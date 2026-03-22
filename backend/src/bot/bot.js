@@ -127,6 +127,10 @@ export function createBot(token) {
     await showCategories(ctx);
   });
 
+  bot.catch((err) => {
+    console.error('Bot error:', err.message);
+  });
+
   // Keyboard button handlers
   bot.hears('🛍️ Boutique', async (ctx) => { await showCategories(ctx); });
   bot.hears('🛒 Mon Panier', async (ctx) => { await showCart(ctx); });
