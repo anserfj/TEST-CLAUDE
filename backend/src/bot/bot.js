@@ -127,6 +127,13 @@ export function createBot(token) {
     await showCategories(ctx);
   });
 
+  // Keyboard button handlers
+  bot.hears('🛍️ Boutique', async (ctx) => { await showCategories(ctx); });
+  bot.hears('🛒 Mon Panier', async (ctx) => { await showCart(ctx); });
+  bot.hears('📦 Mes Commandes', async (ctx) => { await showOrders(ctx); });
+  bot.hears('💬 Contact', async (ctx) => { await showContact(ctx); });
+  bot.hears('ℹ️ À propos', async (ctx) => { await showAbout(ctx); });
+
   // Handle regular text messages (for admin responses forwarded to users)
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text;
