@@ -28,30 +28,59 @@ export function createBot(token) {
     await next();
   });
 
-  // /start command
+  // /start command — opens mini app
   bot.command('start', async (ctx) => {
     const name = ctx.from.first_name || 'ami';
+    const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:5174';
+    const keyboard = new InlineKeyboard()
+      .webApp('🛍️ Ouvrir la boutique', miniappUrl)
+      .row()
+      .text('📦 Mes commandes', 'my_orders')
+      .text('💬 Contacter', 'contact');
+
     await ctx.reply(
       `🌿 *Bienvenue chez CBD Shop!*\n\n` +
       `Bonjour ${name}! 👋\n\n` +
-      `Nous proposons une sélection premium de produits CBD de qualité.\n` +
-      `Tous nos produits sont légaux (< 0.3% THC) et testés en laboratoire.\n\n` +
-      `Utilisez le menu ci-dessous pour naviguer:`,
-      {
-        parse_mode: 'Markdown',
-        reply_markup: getMainKeyboard()
-      }
+      `Découvrez notre sélection premium de produits CBD.\n` +
+      `Tous légaux (< 0.3% THC) et testés en laboratoire. 🧪\n\n` +
+      `Appuyez sur le bouton pour ouvrir notre boutique:`,
+      { parse_mode: 'Markdown', reply_markup: keyboard }
     );
   });
 
-  // Main menu keyboard
-  bot.hears('🛍️ Boutique', showCategories);
-  bot.hears('🛒 Mon Panier', showCart);
-  bot.hears('📦 Mes Commandes', showOrders);
-  bot.hears('💬 Contact', showContact);
-  bot.hears('ℹ️ À propos', showAbout);
+  // Shop button shortcut
+  bot.command('shop', async (ctx) => {
+    const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:5174';
+    await ctx.reply('🛍️ Ouvrez notre boutique :', {
+      reply_markup: new InlineKeyboard().webApp('🛍️ CBD Shop', miniappUrl)
+    });
+  });
 
-  // Callback queries for inline buttons
+  // Inline callbacks
+  bot.callbackQuery('my_orders', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(ctx.from.id);
+    if (!user) { await ctx.reply('Aucune commande trouvée.'); return; }
+    const orders = db.prepare(`
+      SELECT o.*, COUNT(oi.id) as item_count FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.user_id = ? GROUP BY o.id ORDER BY o.created_at DESC LIMIT 5
+    `).all(user.id);
+    if (!orders.length) { await ctx.reply('📦 Vous n\'avez pas encore de commandes.'); return; }
+    const statusLabel = { pending:'⏳ En attente', confirmed:'✅ Confirmée', preparing:'👨‍🍳 Préparation', shipped:'🚚 Expédiée', delivered:'📬 Livrée', cancelled:'❌ Annulée' };
+    let text = '📦 *Vos dernières commandes*\n\n';
+    orders.forEach(o => {
+      text += `${statusLabel[o.status]||'❓'} *#${o.id}* — ${o.total?.toFixed(2)}€\n`;
+    });
+    await ctx.reply(text, { parse_mode: 'Markdown' });
+  });
+
+  bot.callbackQuery('contact', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await ctx.reply('💬 Écrivez-nous directement ici, notre équipe vous répond rapidement!\n\n📍 12 Rue des Fleurs, Paris\n🕐 Lun-Sam 10h-19h');
+  });
+
+  // Legacy inline callbacks (kept for backward compat)
   bot.callbackQuery(/^cat_(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     const catId = parseInt(ctx.match[1]);

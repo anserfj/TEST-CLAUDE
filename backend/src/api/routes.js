@@ -198,4 +198,70 @@ router.get('/stats', (req, res) => {
   });
 });
 
+// ── MINI APP ENDPOINTS ────────────────────────────────────────────────────────
+
+// Post an order from the mini app
+router.post('/miniapp/order', (req, res) => {
+  const { telegram_id, items, notes, total } = req.body;
+  if (!telegram_id || !items?.length) return res.status(400).json({ error: 'Missing fields' });
+
+  const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegram_id);
+  if (!user) return res.status(404).json({ error: 'User not found. Start the bot first.' });
+
+  // Check stock
+  for (const item of items) {
+    const prod = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id);
+    if (!prod || prod.stock < item.quantity) {
+      return res.status(400).json({ error: `Stock insuffisant pour ${prod?.name || 'un produit'}` });
+    }
+  }
+
+  const createOrder = db.transaction(() => {
+    const order = db.prepare(
+      'INSERT INTO orders (user_id, total, status, notes) VALUES (?, ?, ?, ?)'
+    ).run(user.id, total, 'pending', notes || null);
+
+    const orderId = order.lastInsertRowid;
+    for (const item of items) {
+      db.prepare(
+        'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)'
+      ).run(orderId, item.product_id, item.quantity, item.unit_price, item.quantity * item.unit_price);
+      db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(item.quantity, item.product_id);
+    }
+    return orderId;
+  });
+
+  const orderId = createOrder();
+
+  // Notify admin via WS
+  import('../websocket/wsServer.js').then(({ broadcastToAdmins }) => {
+    broadcastToAdmins({
+      type: 'new_order',
+      order: { id: orderId, total, username: user.username, first_name: user.first_name, items }
+    });
+  });
+
+  res.json({ success: true, order_id: orderId });
+});
+
+// Get orders for a telegram user (mini app)
+router.get('/miniapp/orders/:telegramId', (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(req.params.telegramId);
+  if (!user) return res.json([]);
+
+  const orders = db.prepare(`
+    SELECT o.* FROM orders o WHERE o.user_id = ? ORDER BY o.created_at DESC LIMIT 20
+  `).all(user.id);
+
+  const withItems = orders.map(order => {
+    const items = db.prepare(`
+      SELECT oi.*, p.name, p.unit FROM order_items oi JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = ?
+    `).all(order.id);
+    return { ...order, items };
+  });
+
+  res.json(withItems);
+});
+
 export default router;

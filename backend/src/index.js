@@ -10,7 +10,9 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:5173';
 
-app.use(cors({ origin: DASHBOARD_URL }));
+const MINIAPP_URL = process.env.MINIAPP_URL || 'http://localhost:5174';
+
+app.use(cors({ origin: [DASHBOARD_URL, MINIAPP_URL, /localhost:\d+/] }));
 app.use(express.json());
 
 // Health check
