@@ -12,7 +12,10 @@ const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:5173';
 
 const MINIAPP_URL = process.env.MINIAPP_URL || 'http://localhost:5174';
 
-app.use(cors({ origin: [DASHBOARD_URL, MINIAPP_URL, /localhost:\d+/] }));
+const allowedOrigins = process.env.NODE_ENV === 'development'
+  ? [DASHBOARD_URL, MINIAPP_URL, /localhost:\d+/]
+  : [DASHBOARD_URL, MINIAPP_URL];
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 // Health check
