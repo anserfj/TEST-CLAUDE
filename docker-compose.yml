@@ -21,3 +21,11 @@ services:
     environment:
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASS=${ADMIN_PASS}
+
+  miniapp:
+    build: ./miniapp
+    ports:
+      - "5174:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
