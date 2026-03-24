@@ -1,14 +1,6 @@
 // ================================================
-// BALTIMORE 83 — script.js
+// BALTIMORE 83 — script.js (API locale)
 // ================================================
-
-const SUPABASE_URL = "https://lkgyrqfdefwrmdvukmpl.supabase.co";
-const SUPABASE_KEY = "sb_publishable_5eOyGWb80AcDLt-DSC7POA_blD_KhIZ";
-const SB_HEADERS = {
-  "Content-Type": "application/json",
-  "apikey": SUPABASE_KEY,
-  "Authorization": `Bearer ${SUPABASE_KEY}`,
-};
 
 // ── TELEGRAM ──
 const tg = window.Telegram?.WebApp || {
@@ -25,8 +17,6 @@ let cart = [];
 let currentFilter = "tous";
 let currentSearch = "";
 
-const isVideo = url => url && /\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
-
 // ── CART PERSISTENCE ──
 function saveCart() {
   try { localStorage.setItem("baltimore83_cart", JSON.stringify(cart)); } catch(e) {}
@@ -38,19 +28,23 @@ function loadCart() {
   } catch(e) { cart = []; }
 }
 
-// ── SUPABASE ──
-async function sbGet(table, params = "") {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, { headers: SB_HEADERS });
-  if (!r.ok) throw new Error(`Supabase ${r.status}`);
+// ── API ──
+async function apiGet(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`API ${r.status}`);
   return r.json();
 }
-async function sbPost(table, body) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+async function apiPost(path, body) {
+  const r = await fetch(path, {
     method: "POST",
-    headers: { ...SB_HEADERS, "Prefer": "return=minimal" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`Supabase ${r.status}`);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `API ${r.status}`);
+  }
+  return r.json();
 }
 
 // ── INIT ──
@@ -58,15 +52,10 @@ async function init() {
   loadCart();
   showSkeletons();
   try {
-    const data = await sbGet("products", "?order=id.asc");
-    products = data.map(p => ({
-      ...p,
-      price: parseFloat(p.price),
-      gouts: Array.isArray(p.gouts) ? p.gouts : (p.gouts ? JSON.parse(p.gouts) : []),
-      description: p.description || "",
-    }));
+    const data = await apiGet("/api/products");
+    products = data.filter(p => p.active !== 0 && p.active !== false);
   } catch(e) {
-    console.warn("Supabase indispo:", e);
+    console.warn("API indispo:", e);
     products = [];
   }
   renderProducts();
@@ -118,11 +107,13 @@ function searchProducts(q) {
 
 function getFiltered() {
   return products.filter(p => {
-    const matchCat = currentFilter === "tous" || p.category === currentFilter;
+    const cat = (p.category_name || "").toLowerCase();
+    const matchCat = currentFilter === "tous" || cat === currentFilter;
     const matchSearch = !currentSearch ||
       p.name?.toLowerCase().includes(currentSearch) ||
-      p.description?.toLowerCase().includes(currentSearch);
-    return matchCat && matchSearch && p.active !== false;
+      p.description?.toLowerCase().includes(currentSearch) ||
+      cat.includes(currentSearch);
+    return matchCat && matchSearch;
   });
 }
 
@@ -141,29 +132,16 @@ function renderProducts() {
   }
 
   grid.innerHTML = filtered.map(p => {
-    const medias = Array.isArray(p.medias) ? p.medias :
-      (p.medias ? (typeof p.medias === "string" ? JSON.parse(p.medias) : p.medias) : []);
-    const thumb = medias[0];
-    const mediaHtml = thumb
-      ? (isVideo(thumb.url || thumb)
-          ? `<video src="${thumb.url || thumb}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>`
-          : `<img src="${thumb.url || thumb}" alt="${p.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block">`)
-      : `<span style="font-size:3rem">🛍️</span>`;
-
-    const badge = p.badge === "new" ? `<span class="product-badge badge-new">Nouveau</span>`
-      : p.badge === "promo" ? `<span class="product-badge badge-promo">Promo</span>`
-      : p.badge === "top" ? `<span class="product-badge badge-top">Top</span>` : "";
-
+    const emoji = p.category_emoji || "🛍️";
     return `<div class="product-card" onclick="openModal(${p.id})">
       <div class="product-img-wrap">
-        ${badge}
-        ${mediaHtml}
+        <span style="font-size:3.2rem">${emoji}</span>
       </div>
       <div class="product-body">
-        <div class="product-cat">${p.category || ""}</div>
+        <div class="product-cat">${p.category_name || ""}</div>
         <div class="product-name">${p.name}</div>
         <div class="product-price">${parseFloat(p.price).toFixed(2).replace(".", ",")} €</div>
-        ${p.min_qty ? `<span class="product-unit">Min. ${p.min_qty} unités</span>` : ""}
+        <span class="product-unit">/ ${p.unit || "unité"}</span>
       </div>
     </div>`;
   }).join("");
@@ -175,24 +153,17 @@ function openModal(productId) {
   if (!p) return;
   tg.HapticFeedback.impactOccurred("light");
 
-  const medias = Array.isArray(p.medias) ? p.medias :
-    (p.medias ? (typeof p.medias === "string" ? JSON.parse(p.medias) : p.medias) : []);
-  const thumb = medias[0];
-  const mediaHtml = thumb
-    ? (isVideo(thumb.url || thumb)
-        ? `<video src="${thumb.url || thumb}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>`
-        : `<img src="${thumb.url || thumb}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;display:block">`)
-    : `<span style="font-size:5rem">🛍️</span>`;
+  const emoji = p.category_emoji || "🛍️";
 
   document.getElementById("modalBody").innerHTML = `
-    <div class="modal-media">${mediaHtml}</div>
-    <div class="modal-cat">${p.category || ""}</div>
+    <div class="modal-media"><span style="font-size:5rem">${emoji}</span></div>
+    <div class="modal-cat">${p.category_name || ""}</div>
     <div class="modal-name">${p.name}</div>
     ${p.description ? `<div class="modal-desc">${p.description}</div>` : ""}
     <div class="modal-price">${parseFloat(p.price).toFixed(2).replace(".", ",")} €</div>
-    ${p.min_qty ? `<span class="modal-unit">Minimum ${p.min_qty} unités</span>` : ""}
-    <button class="modal-add-btn" onclick="addToCart(${p.id})">
-      Ajouter au panier
+    <span class="modal-unit">par ${p.unit || "unité"} · Stock : ${p.stock}</span>
+    <button class="modal-add-btn" onclick="addToCart(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>
+      ${p.stock <= 0 ? "Rupture de stock" : "Ajouter au panier"}
     </button>
   `;
 
@@ -206,12 +177,13 @@ function closeModal() {
 // ── CART ──
 function addToCart(productId) {
   const p = products.find(x => x.id === productId);
-  if (!p) return;
+  if (!p || p.stock <= 0) return;
   const existing = cart.find(x => x.id === productId);
   if (existing) {
+    if (existing.qty >= p.stock) { showToast("⚠️ Stock insuffisant"); return; }
     existing.qty++;
   } else {
-    cart.push({ id: p.id, name: p.name, price: p.price, qty: 1, medias: p.medias });
+    cart.push({ id: p.id, name: p.name, price: p.price, qty: 1, unit: p.unit, emoji: p.category_emoji || "🛍️" });
   }
   saveCart();
   updateCartBadge();
@@ -263,18 +235,9 @@ function renderCart() {
   const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const totalQty = cart.reduce((s, i) => s + i.qty, 0);
 
-  const itemsHtml = cart.map(item => {
-    const medias = Array.isArray(item.medias) ? item.medias :
-      (item.medias ? (typeof item.medias === "string" ? JSON.parse(item.medias) : item.medias) : []);
-    const thumb = medias[0];
-    const thumbHtml = thumb
-      ? (isVideo(thumb.url || thumb)
-          ? `<video src="${thumb.url || thumb}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;border-radius:8px"></video>`
-          : `<img src="${thumb.url || thumb}" alt="${item.name}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">`)
-      : `🛍️`;
-
-    return `<div class="cart-item">
-      <div class="cart-item-thumb">${thumbHtml}</div>
+  const itemsHtml = cart.map(item => `
+    <div class="cart-item">
+      <div class="cart-item-thumb" style="font-size:1.7rem">${item.emoji || "🛍️"}</div>
       <div class="cart-item-info">
         <div class="cart-item-name">${item.name}</div>
         <div class="cart-item-price">${(item.price * item.qty).toFixed(2).replace(".", ",")} €</div>
@@ -285,8 +248,7 @@ function renderCart() {
         <span class="qty-num">${item.qty}</span>
         <button class="qty-btn" onclick="updateQty(${item.id}, 1)">+</button>
       </div>
-    </div>`;
-  }).join("");
+    </div>`).join("");
 
   el.innerHTML = `
     <div class="cart-items">${itemsHtml}</div>
@@ -302,31 +264,31 @@ function renderCart() {
 async function checkout() {
   if (cart.length === 0) return;
   const user = tg.initDataUnsafe?.user || {};
-  const username = user.username || user.first_name || "Anonyme";
-  const userId = user.id || 0;
+  const telegramId = user.id || 0;
+
+  const btn = document.querySelector(".btn-checkout");
+  if (btn) { btn.disabled = true; btn.textContent = "Envoi..."; }
 
   try {
-    await sbPost("orders", {
-      telegram_id: userId,
-      username: username,
-      items: JSON.stringify(cart),
-      total: cart.reduce((s, i) => s + i.price * i.qty, 0),
-      status: "nouveau",
+    const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
+    await apiPost("/api/miniapp/order", {
+      telegram_id: telegramId,
+      items: cart.map(i => ({
+        product_id: i.id,
+        quantity: i.qty,
+        unit_price: i.price,
+      })),
+      total: totalPrice,
     });
 
-    const msg = `🛒 *Nouvelle commande*\n👤 @${username}\n\n` +
-      cart.map(i => `• ${i.name} x${i.qty} — ${(i.price * i.qty).toFixed(2)}€`).join("\n") +
-      `\n\n💰 *Total: ${cart.reduce((s,i)=>s+i.price*i.qty,0).toFixed(2)}€*`;
-
-    tg.sendData(msg);
     cart = [];
     saveCart();
     updateCartBadge();
     showToast("🎉 Commande envoyée !");
     setTimeout(() => switchTab("produits"), 1200);
   } catch(e) {
-    showToast("❌ Erreur, réessaie");
-    console.error(e);
+    showToast("❌ " + (e.message || "Erreur, réessaie"));
+    if (btn) { btn.disabled = false; btn.textContent = "Passer la commande"; }
   }
 }
 
