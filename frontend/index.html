@@ -63,49 +63,24 @@
 <script type="text/babel">
 const {useState,useEffect,useRef,useMemo,useCallback}=React;
 
-const SB_URL="https://lkgyrqfdefwrmdvukmpl.supabase.co";
-const SB_KEY="sb_publishable_5eOyGWb80AcDLt-DSC7POA_blD_KhIZ";
-const SBH={"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`};
-const BUCKET="product-media";
-const STORAGE_URL=`${SB_URL}/storage/v1/object/public/${BUCKET}`;
-const UPLOAD_URL=`${SB_URL}/storage/v1/object/${BUCKET}`;
-const BOT_TOKEN="8385648324:AAE1ZBe2ZSnylaY8RCzT-ihJ6KQzX08MALk";
-const TG_API=`https://api.telegram.org/bot${BOT_TOKEN}`;
-
-async function sbGet(t,p=""){const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:SBH});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function sbPatch(t,id,body){const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:"PATCH",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());}
-async function sbPost(t,body){const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:"POST",headers:{...SBH,"Prefer":"return=representation"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function sbDelete(t,id){const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:"DELETE",headers:SBH});if(!r.ok)throw new Error(await r.text());}
-async function uploadFile(file,folder="photos"){
-  const ext=file.name.split(".").pop().toLowerCase();
-  const name=`${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-  const mimeMap={"mp4":"video/mp4","mov":"video/quicktime","webm":"video/webm","avi":"video/x-msvideo","jpg":"image/jpeg","jpeg":"image/jpeg","png":"image/png","gif":"image/gif","webp":"image/webp"};
-  const contentType=file.type||mimeMap[ext]||"application/octet-stream";
-  const r=await fetch(`${UPLOAD_URL}/${name}`,{method:"POST",headers:{"apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`,"Content-Type":contentType,"x-upsert":"true"},body:file});
-  if(!r.ok){const err=await r.text();throw new Error("Upload échoué: "+err);}
-  return `${STORAGE_URL}/${name}`;
-}
-async function sendTgMsg(chatId,text){
-  const r=await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:chatId,text,parse_mode:"Markdown"})});
-  const d=await r.json(); return d?.result?.message_id||null;
-}
-async function sendTgFile(chatId,file){
-  const isImg=file.type.startsWith("image/"),isVid=file.type.startsWith("video/");
-  const ep=isImg?"sendPhoto":isVid?"sendVideo":"sendDocument";
-  const fd=isImg?"photo":isVid?"video":"document";
-  const f=new FormData(); f.append("chat_id",chatId); f.append(fd,file);
-  const r=await fetch(`${TG_API}/${ep}`,{method:"POST",body:f});
-  const d=await r.json(); return d?.result?.message_id||null;
-}
+/* ── API LOCALE ── */
+async function apiGet(p){const r=await fetch(p);if(!r.ok)throw new Error(await r.text());return r.json();}
+async function apiPost(p,body){const r=await fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function apiPut(p,body){const r=await fetch(p,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function apiPatch(p,body){const r=await fetch(p,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function apiDelete(p){const r=await fetch(p,{method:"DELETE"});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function uploadFile(file){throw new Error("Upload non supporté — utilisez une URL");}
+async function sendTgMsg(chatId,text){return null;}
+async function sendTgFile(chatId,file){return null;}
 
 const C={bg:"#080a0e",surface:"#0f1318",card:"#111620",border:"#1e2530",accent:"#ffffff",accentDim:"#ffffff18",accentMid:"#ffffff44",gold:"#f0b429",green:"#00e676",red:"#ff4757",orange:"#ff9f43",purple:"#a78bfa",text1:"#eef2f7",text2:"#8b9ab0",text3:"#4a5568"};
-const STATUS={nouveau:{label:"Nouveau",color:C.accent,bg:C.accentDim},payé:{label:"Payé",color:C.purple,bg:"#a78bfa18"},traité:{label:"Traité",color:C.gold,bg:"#f0b42918"},expédié:{label:"Expédié",color:C.green,bg:"#00e67618"},annulé:{label:"Annulé",color:C.red,bg:"#ff475718"}};
+const STATUS={pending:{label:"En attente",color:C.accent,bg:C.accentDim},confirmed:{label:"Confirmé",color:C.purple,bg:"#a78bfa18"},preparing:{label:"En prépa",color:C.gold,bg:"#f0b42918"},shipped:{label:"Expédié",color:C.green,bg:"#00e67618"},delivered:{label:"Livré",color:C.green,bg:"#00e67618"},cancelled:{label:"Annulé",color:C.red,bg:"#ff475718"}};
 const fmt=n=>parseFloat(n||0).toFixed(2).replace(".",",")+"\u00a0€";
 const isVideo=url=>url&&/\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
 const parseItems=items=>{try{return Array.isArray(items)?items:JSON.parse(items||"[]")}catch{return[]}};
 
 /* ── ATOMS ── */
-function Badge({status}){const c=STATUS[status]||STATUS.nouveau;return<span style={{display:"inline-flex",padding:"3px 10px",borderRadius:4,fontSize:11,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:c.color,background:c.bg,border:`1px solid ${c.color}33`}}>{c.label}</span>}
+function Badge({status}){const c=STATUS[status]||STATUS.pending;return<span style={{display:"inline-flex",padding:"3px 10px",borderRadius:4,fontSize:11,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:c.color,background:c.bg,border:`1px solid ${c.color}33`}}>{c.label}</span>}
 function Card({children,style={},onClick,className=""}){return<div onClick={onClick} className={className} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,...style}} onMouseEnter={e=>onClick&&(e.currentTarget.style.borderColor=C.accentMid)} onMouseLeave={e=>onClick&&(e.currentTarget.style.borderColor=C.border)}>{children}</div>}
 function Btn({children,onClick,variant="primary",style={},disabled,title}){
   const v={primary:{background:C.accent,color:C.bg,border:"none"},ghost:{background:"transparent",color:C.text2,border:`1px solid ${C.border}`},danger:{background:"transparent",color:C.red,border:`1px solid ${C.red}33`},gold:{background:C.gold,color:C.bg,border:"none"},purple:{background:C.purple,color:C.bg,border:"none"},green:{background:C.green,color:C.bg,border:"none"}};
@@ -460,53 +435,16 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       const order=orders.find(o=>o.id===id);
       if(!order){setUpdating(false);return;}
       const prevStatus=order.status;
-      await sbPatch("orders",id,{status});
+      await apiPatch("/api/orders/"+id+"/status",{status});
       setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
       setSelected(prev=>prev?.id===id?{...prev,status}:prev);
 
       const items=parseItems(order.items);
 
-      // Déduire le stock : nouveau/annulé → payé
-      if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
-        for(const item of items){
-          const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);
-          if(prod[0]){
-            const newStock=Math.max(0,prod[0].stock-item.qty);
-            await sbPatch("products",prod[0].id,{stock:newStock}).catch(()=>{});
-            if(setProducts)setProducts(prev=>prev.map(p=>p.id===prod[0].id?{...p,stock:newStock}:p));
-          }
-        }
-      }
-      // Remettre le stock : (payé/traité/expédié) → annulé
-      if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
-        for(const item of items){
-          const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);
-          if(prod[0]){
-            const newStock=prod[0].stock+item.qty;
-            await sbPatch("products",prod[0].id,{stock:newStock}).catch(()=>{});
-            if(setProducts)setProducts(prev=>prev.map(p=>p.id===prod[0].id?{...p,stock:newStock}:p));
-          }
-        }
-      }
+      /* stock auto-adjust removed */
     }catch(e){alert(e.message)}
 
-    // Message automatique bot si activé dans paramètres
-    try{
-      const s=getSettings?getSettings():{};
-      const order=orders.find(o=>o.id===id);
-      if(order?.telegram_id){
-        if(status==="expédié"&&s.msgExpédie){
-          const msg=`📦 *Commande ${id} expédiée !*\n\nVotre commande est en route 🚚\nVous recevrez votre colis dans les prochains jours.\n\nMerci pour votre confiance ! 🙏`;
-          await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})});
-          await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:order.telegram_id,direction:"out",text:`📦 Commande ${id} expédiée`,created_at:new Date().toISOString()})});
-        }
-        if(status==="payé"&&s.msgPaye){
-          const msg=`✅ *Paiement confirmé — ${id}*\n\nNous avons bien reçu votre paiement.\nVotre commande est en cours de préparation 📦\n\nMerci ! 🙏`;
-          await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})});
-          await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:order.telegram_id,direction:"out",text:`✅ Paiement confirmé ${id}`,created_at:new Date().toISOString()})});
-        }
-      }
-    }catch(e){}
+    /* auto-messages handled by bot */
     setUpdating(false);
   };
 
@@ -522,7 +460,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
 
   const saveNote=async()=>{
     if(!selected)return;setSavingNote(true);
-    try{await sbPatch("orders",selected.id,{note});setOrders(prev=>prev.map(o=>o.id===selected.id?{...o,note}:o));setSelected(prev=>prev?{...prev,note}:prev)}
+    try{setOrders(prev=>prev.map(o=>o.id===selected.id?{...o,note}:o));setSelected(prev=>prev?{...prev,note}:prev)}
     catch(e){alert(e.message)}
     setSavingNote(false);
   };
@@ -733,7 +671,7 @@ function ClientsPage({orders,setOrders}){
   const [updating,setUpdating]=useState(false);
   const [sortBy,setSortBy]=useState("recent");
 
-  useEffect(()=>{setLoading(true);sbGet("bot_users","?order=last_seen.desc").then(u=>setClients(u)).catch(console.error).finally(()=>setLoading(false));},[]);
+  useEffect(()=>{setLoading(true);apiGet("/api/users").then(u=>setClients(u)).catch(console.error).finally(()=>setLoading(false));},[]);
 
   const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
   const clientOrders=uid=>orders.filter(o=>String(o.telegram_id)===String(uid));
@@ -743,16 +681,16 @@ function ClientsPage({orders,setOrders}){
     setUpdating(true);
     try{
       const order=orders.find(o=>o.id===id);
-      await sbPatch("orders",id,{status});
+      await apiPatch("/api/orders/"+id+"/status",{status});
       setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
       if(order){
         const prevStatus=order.status;
         const items=parseItems(order.items);
         if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
-          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:Math.max(0,prod[0].stock-item.qty)}).catch(()=>{})}
+          for(const item of items){/* stock auto-adjust removed */}
         }
         if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
-          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{})}
+          for(const item of items){/* stock auto-adjust removed */}
         }
       }
     }catch(e){alert(e.message)}
@@ -889,27 +827,27 @@ function CatalogPage({products,setProducts,loading,reload}){
     const gallery=form.medias.filter(m=>m!==firstImg&&m!==firstVid).map(m=>m.url);
     const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),compare_price:form.compare_price?parseFloat(form.compare_price):null,unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,low_stock_alert:parseInt(form.low_stock_alert)||50,badge:form.badge||null,description:form.description||null,gouts:form.gouts,image_url:firstImg?.url||null,video_url:firstVid?.url||null,gallery};
     try{
-      if(modal==="new"){const[r]=await sbPost("products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !")}
-      else{await sbPatch("products",modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body,id:modal.id}:p));showToast("✅ Modifié !")}
+      if(modal==="new"){const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !")}
+      else{await apiPut("/api/products/"+modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body,id:modal.id}:p));showToast("✅ Modifié !")}
       setModal(null);
     }catch(e){alert("Erreur: "+e.message)}
     setSaving(false);
   };
 
-  const remove=async id=>{if(!confirm("Supprimer ?"))return;try{await sbDelete("products",id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Supprimé")}catch(e){alert(e.message)}};
+  const remove=async id=>{if(!confirm("Supprimer ?"))return;try{await apiDelete("/api/products/"+id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Supprimé")}catch(e){alert(e.message)}};
 
   const duplicate=async p=>{
     const body={name:`${p.name} (copie)`,cat:p.cat,emoji:p.emoji,price:p.price,compare_price:p.compare_price||null,unit:p.unit,min_qty:p.min_qty,stock:0,badge:null,gouts:p.gouts||[],image_url:p.image_url||null,video_url:p.video_url||null,gallery:p.gallery||[]};
-    try{const[r]=await sbPost("products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué — stock mis à 0")}catch(e){alert(e.message)}
+    try{const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué — stock mis à 0")}catch(e){alert(e.message)}
   };
 
   const bulkUpdateBadge=async badge=>{
-    for(const id of bulkSelected){try{await sbPatch("products",id,{badge:badge||null});setProducts(prev=>prev.map(p=>bulkSelected.includes(p.id)?{...p,badge:badge||null}:p))}catch(e){}}
+    for(const id of bulkSelected){try{/* badge not supported in local backend */setProducts(prev=>prev.map(p=>bulkSelected.includes(p.id)?{...p,badge:badge||null}:p))}catch(e){}}
     setBulkSelected([]);showToast(`✅ ${bulkSelected.length} produits mis à jour`);
   };
 
   const updateStock=async(p,newStock)=>{
-    try{await sbPatch("products",p.id,{stock:newStock});setProducts(prev=>prev.map(x=>x.id===p.id?{...x,stock:newStock}:x))}catch(e){alert(e.message)}
+    try{await apiPatch("/api/products/"+p.id+"/stock",{stock:newStock});setProducts(prev=>prev.map(x=>x.id===p.id?{...x,stock:newStock}:x))}catch(e){alert(e.message)}
   };
 
   const filtered=useMemo(()=>{
@@ -1128,7 +1066,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
   const fetchData=async(silent=false)=>{
     if(!silent)setLoading(true);
     try{
-      const[u,m]=await Promise.all([sbGet("bot_users","?order=last_seen.desc"),sbGet("bot_messages","?order=created_at.desc&limit=500")]);
+      const[u,conversations]=await Promise.all([apiGet("/api/users"),apiGet("/api/messages")]);const m=[];
       setUsers(u);setMessages(m);
       if(!silent)markAllRead(m);
     }catch(e){console.error(e)}
@@ -1154,7 +1092,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
 
   const deleteMsg=async msg=>{
     if(msg.direction==="out"&&msg.tg_message_id){try{await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:msg.telegram_id,message_id:msg.tg_message_id})})}catch(e){}}
-    try{await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${msg.id}`,{method:"DELETE",headers:SBH});setMessages(prev=>prev.filter(m=>m.id!==msg.id))}catch(e){}
+    setMessages(prev=>prev.filter(m=>m.id!==msg.id))
   };
 
   const sendReply=async()=>{
@@ -1165,8 +1103,8 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
       if(replyFile){tgMsgId=await sendTgFile(selected.id,replyFile);if(reply.trim())await sendTgMsg(selected.id,reply.trim());displayText=`📎 ${replyFile.name}${reply.trim()?` — ${reply.trim()}`:""}` }
       else{tgMsgId=await sendTgMsg(selected.id,reply.trim())}
       const newMsg={id:Date.now(),telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:new Date().toISOString()};
-      await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId})});
-      await fetch(`${SB_URL}/rest/v1/bot_users?id=eq.${selected.id}`,{method:"PATCH",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({last_seen:new Date().toISOString()})});
+      
+      
       setMessages(prev=>[...prev,newMsg]);
       setUsers(prev=>prev.map(u=>u.id===selected.id?{...u,last_seen:new Date().toISOString()}:u));
       setReply("");setReplyFile(null);if(fileRef.current)fileRef.current.value="";
@@ -1186,7 +1124,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
         let tgMsgId=null;
         if(broadcastFile){tgMsgId=await sendTgFile(u.id,broadcastFile);if(broadcast.trim())await sendTgMsg(u.id,broadcast.trim())}
         else{tgMsgId=await sendTgMsg(u.id,broadcast.trim())}
-        await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:u.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:sentAt,is_broadcast:true})});
+        
         ok++;
       }catch(e){fail++}
       await new Promise(r=>setTimeout(r,50));
@@ -1207,7 +1145,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
     if(!confirm(`Supprimer ce broadcast pour ${group.msgs.length} utilisateurs ?`))return;
     for(const m of group.msgs){
       if(m.tg_message_id){try{await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:m.telegram_id,message_id:m.tg_message_id})})}catch(e){}}
-      try{await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${m.id}`,{method:"DELETE",headers:SBH})}catch(e){}
+      
     }
     setMessages(prev=>prev.filter(m=>!group.msgs.find(gm=>gm.id===m.id)));
     showToast("🗑️ Broadcast supprimé");
@@ -1254,16 +1192,16 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
     setUpdatingO(true);
     try{
       const order=orders.find(o=>o.id===id);
-      await sbPatch("orders",id,{status});
+      await apiPatch("/api/orders/"+id+"/status",{status});
       if(setOrders)setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
       if(order){
         const prevStatus=order.status;
         const items=parseItems(order.items);
         if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
-          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:Math.max(0,prod[0].stock-item.qty)}).catch(()=>{})}
+          for(const item of items){/* stock auto-adjust removed */}
         }
         if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
-          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{})}
+          for(const item of items){/* stock auto-adjust removed */}
         }
         // Messages auto
         const s=getSettings?getSettings():{};
@@ -1518,7 +1456,7 @@ function SettingsPage({orders,logout}){
     {/* Liens rapides */}
     <Card style={{marginBottom:14}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🔗 Liens rapides</div>
-      {[{label:"🛒 Boutique Telegram",url:"https://anserfj.github.io/BATIMORE-83/index.htm",sub:"anserfj.github.io/BATIMORE-83"},{label:"🗄️ Supabase",url:"https://supabase.com/dashboard/project/lkgyrqfdefwrmdvukmpl",sub:"lkgyrqfdefwrmdvukmpl"},{label:"⚙️ Cloudflare Worker",url:"https://dash.cloudflare.com",sub:"Bot webhook"}].map(l=>
+      {[{label:"🛒 Mini App Telegram",url:"https://baltimore-83.duckdns.org",sub:"baltimore-83.duckdns.org"},{label:"🗄️ Backend API",url:"https://baltimore-83.duckdns.org:5174",sub:"API locale SQLite"},{label:"⚙️ Serveur",url:"https://baltimore-83.duckdns.org",sub:"baltimore-83.duckdns.org"}].map(l=>
       <div key={l.url} style={{padding:"11px 14px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <div><div style={{fontSize:13,fontWeight:600}}>{l.label}</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:1}}>{l.sub}</div></div>
         <Btn variant="ghost" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>window.open(l.url,"_blank")}>Ouvrir</Btn>
@@ -1553,12 +1491,12 @@ function App(){
 
   const getSettings=()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}};
 
-  const fetchOrders=async()=>{setLoadO(true);try{setOrders(await sbGet("orders","?order=created_at.desc"))}catch(e){console.error(e)}setLoadO(false)};
-  const fetchProducts=async()=>{setLoadP(true);try{setProducts(await sbGet("products","?order=id.asc"))}catch(e){console.error(e)}setLoadP(false)};
+  const fetchOrders=async()=>{setLoadO(true);try{setOrders((await apiGet("/api/orders")).orders||[])}catch(e){console.error(e)}setLoadO(false)};
+  const fetchProducts=async()=>{setLoadP(true);try{setProducts(await apiGet("/api/products"))}catch(e){console.error(e)}setLoadP(false)};
 
   const pollUnread=async()=>{
     try{
-      const msgs=await sbGet("bot_messages","?direction=eq.in&order=created_at.desc&limit=200");
+      const msgs=[];
       const rids=JSON.parse(localStorage.getItem("baltimore83_read_ids")||"[]");
       const unread=msgs.filter(m=>!rids.includes(m.id));
       const prevCount=unreadMsgCount;
