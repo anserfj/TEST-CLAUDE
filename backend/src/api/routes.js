@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import db from '../db/database.js';
+import { notifyGroup } from '../bot/bot.js';
 
 const router = Router();
 
@@ -240,6 +241,17 @@ router.post('/miniapp/order', (req, res) => {
       order: { id: orderId, total, username: user.username, first_name: user.first_name, items }
     });
   });
+
+  // Notify group
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Inconnu';
+  const username = user.username ? `@${user.username}` : `#${user.telegram_id}`;
+  const itemsList = items.map(i => `• ${i.product_id} x${i.quantity}`).join('\n');
+  notifyGroup(
+    `🛍️ *Nouvelle commande #${orderId}* (Mini App)\n` +
+    `👤 ${name} (${username})\n` +
+    `💰 Total: *${total.toFixed(2)}€*\n` +
+    `📦 ${items.length} article(s)`
+  );
 
   res.json({ success: true, order_id: orderId });
 });

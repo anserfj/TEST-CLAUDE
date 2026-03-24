@@ -4,12 +4,23 @@ import { broadcastToAdmins } from '../websocket/wsServer.js';
 
 let bot = null;
 
+export async function notifyGroup(text) {
+  const groupId = process.env.NOTIFY_GROUP_ID;
+  if (!bot || !groupId) return;
+  try {
+    await bot.api.sendMessage(groupId, text, { parse_mode: 'Markdown' });
+  } catch (e) {
+    console.error('notifyGroup error:', e.message);
+  }
+}
+
 export function createBot(token) {
   bot = new Bot(token);
 
   // Middleware: upsert user on every message
   bot.use(async (ctx, next) => {
     if (ctx.from) {
+      const isNew = !db.prepare('SELECT id FROM users WHERE telegram_id = ?').get(ctx.from.id);
       db.prepare(`
         INSERT INTO users (telegram_id, username, first_name, last_name, last_seen)
         VALUES (?, ?, ?, ?, datetime('now'))
@@ -24,6 +35,11 @@ export function createBot(token) {
         ctx.from.first_name || null,
         ctx.from.last_name || null
       );
+      if (isNew) {
+        const name = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || 'Inconnu';
+        const username = ctx.from.username ? `@${ctx.from.username}` : `#${ctx.from.id}`;
+        await notifyGroup(`👤 *Nouvel utilisateur*\n${name} (${username})`);
+      }
     }
     await next();
   });
@@ -363,6 +379,17 @@ async function processCheckout(ctx) {
       items
     }
   });
+
+  // Notify group
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Inconnu';
+  const username = user.username ? `@${user.username}` : `#${user.telegram_id}`;
+  const itemsList = items.map(i => `• ${i.name} x${i.quantity}`).join('\n');
+  await notifyGroup(
+    `🛍️ *Nouvelle commande #${orderId}*\n` +
+    `👤 ${name} (${username})\n` +
+    `💰 Total: *${total.toFixed(2)}€*\n` +
+    `📦 Articles:\n${itemsList}`
+  );
 
   await ctx.editMessageText(
     `✅ *Commande #${orderId} confirmée!*\n\n` +
