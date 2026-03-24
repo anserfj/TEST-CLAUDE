@@ -69,9 +69,6 @@ async function apiPost(p,body){const r=await fetch(p,{method:"POST",headers:{"Co
 async function apiPut(p,body){const r=await fetch(p,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
 async function apiPatch(p,body){const r=await fetch(p,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
 async function apiDelete(p){const r=await fetch(p,{method:"DELETE"});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function uploadFile(file){throw new Error("Upload non supporté — utilisez une URL");}
-async function sendTgMsg(chatId,text){return null;}
-async function sendTgFile(chatId,file){return null;}
 
 const C={bg:"#080a0e",surface:"#0f1318",card:"#111620",border:"#1e2530",accent:"#ffffff",accentDim:"#ffffff18",accentMid:"#ffffff44",gold:"#f0b429",green:"#00e676",red:"#ff4757",orange:"#ff9f43",purple:"#a78bfa",text1:"#eef2f7",text2:"#8b9ab0",text3:"#4a5568"};
 const STATUS={pending:{label:"En attente",color:C.accent,bg:C.accentDim},confirmed:{label:"Confirmé",color:C.purple,bg:"#a78bfa18"},preparing:{label:"En prépa",color:C.gold,bg:"#f0b42918"},shipped:{label:"Expédié",color:C.green,bg:"#00e67618"},delivered:{label:"Livré",color:C.green,bg:"#00e67618"},cancelled:{label:"Annulé",color:C.red,bg:"#ff475718"}};
@@ -131,18 +128,8 @@ function Sparkline({data,color=C.accent,height=40}){
 
 /* ── GALERIE EDITOR ── */
 function GalerieEditor({medias,onChange}){
-  const [dragging,setDragging]=useState(false);
-  const [uploading,setUploading]=useState(false);
   const [urlInput,setUrlInput]=useState("");
-  const [showUrl,setShowUrl]=useState(false);
-  const fileRef=useRef();
   const addUrl=url=>{if(!url)return;onChange([...medias,{url,type:isVideo(url)?"video":"image"}])};
-  const handleFiles=async files=>{
-    setUploading(true);
-    try{const up=[];for(const f of Array.from(files)){const folder=f.type.startsWith("video")?"videos":"photos";const url=await uploadFile(f,folder);up.push({url,type:f.type.startsWith("video")?"video":"image"});}onChange([...medias,...up]);}
-    catch(e){alert("Upload: "+e.message);}
-    setUploading(false);
-  };
   const remove=idx=>onChange(medias.filter((_,i)=>i!==idx));
   const moveFirst=idx=>{const c=[...medias];const[item]=c.splice(idx,1);onChange([item,...c])};
   return<div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -160,16 +147,9 @@ function GalerieEditor({medias,onChange}){
         </div>
       </div>)}
     </div>}
-    <div className="drop-zone" onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);handleFiles(e.dataTransfer.files)}} onClick={()=>fileRef.current?.click()} style={{borderColor:dragging?C.accent:""}}>
-      <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={e=>handleFiles(e.target.files)}/>
-      {uploading?<div style={{color:C.accent,fontSize:13}}>⏳ Upload...</div>:<div style={{color:C.text3,fontSize:13}}><div style={{fontSize:24,marginBottom:4}}>📂</div><span style={{color:C.accent,fontWeight:600}}>Glisse ici</span> ou clique — photos & vidéos</div>}
-    </div>
-    <div>
-      <button onClick={()=>setShowUrl(v=>!v)} style={{background:"none",border:"none",color:C.text3,fontSize:12,cursor:"pointer",textDecoration:"underline"}}>▼ Ajouter via URL</button>
-      {showUrl&&<div style={{display:"flex",gap:8,marginTop:6}}>
-        <input value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder="https://..." onKeyDown={e=>e.key==="Enter"&&(addUrl(urlInput.trim()),setUrlInput(""),setShowUrl(false))} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"7px 11px",outline:"none"}}/>
-        <Btn onClick={()=>{addUrl(urlInput.trim());setUrlInput("");setShowUrl(false)}} style={{padding:"7px 12px",fontSize:12}}>+</Btn>
-      </div>}
+    <div style={{display:"flex",gap:8}}>
+      <input value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder="https://... (URL photo ou vidéo)" onKeyDown={e=>e.key==="Enter"&&(addUrl(urlInput.trim()),setUrlInput(""))} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"7px 11px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <Btn onClick={()=>{addUrl(urlInput.trim());setUrlInput("")}} style={{padding:"7px 12px",fontSize:12}}>+ URL</Btn>
     </div>
   </div>
 }
@@ -497,7 +477,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
   const filtered=useMemo(()=>{
     let r=orders.filter(o=>{
       if(filter!=="tous"&&o.status!==filter)return false;
-      if(search&&!o.id.toLowerCase().includes(search.toLowerCase())&&!o.telegram_user.toLowerCase().includes(search.toLowerCase()))return false;
+      if(search&&!String(o.id).toLowerCase().includes(search.toLowerCase())&&!o.telegram_user.toLowerCase().includes(search.toLowerCase()))return false;
       if(dateFrom&&new Date(o.created_at)<new Date(dateFrom))return false;
       if(dateTo&&new Date(o.created_at)>new Date(dateTo+"T23:59:59"))return false;
       return true;
@@ -793,7 +773,7 @@ function ClientsPage({orders,setOrders}){
 }
 
 /* ── CATALOG ── */
-const EMPTY={name:"",cat:"puff",emoji:"💨",price:"",compare_price:"",unit:"/ unité",min_qty:"10",badge:"",stock:"",low_stock_alert:"50",description:"",gouts:[],medias:[]};
+const EMPTY={name:"",category_id:"",unit:"g",price:"",stock:"",thc_percent:"",cbd_percent:"",description:"",active:1,medias:[]};
 
 function CatalogPage({products,setProducts,loading,reload}){
   const [filter,setFilter]=useState("tous");
@@ -804,18 +784,21 @@ function CatalogPage({products,setProducts,loading,reload}){
   const [toast,setToast]=useState("");
   const [bulkSelected,setBulkSelected]=useState([]);
   const [view,setView]=useState("grid"); // grid | list
+  const [categories,setCategories]=useState([]);
+
+  useEffect(()=>{apiGet("/api/categories").then(c=>setCategories(Array.isArray(c)?c:[])).catch(()=>{})},[]);
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
   const setF=patch=>setForm(f=>({...f,...patch}));
 
-  const openNew=()=>{setForm(EMPTY);setModal("new")};
+  const openNew=()=>{setForm({...EMPTY,category_id:categories[0]?.id||""});setModal("new")};
   const openEdit=p=>{
     const em=[];
     if(p.image_url)em.push({url:p.image_url,type:"image"});
     if(p.video_url)em.push({url:p.video_url,type:"video"});
     const gal=Array.isArray(p.gallery)?p.gallery:(p.gallery?JSON.parse(p.gallery||"[]"):[]);
     gal.forEach(url=>{if(url&&!em.find(m=>m.url===url))em.push({url,type:isVideo(url)?"video":"image"})});
-    setForm({name:p.name,cat:p.cat,emoji:p.emoji||"💨",price:String(p.price),compare_price:String(p.compare_price||""),unit:p.unit,min_qty:String(p.min_qty),badge:p.badge||"",stock:String(p.stock),low_stock_alert:String(p.low_stock_alert||"50"),description:p.description||"",gouts:Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]),medias:em});
+    setForm({name:p.name,category_id:String(p.category_id||""),unit:p.unit||"g",price:String(p.price),stock:String(p.stock),thc_percent:String(p.thc_percent||""),cbd_percent:String(p.cbd_percent||""),description:p.description||"",active:p.active??1,medias:em});
     setModal(p);
   };
 
@@ -824,8 +807,19 @@ function CatalogPage({products,setProducts,loading,reload}){
     setSaving(true);
     const firstImg=form.medias.find(m=>m.type==="image");
     const firstVid=form.medias.find(m=>m.type==="video");
-    const gallery=form.medias.filter(m=>m!==firstImg&&m!==firstVid).map(m=>m.url);
-    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),compare_price:form.compare_price?parseFloat(form.compare_price):null,unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,low_stock_alert:parseInt(form.low_stock_alert)||50,badge:form.badge||null,description:form.description||null,gouts:form.gouts,image_url:firstImg?.url||null,video_url:firstVid?.url||null,gallery};
+    const body={
+      category_id:form.category_id?parseInt(form.category_id):null,
+      name:form.name,
+      description:form.description||null,
+      price:parseFloat(form.price),
+      stock:parseInt(form.stock)||0,
+      unit:form.unit||"g",
+      thc_percent:form.thc_percent?parseFloat(form.thc_percent):null,
+      cbd_percent:form.cbd_percent?parseFloat(form.cbd_percent):null,
+      active:form.active?1:0,
+      image_url:firstImg?.url||null,
+      video_url:firstVid?.url||null,
+    };
     try{
       if(modal==="new"){const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !")}
       else{await apiPut("/api/products/"+modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body,id:modal.id}:p));showToast("✅ Modifié !")}
@@ -837,22 +831,25 @@ function CatalogPage({products,setProducts,loading,reload}){
   const remove=async id=>{if(!confirm("Supprimer ?"))return;try{await apiDelete("/api/products/"+id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Supprimé")}catch(e){alert(e.message)}};
 
   const duplicate=async p=>{
-    const body={name:`${p.name} (copie)`,cat:p.cat,emoji:p.emoji,price:p.price,compare_price:p.compare_price||null,unit:p.unit,min_qty:p.min_qty,stock:0,badge:null,gouts:p.gouts||[],image_url:p.image_url||null,video_url:p.video_url||null,gallery:p.gallery||[]};
+    const body={category_id:p.category_id||null,name:`${p.name} (copie)`,description:p.description||null,price:p.price,stock:0,unit:p.unit||"g",thc_percent:p.thc_percent||null,cbd_percent:p.cbd_percent||null,active:1};
     try{const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué — stock mis à 0")}catch(e){alert(e.message)}
   };
 
-  const bulkUpdateBadge=async badge=>{
-    for(const id of bulkSelected){try{/* badge not supported in local backend */setProducts(prev=>prev.map(p=>bulkSelected.includes(p.id)?{...p,badge:badge||null}:p))}catch(e){}}
+  const bulkToggleActive=async(active)=>{
+    for(const id of bulkSelected){
+      const p=products.find(x=>x.id===id);
+      if(p)try{await apiPut("/api/products/"+id,{...p,active});setProducts(prev=>prev.map(x=>x.id===id?{...x,active}:x))}catch(e){}
+    }
     setBulkSelected([]);showToast(`✅ ${bulkSelected.length} produits mis à jour`);
   };
 
   const updateStock=async(p,newStock)=>{
-    try{await apiPatch("/api/products/"+p.id+"/stock",{stock:newStock});setProducts(prev=>prev.map(x=>x.id===p.id?{...x,stock:newStock}:x))}catch(e){alert(e.message)}
+    try{await apiPut("/api/products/"+p.id,{...p,stock:newStock});setProducts(prev=>prev.map(x=>x.id===p.id?{...x,stock:newStock}:x))}catch(e){alert(e.message)}
   };
 
   const filtered=useMemo(()=>{
     let r=products;
-    if(filter!=="tous")r=r.filter(p=>p.cat===filter);
+    if(filter!=="tous")r=r.filter(p=>String(p.category_id)===filter||p.category_name===filter);
     if(search)r=r.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
     return r;
   },[products,filter,search]);
@@ -871,16 +868,15 @@ function CatalogPage({products,setProducts,loading,reload}){
 
     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{flex:1,minWidth:140,background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-      {["tous","puff","recharge","accessoire"].map(c=><button key={c} onClick={()=>setFilter(c)} style={{padding:"6px 14px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===c?C.accent:"transparent",color:filter===c?C.bg:C.text2,border:`1px solid ${filter===c?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{c}</button>)}
+      {[{v:"tous",l:"Tous"},...categories.map(c=>({v:String(c.id),l:`${c.emoji||""} ${c.name}`}))].map(c=><button key={c.v} onClick={()=>setFilter(c.v)} style={{padding:"6px 14px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",background:filter===c.v?C.accent:"transparent",color:filter===c.v?C.bg:C.text2,border:`1px solid ${filter===c.v?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{c.l}</button>)}
       <span style={{marginLeft:"auto",fontSize:12,color:C.text3}}>{filtered.length} produit{filtered.length>1?"s":""}</span>
     </div>
 
     {/* Bulk actions */}
     {bulkSelected.length>0&&<div style={{padding:"10px 14px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:9,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <span style={{fontSize:13,color:C.accent,fontWeight:600}}>{bulkSelected.length} sélectionné{bulkSelected.length>1?"s":""}</span>
-      <Btn style={{padding:"4px 10px",fontSize:11}} onClick={()=>bulkUpdateBadge("promo")}>🔥 Promo</Btn>
-      <Btn style={{padding:"4px 10px",fontSize:11}} onClick={()=>bulkUpdateBadge("new")}>🆕 New</Btn>
-      <Btn variant="ghost" style={{padding:"4px 10px",fontSize:11}} onClick={()=>bulkUpdateBadge("")}>Effacer badge</Btn>
+      <Btn variant="green" style={{padding:"4px 10px",fontSize:11}} onClick={()=>bulkToggleActive(1)}>✅ Activer</Btn>
+      <Btn variant="danger" style={{padding:"4px 10px",fontSize:11}} onClick={()=>bulkToggleActive(0)}>❌ Désactiver</Btn>
       <button onClick={()=>setBulkSelected([])} style={{marginLeft:"auto",background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:14}}>×</button>
     </div>}
 
@@ -891,29 +887,28 @@ function CatalogPage({products,setProducts,loading,reload}){
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr style={{borderBottom:`1px solid ${C.border}`,background:C.surface}}>
             <th style={{padding:"10px 14px",width:32}}><input type="checkbox" onChange={e=>setBulkSelected(e.target.checked?filtered.map(p=>p.id):[])}/></th>
-            {["Produit","Catégorie","Prix","Stock","Badge","Actions"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>)}
+            {["Produit","Catégorie","Prix","Stock","Statut","Actions"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>)}
           </tr></thead>
           <tbody>
             {filtered.map((p,i)=>{
-              const gouts=Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]);
               const mainImg=p.image_url;
               return<tr key={p.id} style={{borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none"}} className="row-hover">
                 <td style={{padding:"10px 14px"}}><input type="checkbox" checked={bulkSelected.includes(p.id)} onChange={e=>{e.stopPropagation();setBulkSelected(prev=>e.target.checked?[...prev,p.id]:prev.filter(x=>x!==p.id))}}/></td>
                 <td style={{padding:"10px 14px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     <div style={{width:40,height:40,borderRadius:8,background:C.surface,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      {mainImg?<img src={mainImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:<span style={{fontSize:20}}>{p.emoji||"💨"}</span>}
+                      {mainImg?<img src={mainImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:<span style={{fontSize:20}}>{p.category_emoji||"📦"}</span>}
                     </div>
                     <div>
                       <div style={{fontSize:13,fontWeight:600}}>{p.name}</div>
-                      {gouts.length>0&&<div style={{fontSize:11,color:C.text3}}>{gouts.length} goûts</div>}
+                      {(p.thc_percent||p.cbd_percent)&&<div style={{fontSize:11,color:C.text3}}>{p.thc_percent?`THC ${p.thc_percent}%`:""}{p.thc_percent&&p.cbd_percent?" · ":""}{p.cbd_percent?`CBD ${p.cbd_percent}%`:""}</div>}
                     </div>
                   </div>
                 </td>
-                <td style={{padding:"10px 14px",fontSize:12,color:C.text2,textTransform:"capitalize"}}>{p.cat}</td>
+                <td style={{padding:"10px 14px",fontSize:12,color:C.text2}}>{p.category_emoji||""} {p.category_name||"—"}</td>
                 <td style={{padding:"10px 14px"}}>
                   <div style={{fontSize:13,fontWeight:700,color:C.accent}}>{fmt(p.price)}</div>
-                  {p.compare_price&&<div style={{fontSize:11,color:C.text3,textDecoration:"line-through"}}>{fmt(p.compare_price)}</div>}
+                  <div style={{fontSize:11,color:C.text3}}>{p.unit}</div>
                 </td>
                 <td style={{padding:"10px 14px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -921,7 +916,7 @@ function CatalogPage({products,setProducts,loading,reload}){
                     <input type="number" defaultValue={p.stock} min="0" onBlur={e=>parseInt(e.target.value)!==p.stock&&updateStock(p,parseInt(e.target.value)||0)} style={{width:60,background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,color:C.text1,fontSize:12,padding:"3px 7px",outline:"none"}}/>
                   </div>
                 </td>
-                <td style={{padding:"10px 14px"}}>{p.badge&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:4,background:p.badge==="new"?"#00e67618":p.badge==="promo"?"#ff475718":"#f0b42918",color:p.badge==="new"?C.green:p.badge==="promo"?C.red:C.gold,border:`1px solid currentColor`,fontWeight:700,textTransform:"uppercase"}}>{p.badge}</span>}</td>
+                <td style={{padding:"10px 14px"}}><span style={{fontSize:10,padding:"2px 7px",borderRadius:4,background:p.active?"#00e67618":"#ff475718",color:p.active?C.green:C.red,border:"1px solid currentColor",fontWeight:700}}>{p.active?"ACTIF":"INACTIF"}</span></td>
                 <td style={{padding:"10px 14px"}}>
                   <div style={{display:"flex",gap:6}}>
                     <Btn variant="ghost" style={{padding:"4px 10px",fontSize:11}} onClick={()=>openEdit(p)}>✏️</Btn>
@@ -937,31 +932,28 @@ function CatalogPage({products,setProducts,loading,reload}){
     ):(
       <div className="catalog-grid">
         {filtered.map(p=>{
-          const gouts=Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]);
           const mainImg=p.image_url;const mainVid=p.video_url;
-          const epuise=p.stock===0;const faible=!epuise&&p.stock<(p.low_stock_alert||50);
-          const discount=p.compare_price&&p.compare_price>p.price?Math.round((1-p.price/p.compare_price)*100):0;
+          const epuise=p.stock===0;const faible=!epuise&&p.stock<50;
           return<Card key={p.id} style={{padding:0,overflow:"hidden",cursor:"pointer"}} onClick={()=>openEdit(p)}>
             <div style={{height:130,background:C.surface,position:"relative",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
               {mainVid?<video src={mainVid} style={{width:"100%",height:"100%",objectFit:"cover"}} autoPlay muted loop playsInline/>
                :mainImg?<img src={mainImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
-               :<span style={{fontSize:40}}>{p.emoji||"💨"}</span>}
+               :<span style={{fontSize:40}}>{p.category_emoji||"📦"}</span>}
               {epuise&&<div style={{position:"absolute",inset:0,background:"#00000066",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{background:C.red,color:"#fff",fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:5}}>ÉPUISÉ</span></div>}
               {!epuise&&faible&&<span style={{position:"absolute",top:6,left:6,background:C.orange,color:"#000",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3}}>STOCK FAIBLE</span>}
-              {!epuise&&!faible&&p.badge&&<span style={{position:"absolute",top:6,left:6,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3,background:p.badge==="new"?C.green:p.badge==="promo"?C.red:p.badge==="top"?C.accent:C.orange,color:"#000",textTransform:"uppercase"}}>{p.badge}</span>}
-              {discount>0&&<span style={{position:"absolute",top:6,right:6,background:C.red,color:"#fff",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3}}>-{discount}%</span>}
+              {!p.active&&<span style={{position:"absolute",top:6,right:6,background:"#ff475788",color:"#fff",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3}}>INACTIF</span>}
               <input type="checkbox" checked={bulkSelected.includes(p.id)} onChange={e=>{e.stopPropagation();setBulkSelected(prev=>e.target.checked?[...prev,p.id]:prev.filter(x=>x!==p.id))}} onClick={e=>e.stopPropagation()} style={{position:"absolute",bottom:6,right:6,width:16,height:16,cursor:"pointer"}}/>
             </div>
             <div style={{padding:12}}>
-              <div style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:2}}>{p.cat}</div>
+              <div style={{fontSize:10,color:C.text3,letterSpacing:".06em",marginBottom:2}}>{p.category_emoji||""} {p.category_name||"Sans catégorie"}</div>
               <div style={{fontSize:13,fontWeight:600,marginBottom:4,lineHeight:1.3}}>{p.name}</div>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                 <span style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.accent}}>{fmt(p.price)}</span>
-                {p.compare_price&&<span style={{fontSize:11,color:C.text3,textDecoration:"line-through"}}>{fmt(p.compare_price)}</span>}
+                <span style={{fontSize:11,color:C.text3}}>{p.unit}</span>
               </div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <span style={{fontSize:11,color:p.stock===0?C.red:p.stock<50?C.orange:C.green,fontWeight:600}}>Stock: {p.stock}</span>
-                {gouts.length>0&&<span style={{fontSize:10,color:C.accent}}>{gouts.length} goûts</span>}
+                {(p.thc_percent||p.cbd_percent)&&<span style={{fontSize:10,color:C.accent}}>{p.thc_percent?`THC ${p.thc_percent}%`:""}{p.thc_percent&&p.cbd_percent?" ":""}{p.cbd_percent?`CBD ${p.cbd_percent}%`:""}</span>}
               </div>
               <div style={{display:"flex",gap:6,marginTop:8}} onClick={e=>e.stopPropagation()}>
                 <Btn variant="ghost" style={{flex:1,justifyContent:"center",padding:"5px",fontSize:11}} onClick={()=>openEdit(p)}>✏️</Btn>
@@ -982,35 +974,30 @@ function CatalogPage({products,setProducts,loading,reload}){
           <button onClick={()=>setModal(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:20}}>×</button>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{display:"grid",gridTemplateColumns:"70px 1fr",gap:10}}>
-            <Inp label="Emoji" value={form.emoji} onChange={v=>setF({emoji:v})}/>
-            <Inp label="Nom" value={form.name} onChange={v=>setF({name:v})} placeholder="Ex: Elf Bar 600" required/>
-          </div>
+          <Inp label="Nom" value={form.name} onChange={v=>setF({name:v})} placeholder="Ex: Wedding Cake" required/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <Sel label="Catégorie" value={form.cat} onChange={v=>setF({cat:v})} options={[{value:"puff",label:"Puff"},{value:"recharge",label:"Recharge"},{value:"accessoire",label:"Accessoire"}]}/>
-            <Sel label="Badge" value={form.badge} onChange={v=>setF({badge:v})} options={[{value:"",label:"Aucun"},{value:"new",label:"🆕 Nouveau"},{value:"promo",label:"🔥 Promo"},{value:"top",label:"⭐ Top"},{value:"stock",label:"⚠️ Stock faible"}]}/>
-            <div>
-              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.text3,marginBottom:6}}>Description</div>
-              <textarea value={form.description} onChange={e=>setF({description:e.target.value})}
-                placeholder="Description du produit (optionnel)..."
-                rows={3}
-                style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,color:C.text1,fontSize:13,padding:"10px 13px",outline:"none",fontFamily:"'DM Sans',sans-serif",resize:"vertical",boxSizing:"border-box"}}
-                onFocus={e=>e.target.style.borderColor=C.accent}
-                onBlur={e=>e.target.style.borderColor=C.border}/>
-            </div>
+            <Sel label="Catégorie" value={String(form.category_id)} onChange={v=>setF({category_id:v})} options={[{value:"",label:"— Aucune —"},...categories.map(c=>({value:String(c.id),label:`${c.emoji||""} ${c.name}`}))]}/>
+            <Sel label="Actif" value={String(form.active)} onChange={v=>setF({active:parseInt(v)})} options={[{value:"1",label:"✅ Actif"},{value:"0",label:"❌ Inactif"}]}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.text3,marginBottom:6}}>Description</div>
+            <textarea value={form.description} onChange={e=>setF({description:e.target.value})}
+              placeholder="Description du produit (optionnel)..."
+              rows={3}
+              style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,color:C.text1,fontSize:13,padding:"10px 13px",outline:"none",fontFamily:"'DM Sans',sans-serif",resize:"vertical",boxSizing:"border-box"}}
+              onFocus={e=>e.target.style.borderColor=C.accent}
+              onBlur={e=>e.target.style.borderColor=C.border}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Inp label="Prix (€)" type="number" value={form.price} onChange={v=>setF({price:v})} required min="0" note="Prix de vente"/>
-            <Inp label="Prix barré (€)" type="number" value={form.compare_price} onChange={v=>setF({compare_price:v})} min="0" note="Optionnel — affiche -X%"/>
+            <Inp label="Stock" type="number" value={form.stock} onChange={v=>setF({stock:v})} min="0"/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-            <Inp label="Stock" type="number" value={form.stock} onChange={v=>setF({stock:v})} min="0"/>
-            <Inp label="Alerte stock" type="number" value={form.low_stock_alert} onChange={v=>setF({low_stock_alert:v})} min="0" note="Seuil stock faible"/>
-            <Inp label="Qté min." type="number" value={form.min_qty} onChange={v=>setF({min_qty:v})} min="1"/>
+            <Inp label="Unité" value={form.unit} onChange={v=>setF({unit:v})} placeholder="g"/>
+            <Inp label="THC (%)" type="number" value={form.thc_percent} onChange={v=>setF({thc_percent:v})} min="0" max="100"/>
+            <Inp label="CBD (%)" type="number" value={form.cbd_percent} onChange={v=>setF({cbd_percent:v})} min="0" max="100"/>
           </div>
-          <Inp label="Unité" value={form.unit} onChange={v=>setF({unit:v})} placeholder="/ unité"/>
           <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}><GalerieEditor medias={form.medias} onChange={medias=>setF({medias})}/></div>
-          <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}><GoutsEditor gouts={form.gouts} onChange={gouts=>setF({gouts})}/></div>
         </div>
         <div style={{display:"flex",gap:10,marginTop:20,justifyContent:"flex-end"}}>
           <Btn variant="ghost" onClick={()=>setModal(null)}>Annuler</Btn>
@@ -1066,17 +1053,42 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
   const fetchData=async(silent=false)=>{
     if(!silent)setLoading(true);
     try{
-      const[u,conversations]=await Promise.all([apiGet("/api/users"),apiGet("/api/messages")]);const m=[];
-      setUsers(u);setMessages(m);
+      const[u,conversations]=await Promise.all([apiGet("/api/users"),apiGet("/api/messages")]);
+      setUsers(u);
+      // /api/messages returns array: {id, telegram_id, username, first_name, last_name,
+      //   last_message, last_message_time, from_admin, unread_count}
+      const convArr=Array.isArray(conversations)?conversations:[];
+      // Map conversations to message objects for sidebar display
+      const m=convArr.map(c=>({
+        id:c.id,
+        user_id:c.id,
+        telegram_id:c.id,
+        text:c.last_message||"",
+        direction:c.from_admin?"out":"in",
+        created_at:c.last_message_time||new Date().toISOString(),
+        unread_count:c.unread_count||0
+      }));
+      setMessages(m);
       if(!silent)markAllRead(m);
     }catch(e){console.error(e)}
     if(!silent)setLoading(false);
   };
 
+  const fetchUserMessages=async(userId)=>{
+    try{
+      const msgs=await apiGet("/api/messages/"+userId);
+      const mapped=msgs.map(m=>({...m,telegram_id:m.user_id,direction:m.from_admin?"out":"in"}));
+      setMessages(prev=>{
+        const other=prev.filter(m=>m.telegram_id!==userId);
+        return [...other,...mapped];
+      });
+    }catch(e){console.error(e)}
+  };
+
   useEffect(()=>{fetchData()},[]);
   useEffect(()=>{const t=setInterval(()=>fetchData(true),5000);return()=>clearInterval(t)},[]);
   useEffect(()=>{if(messagesEndRef.current)messagesEndRef.current.scrollIntoView({behavior:"smooth"})},[messages,selected]);
-  useEffect(()=>{if(selected)markRead(selected.id)},[selected]);
+  useEffect(()=>{if(selected){markRead(selected.id);fetchUserMessages(selected.id)}},[selected?.id]);
 
   // IntersectionObserver pour marquer lus quand visibles
   useEffect(()=>{
@@ -1127,10 +1139,6 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
 
   const deleteBroadcastGroup=async group=>{
     if(!confirm(`Supprimer ce broadcast pour ${group.msgs.length} utilisateurs ?`))return;
-    for(const m of group.msgs){
-      if(m.tg_message_id){try{await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:m.telegram_id,message_id:m.tg_message_id})})}catch(e){}}
-      
-    }
     setMessages(prev=>prev.filter(m=>!group.msgs.find(gm=>gm.id===m.id)));
     showToast("🗑️ Broadcast supprimé");
   };
@@ -1187,18 +1195,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
         if(status==="cancelled"&&prevStatus!=="pending"&&prevStatus!=="cancelled"){
           for(const item of items){/* stock auto-adjust removed */}
         }
-        // Messages auto
-        const s=getSettings?getSettings():{};
-        if(order.telegram_id){
-          if(status==="expédié"&&s.msgExpédie){
-            const msg=`📦 *Commande ${id} expédiée !*\n\nVotre commande est en route 🚚\nMerci pour votre confiance ! 🙏`;
-            await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})}).catch(()=>{});
-          }
-          if(status==="payé"&&s.msgPaye){
-            const msg=`✅ *Paiement confirmé — ${id}*\n\nNous avons bien reçu votre paiement.\nVotre commande est en cours de préparation 📦`;
-            await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})}).catch(()=>{});
-          }
-        }
+        // Messages auto handled by bot backend
       }
     }catch(e){}
     setUpdatingO(false);
@@ -1229,17 +1226,9 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
           <Card style={{marginBottom:16}}>
             <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:4}}>Envoyer à tous</div>
             <div style={{fontSize:12,color:C.text3,marginBottom:14}}>{users.length} utilisateurs</div>
-            {broadcastFile&&<div style={{padding:"7px 11px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:7,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <span style={{fontSize:12,color:C.accent}}>📎 {broadcastFile.name}</span>
-              <button onClick={()=>{setBroadcastFile(null);broadcastFileRef.current.value=""}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:14}}>×</button>
-            </div>}
-            <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Message... (*gras*, _italique_)" style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:14,padding:"11px 13px",outline:"none",resize:"vertical",minHeight:90,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,gap:10}}>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>broadcastFileRef.current?.click()} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:"pointer",padding:"6px 11px",fontSize:12}}>📎 Fichier</button>
-                <input ref={broadcastFileRef} type="file" accept="image/*,video/*,application/pdf,.doc,.docx" style={{display:"none"}} onChange={e=>setBroadcastFile(e.target.files[0]||null)}/>
-              </div>
-              <Btn onClick={sendBroadcast} disabled={broadcasting||(!broadcast.trim()&&!broadcastFile)}>{broadcasting?"⏳ Envoi...":`📢 Envoyer à ${users.length}`}</Btn>
+            <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Message..." style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:14,padding:"11px 13px",outline:"none",resize:"vertical",minHeight:90,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+            <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",marginTop:10,gap:10}}>
+              <Btn onClick={sendBroadcast} disabled={broadcasting||!broadcast.trim()}>{broadcasting?"⏳ Envoi...":`📢 Envoyer à ${users.length}`}</Btn>
             </div>
           </Card>
           <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:10,color:C.text2}}>Historique ({broadcastGroups().length})</div>
@@ -1325,15 +1314,9 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
 
             {/* Zone réponse */}
             <div style={{padding:"9px 13px",borderTop:`1px solid ${C.border}`,background:C.surface,flexShrink:0}}>
-              {replyFile&&<div style={{padding:"5px 10px",background:C.accentDim,borderRadius:7,marginBottom:7,fontSize:12,color:C.accent,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span>📎 {replyFile.name}</span>
-                <button onClick={()=>{setReplyFile(null);fileRef.current.value=""}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13}}>×</button>
-              </div>}
               <div style={{display:"flex",gap:7,alignItems:"flex-end"}}>
-                <button onClick={()=>fileRef.current?.click()} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:9,color:C.text2,cursor:"pointer",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>📎</button>
-                <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" style={{display:"none"}} onChange={e=>setReplyFile(e.target.files[0]||null)}/>
                 <textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Message..." onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendReply())} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none",resize:"none",maxHeight:100,minHeight:36,fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border} rows={1}/>
-                <button onClick={sendReply} disabled={sending||(!reply.trim()&&!replyFile)} style={{background:sending||(!reply.trim()&&!replyFile)?C.border:C.accent,border:"none",borderRadius:9,color:C.bg,cursor:"pointer",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>
+                <button onClick={sendReply} disabled={sending||!reply.trim()} style={{background:sending||!reply.trim()?C.border:C.accent,border:"none",borderRadius:9,color:C.bg,cursor:"pointer",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>
                   {sending?"⏳":"➤"}
                 </button>
               </div>
@@ -1480,16 +1463,14 @@ function App(){
 
   const pollUnread=async()=>{
     try{
-      const msgs=[];
-      const rids=JSON.parse(localStorage.getItem("baltimore83_read_ids")||"[]");
-      const unread=msgs.filter(m=>!rids.includes(m.id));
+      const conversations=await apiGet("/api/messages");
+      const convArr=Array.isArray(conversations)?conversations:[];
+      const totalUnread=convArr.reduce((s,c)=>s+(c.unread_count||0),0);
       const prevCount=unreadMsgCount;
-      setUnreadMsgCount(unread.length);
-      // Notification browser si nouveau message
+      setUnreadMsgCount(totalUnread);
       const s=getSettings();
-      if(s.notifMessages&&s.notifMessages&&Notification?.permission==="granted"&&unread.length>prevCount){
-        const newest=unread[0];
-        new Notification("Baltimore 83 — Nouveau message",{body:newest.text||"📷 Média",icon:"https://anserfj.github.io/telegram-shop/LOGO_ZK_PRO.jpg"});
+      if(s.notifMessages&&Notification?.permission==="granted"&&unread.length>prevCount){
+        new Notification("Baltimore 83 — Nouveau message",{body:"Nouveau message reçu",icon:""});
       }
     }catch(e){}
   };

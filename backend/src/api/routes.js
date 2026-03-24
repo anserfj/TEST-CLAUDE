@@ -25,20 +25,20 @@ router.get('/products/:id', (req, res) => {
 });
 
 router.post('/products', (req, res) => {
-  const { category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active } = req.body;
+  const { category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active, image_url } = req.body;
   const result = db.prepare(`
-    INSERT INTO products (category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(category_id, name, description, price, stock || 0, unit || 'g', thc_percent || 0, cbd_percent || 0, active !== false ? 1 : 0);
+    INSERT INTO products (category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active, image_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(category_id, name, description, price, stock || 0, unit || 'g', thc_percent || 0, cbd_percent || 0, active !== false ? 1 : 0, image_url || null);
   res.json({ id: result.lastInsertRowid, ...req.body });
 });
 
 router.put('/products/:id', (req, res) => {
-  const { name, description, price, stock, unit, thc_percent, cbd_percent, active, category_id } = req.body;
+  const { name, description, price, stock, unit, thc_percent, cbd_percent, active, category_id, image_url } = req.body;
   db.prepare(`
-    UPDATE products SET name=?, description=?, price=?, stock=?, unit=?, thc_percent=?, cbd_percent=?, active=?, category_id=?
+    UPDATE products SET name=?, description=?, price=?, stock=?, unit=?, thc_percent=?, cbd_percent=?, active=?, category_id=?, image_url=?
     WHERE id=?
-  `).run(name, description, price, stock, unit, thc_percent, cbd_percent, active ? 1 : 0, category_id, req.params.id);
+  `).run(name, description, price, stock, unit, thc_percent, cbd_percent, active ? 1 : 0, category_id, image_url || null, req.params.id);
   res.json({ success: true });
 });
 
