@@ -267,12 +267,12 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
 /* ── DASHBOARD ── */
 function DashboardPage({orders,products,setPage}){
   const now=new Date(),thisMonth=now.getMonth(),thisYear=now.getFullYear();
-  const active=orders.filter(o=>o.status!=="annulé");
+  const active=orders.filter(o=>o.status!=="cancelled");
   const totalCA=active.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
   const monthOrders=active.filter(o=>{const d=new Date(o.created_at);return d.getMonth()===thisMonth&&d.getFullYear()===thisYear});
   const monthCA=monthOrders.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
-  const newOrders=orders.filter(o=>o.status==="nouveau").length;
-  const shipped=orders.filter(o=>o.status==="expédié").length;
+  const newOrders=orders.filter(o=>o.status==="pending").length;
+  const shipped=orders.filter(o=>o.status==="shipped").length;
   const avgOrder=active.length?totalCA/active.length:0;
   const lowStock=products.filter(p=>p.stock<50&&p.stock>0).length;
   const outStock=products.filter(p=>p.stock===0).length;
@@ -301,7 +301,7 @@ function DashboardPage({orders,products,setPage}){
   },[orders]);
 
   // Commandes en attente de traitement
-  const pending=orders.filter(o=>["nouveau","payé"].includes(o.status)).length;
+  const pending=orders.filter(o=>["pending","confirmed"].includes(o.status)).length;
 
   return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
@@ -535,7 +535,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       </select>
     </div>
     <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-      {["tous","nouveau","payé","traité","expédié","annulé"].map(s=><button key={s} onClick={()=>{setFilter(s);setCurrentPage(1)}} style={{padding:"5px 12px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s?C.accent:"transparent",color:filter===s?C.bg:C.text2,border:`1px solid ${filter===s?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s}</button>)}
+      {[{v:"tous",l:"tous"},{v:"pending",l:"En attente"},{v:"confirmed",l:"Confirmé"},{v:"preparing",l:"En prépa"},{v:"shipped",l:"Expédié"},{v:"delivered",l:"Livré"},{v:"cancelled",l:"Annulé"}].map(s=><button key={s.v} onClick={()=>{setFilter(s.v);setCurrentPage(1)}} style={{padding:"5px 12px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s.v?C.accent:"transparent",color:filter===s.v?C.bg:C.text2,border:`1px solid ${filter===s.v?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s.l}</button>)}
       <span style={{marginLeft:"auto",fontSize:12,color:C.text3}}>{filtered.length} · {fmt(totalFiltered)}</span>
     </div>
 
@@ -564,9 +564,9 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
                 <td className="hide-mobile" style={{padding:"11px 14px",fontSize:13,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</td>
                 <td style={{padding:"11px 14px"}}><Badge status={o.status}/></td>
                 <td style={{padding:"11px 14px"}}>
-                  {o.status==="nouveau"&&<Btn variant="purple" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"payé")}}>💜 Payé</Btn>}
-                  {o.status==="payé"&&<Btn variant="gold" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"traité")}}>✓ Traiter</Btn>}
-                  {o.status==="traité"&&<Btn style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"expédié")}}>🚚</Btn>}
+                  {o.status==="pending"&&<Btn variant="purple" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"confirmed")}}>💜 Confirmer</Btn>}
+                  {o.status==="confirmed"&&<Btn variant="gold" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"preparing")}}>✓ Préparer</Btn>}
+                  {o.status==="preparing"&&<Btn style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"shipped")}}>🚚</Btn>}
                 </td>
               </tr>)}
               {filtered.length===0&&<tr><td colSpan={6} style={{padding:40,textAlign:"center",color:C.text3}}>Aucune commande</td></tr>}
@@ -675,7 +675,7 @@ function ClientsPage({orders,setOrders}){
 
   const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
   const clientOrders=uid=>orders.filter(o=>String(o.telegram_id)===String(uid));
-  const ca=uid=>clientOrders(uid).filter(o=>o.status!=="annulé").reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+  const ca=uid=>clientOrders(uid).filter(o=>o.status!=="cancelled").reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
 
   const updateStatus=async(id,status)=>{
     setUpdating(true);
@@ -686,10 +686,10 @@ function ClientsPage({orders,setOrders}){
       if(order){
         const prevStatus=order.status;
         const items=parseItems(order.items);
-        if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
+        if(status==="confirmed"&&(prevStatus==="pending"||prevStatus==="cancelled")){
           for(const item of items){/* stock auto-adjust removed */}
         }
-        if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
+        if(status==="cancelled"&&prevStatus!=="pending"&&prevStatus!=="cancelled"){
           for(const item of items){/* stock auto-adjust removed */}
         }
       }
@@ -1197,10 +1197,10 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
       if(order){
         const prevStatus=order.status;
         const items=parseItems(order.items);
-        if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
+        if(status==="confirmed"&&(prevStatus==="pending"||prevStatus==="cancelled")){
           for(const item of items){/* stock auto-adjust removed */}
         }
-        if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
+        if(status==="cancelled"&&prevStatus!=="pending"&&prevStatus!=="cancelled"){
           for(const item of items){/* stock auto-adjust removed */}
         }
         // Messages auto
@@ -1491,7 +1491,7 @@ function App(){
 
   const getSettings=()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}};
 
-  const fetchOrders=async()=>{setLoadO(true);try{setOrders((await apiGet("/api/orders")).orders||[])}catch(e){console.error(e)}setLoadO(false)};
+  const fetchOrders=async()=>{setLoadO(true);try{const data=(await apiGet("/api/orders")).orders||[];const mapped=data.map(o=>({...o,telegram_user:o.username?`@${o.username}`:[o.first_name,o.last_name].filter(Boolean).join(" ")||`User #${o.telegram_id}`}));setOrders(mapped)}catch(e){console.error(e)}setLoadO(false)};
   const fetchProducts=async()=>{setLoadP(true);try{setProducts(await apiGet("/api/products"))}catch(e){console.error(e)}setLoadP(false)};
 
   const pollUnread=async()=>{
@@ -1514,7 +1514,7 @@ function App(){
   useEffect(()=>{if(!logged)return;const t=setInterval(fetchOrders,30000);return()=>clearInterval(t)},[logged]);
   useEffect(()=>{if(!logged)return;const t=setInterval(pollUnread,5000);return()=>clearInterval(t)},[logged]);
 
-  const newCount=orders.filter(o=>o.status==="nouveau").length;
+  const newCount=orders.filter(o=>o.status==="pending").length;
   if(!logged)return<LoginPage onLogin={login}/>;
 
   return<div style={{display:"flex",minHeight:"100vh"}}>
