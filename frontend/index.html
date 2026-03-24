@@ -1,13 +1,1598 @@
 <!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CBD Shop Dashboard</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BALTIMORE 83 · Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#080a0e;color:#eef2f7;font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+    ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0f1318}::-webkit-scrollbar-thumb{background:#1e2530;border-radius:2px}
+    input,select,textarea,button{font-family:'DM Sans',sans-serif}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    @keyframes scaleIn{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+    .fade-in{animation:fadeIn .3s ease forwards}
+    .scale-in{animation:scaleIn .25s ease forwards}
+    .slide-in{animation:slideIn .25s ease forwards}
+    .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#00e676;animation:pulse 2s infinite}
+    .spinner{width:24px;height:24px;border:2px solid #1e2530;border-top-color:#ffffff;border-radius:50%;animation:spin .7s linear infinite;margin:auto}
+    .drop-zone{border:2px dashed #1e2530;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s}
+    .drop-zone:hover,.drop-zone.drag-over{border-color:#ffffff;background:#ffffff08}
+    .drop-zone input[type=file]{display:none}
+    .row-hover:hover{background:#ffffff06!important;cursor:pointer}
+    .tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+    /* Responsive */
+    .sidebar-desktop{display:flex}
+    .sidebar-mobile{display:none}
+    .main-content{margin-left:220px;max-width:calc(100vw - 220px);padding:28px 24px}
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .hide-mobile{display:table-cell}
+    .catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .dash-grid-2{display:grid;grid-template-columns:1.8fr 1fr;gap:16px}
+    .dash-grid-equal{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .inbox-wrap{display:flex;flex:1;min-height:0;border-radius:12px;overflow:hidden}
+    .inbox-users{width:270px;flex-shrink:0;overflow-y:auto}
+    @media(max-width:900px){
+      .stats-grid{grid-template-columns:repeat(2,1fr)!important}
+      .dash-grid-2{grid-template-columns:1fr!important}
+      .dash-grid-equal{grid-template-columns:1fr!important}
+    }
+    @media(max-width:640px){
+      .sidebar-desktop{display:none!important}
+      .sidebar-mobile{display:flex!important;position:fixed;bottom:0;left:0;right:0;height:60px;background:#0c0f14;border-top:1px solid #1e2530;z-index:200;align-items:stretch;padding-bottom:env(safe-area-inset-bottom)}
+      .main-content{margin-left:0!important;max-width:100vw!important;padding:14px 12px calc(68px + env(safe-area-inset-bottom)) 12px!important}
+      .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+      .hide-mobile{display:none!important}
+      .catalog-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+      .dash-grid-2{grid-template-columns:1fr!important}
+      .dash-grid-equal{grid-template-columns:1fr!important}
+      .inbox-wrap{flex-direction:column!important}
+      .inbox-users{width:100%!important;max-height:180px!important;border-right:none!important;border-bottom:1px solid #1e2530!important}
+    }
+  </style>
+</head>
+<body><div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useMemo,useCallback}=React;
+
+const SB_URL="https://lkgyrqfdefwrmdvukmpl.supabase.co";
+const SB_KEY="sb_publishable_5eOyGWb80AcDLt-DSC7POA_blD_KhIZ";
+const SBH={"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`};
+const BUCKET="product-media";
+const STORAGE_URL=`${SB_URL}/storage/v1/object/public/${BUCKET}`;
+const UPLOAD_URL=`${SB_URL}/storage/v1/object/${BUCKET}`;
+const BOT_TOKEN="8385648324:AAE1ZBe2ZSnylaY8RCzT-ihJ6KQzX08MALk";
+const TG_API=`https://api.telegram.org/bot${BOT_TOKEN}`;
+
+async function sbGet(t,p=""){const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:SBH});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function sbPatch(t,id,body){const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:"PATCH",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());}
+async function sbPost(t,body){const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:"POST",headers:{...SBH,"Prefer":"return=representation"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function sbDelete(t,id){const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:"DELETE",headers:SBH});if(!r.ok)throw new Error(await r.text());}
+async function uploadFile(file,folder="photos"){
+  const ext=file.name.split(".").pop().toLowerCase();
+  const name=`${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const mimeMap={"mp4":"video/mp4","mov":"video/quicktime","webm":"video/webm","avi":"video/x-msvideo","jpg":"image/jpeg","jpeg":"image/jpeg","png":"image/png","gif":"image/gif","webp":"image/webp"};
+  const contentType=file.type||mimeMap[ext]||"application/octet-stream";
+  const r=await fetch(`${UPLOAD_URL}/${name}`,{method:"POST",headers:{"apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`,"Content-Type":contentType,"x-upsert":"true"},body:file});
+  if(!r.ok){const err=await r.text();throw new Error("Upload échoué: "+err);}
+  return `${STORAGE_URL}/${name}`;
+}
+async function sendTgMsg(chatId,text){
+  const r=await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:chatId,text,parse_mode:"Markdown"})});
+  const d=await r.json(); return d?.result?.message_id||null;
+}
+async function sendTgFile(chatId,file){
+  const isImg=file.type.startsWith("image/"),isVid=file.type.startsWith("video/");
+  const ep=isImg?"sendPhoto":isVid?"sendVideo":"sendDocument";
+  const fd=isImg?"photo":isVid?"video":"document";
+  const f=new FormData(); f.append("chat_id",chatId); f.append(fd,file);
+  const r=await fetch(`${TG_API}/${ep}`,{method:"POST",body:f});
+  const d=await r.json(); return d?.result?.message_id||null;
+}
+
+const C={bg:"#080a0e",surface:"#0f1318",card:"#111620",border:"#1e2530",accent:"#ffffff",accentDim:"#ffffff18",accentMid:"#ffffff44",gold:"#f0b429",green:"#00e676",red:"#ff4757",orange:"#ff9f43",purple:"#a78bfa",text1:"#eef2f7",text2:"#8b9ab0",text3:"#4a5568"};
+const STATUS={nouveau:{label:"Nouveau",color:C.accent,bg:C.accentDim},payé:{label:"Payé",color:C.purple,bg:"#a78bfa18"},traité:{label:"Traité",color:C.gold,bg:"#f0b42918"},expédié:{label:"Expédié",color:C.green,bg:"#00e67618"},annulé:{label:"Annulé",color:C.red,bg:"#ff475718"}};
+const fmt=n=>parseFloat(n||0).toFixed(2).replace(".",",")+"\u00a0€";
+const isVideo=url=>url&&/\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
+const parseItems=items=>{try{return Array.isArray(items)?items:JSON.parse(items||"[]")}catch{return[]}};
+
+/* ── ATOMS ── */
+function Badge({status}){const c=STATUS[status]||STATUS.nouveau;return<span style={{display:"inline-flex",padding:"3px 10px",borderRadius:4,fontSize:11,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:c.color,background:c.bg,border:`1px solid ${c.color}33`}}>{c.label}</span>}
+function Card({children,style={},onClick,className=""}){return<div onClick={onClick} className={className} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,...style}} onMouseEnter={e=>onClick&&(e.currentTarget.style.borderColor=C.accentMid)} onMouseLeave={e=>onClick&&(e.currentTarget.style.borderColor=C.border)}>{children}</div>}
+function Btn({children,onClick,variant="primary",style={},disabled,title}){
+  const v={primary:{background:C.accent,color:C.bg,border:"none"},ghost:{background:"transparent",color:C.text2,border:`1px solid ${C.border}`},danger:{background:"transparent",color:C.red,border:`1px solid ${C.red}33`},gold:{background:C.gold,color:C.bg,border:"none"},purple:{background:C.purple,color:C.bg,border:"none"},green:{background:C.green,color:C.bg,border:"none"}};
+  return<button title={title} onClick={onClick} disabled={disabled} style={{...v[variant],padding:"8px 14px",borderRadius:8,fontSize:13,fontWeight:600,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6,...style}} onMouseEnter={e=>!disabled&&(e.currentTarget.style.opacity=".8")} onMouseLeave={e=>!disabled&&(e.currentTarget.style.opacity="1")}>{children}</button>
+}
+function Inp({label,value,onChange,type="text",placeholder,required,style={},min,max,note}){
+  return<div style={{display:"flex",flexDirection:"column",gap:5,...style}}>
+    {label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}{required&&<span style={{color:C.red}}> *</span>}</label>}
+    <input type={type} value={value} min={min} max={max} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+    {note&&<div style={{fontSize:11,color:C.text3}}>{note}</div>}
+  </div>
+}
+function Sel({label,value,onChange,options,style={}}){
+  return<div style={{display:"flex",flexDirection:"column",gap:5,...style}}>
+    {label&&<label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}</label>}
+    <select value={value} onChange={e=>onChange(e.target.value)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",cursor:"pointer"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}>
+      {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  </div>
+}
+function Toast({msg}){return msg?<div style={{position:"fixed",bottom:24,right:24,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 20px",fontSize:14,zIndex:9999,boxShadow:"0 8px 32px #00000080",animation:"fadeIn .2s ease"}}>{msg}</div>:null}
+
+function StatCard({icon,label,value,sub,color=C.accent,trend,onClick}){
+  return<div onClick={onClick} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:16,position:"relative",overflow:"hidden",cursor:onClick?"pointer":"default",transition:"border-color .15s"}} onMouseEnter={e=>onClick&&(e.currentTarget.style.borderColor=C.accentMid)} onMouseLeave={e=>onClick&&(e.currentTarget.style.borderColor=C.border)}>
+    <div style={{position:"absolute",top:0,right:0,width:70,height:70,background:`radial-gradient(circle at 100% 0%,${color}18 0%,transparent 70%)`}}/>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+      <span style={{fontSize:22}}>{icon}</span>
+      {trend!==undefined&&<span style={{fontSize:10,fontWeight:700,color:trend>=0?C.green:C.red,background:trend>=0?"#00e67618":"#ff475718",padding:"2px 6px",borderRadius:4}}>{trend>=0?"↑":"↓"}{Math.abs(trend)}%</span>}
+    </div>
+    <div style={{fontFamily:"'Bebas Neue'",fontSize:28,color,letterSpacing:"0.03em",lineHeight:1}}>{value}</div>
+    <div style={{fontSize:12,color:C.text2,marginTop:4,fontWeight:500}}>{label}</div>
+    {sub&&<div style={{fontSize:11,color:C.text3,marginTop:2}}>{sub}</div>}
+  </div>
+}
+
+/* ── MINI SPARKLINE ── */
+function Sparkline({data,color=C.accent,height=40}){
+  if(!data||data.length<2) return null;
+  const max=Math.max(...data),min=Math.min(...data);
+  const range=max-min||1;
+  const w=100,h=height;
+  const pts=data.map((v,i)=>`${(i/(data.length-1))*w},${h-((v-min)/range)*h}`).join(" ");
+  return<svg viewBox={`0 0 ${w} ${h}`} style={{width:"100%",height}} preserveAspectRatio="none">
+    <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <polyline points={`0,${h} ${pts} ${w},${h}`} fill={`${color}18`} stroke="none"/>
+  </svg>
+}
+
+/* ── GALERIE EDITOR ── */
+function GalerieEditor({medias,onChange}){
+  const [dragging,setDragging]=useState(false);
+  const [uploading,setUploading]=useState(false);
+  const [urlInput,setUrlInput]=useState("");
+  const [showUrl,setShowUrl]=useState(false);
+  const fileRef=useRef();
+  const addUrl=url=>{if(!url)return;onChange([...medias,{url,type:isVideo(url)?"video":"image"}])};
+  const handleFiles=async files=>{
+    setUploading(true);
+    try{const up=[];for(const f of Array.from(files)){const folder=f.type.startsWith("video")?"videos":"photos";const url=await uploadFile(f,folder);up.push({url,type:f.type.startsWith("video")?"video":"image"});}onChange([...medias,...up]);}
+    catch(e){alert("Upload: "+e.message);}
+    setUploading(false);
+  };
+  const remove=idx=>onChange(medias.filter((_,i)=>i!==idx));
+  const moveFirst=idx=>{const c=[...medias];const[item]=c.splice(idx,1);onChange([item,...c])};
+  return<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase"}}>📸 Médias</label>
+      <span style={{fontSize:11,color:C.text3}}>{medias.length===0?"Aucun":`${medias.length} fichier${medias.length>1?"s":""} · 1er = vignette`}</span>
+    </div>
+    {medias.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:8}}>
+      {medias.map((m,i)=><div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",border:`2px solid ${i===0?C.accent:C.border}`,aspectRatio:"1/1",background:C.surface}}>
+        {i===0&&<span style={{position:"absolute",top:4,left:4,background:C.accent,color:"#000",fontSize:8,fontWeight:700,padding:"1px 5px",borderRadius:3,zIndex:2}}>PRINCIPAL</span>}
+        {m.type==="video"?<video src={m.url} style={{width:"100%",height:"100%",objectFit:"cover"}} autoPlay muted loop playsInline/>:<img src={m.url} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>}
+        <div style={{position:"absolute",top:4,right:4,display:"flex",flexDirection:"column",gap:3}}>
+          <button onClick={()=>remove(i)} style={{background:"#ff4757cc",border:"none",borderRadius:4,color:"#fff",cursor:"pointer",width:20,height:20,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          {i>0&&<button onClick={()=>moveFirst(i)} style={{background:"#ffffffcc",border:"none",borderRadius:4,color:"#000",cursor:"pointer",width:20,height:20,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>★</button>}
+        </div>
+      </div>)}
+    </div>}
+    <div className="drop-zone" onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={e=>{e.preventDefault();setDragging(false);handleFiles(e.dataTransfer.files)}} onClick={()=>fileRef.current?.click()} style={{borderColor:dragging?C.accent:""}}>
+      <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={e=>handleFiles(e.target.files)}/>
+      {uploading?<div style={{color:C.accent,fontSize:13}}>⏳ Upload...</div>:<div style={{color:C.text3,fontSize:13}}><div style={{fontSize:24,marginBottom:4}}>📂</div><span style={{color:C.accent,fontWeight:600}}>Glisse ici</span> ou clique — photos & vidéos</div>}
+    </div>
+    <div>
+      <button onClick={()=>setShowUrl(v=>!v)} style={{background:"none",border:"none",color:C.text3,fontSize:12,cursor:"pointer",textDecoration:"underline"}}>▼ Ajouter via URL</button>
+      {showUrl&&<div style={{display:"flex",gap:8,marginTop:6}}>
+        <input value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder="https://..." onKeyDown={e=>e.key==="Enter"&&(addUrl(urlInput.trim()),setUrlInput(""),setShowUrl(false))} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"7px 11px",outline:"none"}}/>
+        <Btn onClick={()=>{addUrl(urlInput.trim());setUrlInput("");setShowUrl(false)}} style={{padding:"7px 12px",fontSize:12}}>+</Btn>
+      </div>}
+    </div>
+  </div>
+}
+
+function GoutsEditor({gouts,onChange}){
+  const [v,setV]=useState("");
+  const add=()=>{const g=v.trim();if(!g||gouts.includes(g))return;onChange([...gouts,g]);setV("")};
+  return<div style={{display:"flex",flexDirection:"column",gap:8}}>
+    <label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase"}}>Goûts</label>
+    <div style={{display:"flex",flexWrap:"wrap",gap:5,minHeight:34,padding:8,background:C.surface,borderRadius:8,border:`1px solid ${C.border}`}}>
+      {gouts.map((g,i)=><span key={i} style={{display:"inline-flex",alignItems:"center",gap:3,padding:"2px 8px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:16,fontSize:12,color:C.accent}}>
+        {g}<button onClick={()=>onChange(gouts.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13,lineHeight:1}}>×</button>
+      </span>)}
+      {gouts.length===0&&<span style={{color:C.text3,fontSize:12,alignSelf:"center"}}>Aucun goût</span>}
+    </div>
+    <div style={{display:"flex",gap:8}}>
+      <input value={v} onChange={e=>setV(e.target.value)} placeholder="Ex: Mangue Glacée" onKeyDown={e=>e.key==="Enter"&&add()} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"7px 11px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <Btn onClick={add} style={{padding:"7px 12px",fontSize:12}}>+ Ajouter</Btn>
+    </div>
+  </div>
+}
+
+/* ── LOGIN ── */
+function LoginPage({onLogin}){
+  const [email,setEmail]=useState("");
+  const [pass,setPass]=useState("");
+  const [err,setErr]=useState("");
+  const [isLoading,setLoading]=useState(false);
+  const handle=e=>{e.preventDefault();setLoading(true);setErr("");setTimeout(()=>{if(email==="admin@baltimore83.fr"&&pass==="baltimore2025")onLogin();else{setErr("Email ou mot de passe incorrect.");setLoading(false);}},600)};
+  return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
+    <div style={{position:"absolute",inset:0,opacity:.03,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
+    <div style={{position:"absolute",top:"20%",left:"10%",width:300,height:300,background:`radial-gradient(circle,${C.accent}12 0%,transparent 70%)`,borderRadius:"50%",pointerEvents:"none"}}/>
+    <div className="scale-in" style={{width:"100%",maxWidth:400,padding:20,position:"relative",zIndex:1}}>
+      <div style={{textAlign:"center",marginBottom:36}}>
+        <img src="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/2Q==" style={{height:60,width:"auto",objectFit:"contain",borderRadius:6,marginBottom:8}}/>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:38,color:C.accent,letterSpacing:"0.08em",lineHeight:1}}>Baltimore 83</div>
+        <div style={{fontSize:11,color:C.text3,letterSpacing:"0.2em",textTransform:"uppercase",marginTop:4}}>Administration · CBD Shop</div>
+      </div>
+      <Card style={{padding:28}}>
+        <div style={{marginBottom:22}}><div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.text1,letterSpacing:"0.05em"}}>Connexion</div><div style={{fontSize:13,color:C.text2,marginTop:3}}>Accès réservé aux administrateurs</div></div>
+        <form onSubmit={handle} style={{display:"flex",flexDirection:"column",gap:14}}>
+          <Inp label="Email" type="email" value={email} onChange={setEmail} placeholder="admin@baltimore83.fr" required/>
+          <Inp label="Mot de passe" type="password" value={pass} onChange={setPass} placeholder="••••••••" required/>
+          {err&&<div style={{background:"#ff475712",border:`1px solid ${C.red}33`,borderRadius:8,padding:"9px 13px",fontSize:13,color:C.red}}>{err}</div>}
+          <Btn style={{width:"100%",justifyContent:"center",padding:"11px 20px",fontSize:14,marginTop:4}} disabled={isLoading}>{isLoading?"Connexion...":"Se connecter →"}</Btn>
+        </form>
+      </Card>
+    </div>
+  </div>
+}
+
+/* ── SIDEBAR ── */
+function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const MobileNav=()=><div className="sidebar-mobile">
+    {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 2px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
+      <span style={{fontSize:18,lineHeight:1}}>{item.icon}</span>
+      <span style={{fontSize:8,fontWeight:600,letterSpacing:"0.04em"}}>{item.label}</span>
+      {item.id==="orders"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 16px)",background:C.accent,color:C.bg,borderRadius:8,fontSize:8,fontWeight:700,padding:"0 4px"}}>{newCount}</span>}
+      {item.id==="messages"&&unreadMsg>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 16px)",background:C.red,color:"#fff",borderRadius:8,fontSize:8,fontWeight:700,padding:"0 4px"}}>{unreadMsg}</span>}
+      {page===item.id&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
+    </button>)}
+  </div>;
+  return<>
+    <div className="sidebar-desktop" style={{width:220,minHeight:"100vh",background:C.surface,borderRight:`1px solid ${C.border}`,flexDirection:"column",position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
+      <div style={{padding:"20px 18px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><img src="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/2Q==" style={{height:30,width:"auto",objectFit:"contain",borderRadius:4}}/><div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.accent,letterSpacing:"0.08em"}}>Baltimore 83</div></div>
+        <div style={{fontSize:10,color:C.text3,letterSpacing:"0.15em",textTransform:"uppercase",marginTop:4}}>CBD SHOP</div>
+      </div>
+      <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.border}`}}>
+        <input placeholder="🔍 Recherche rapide..." onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){setPage("orders")}}} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,color:C.text1,fontSize:12,padding:"7px 10px",outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      </div>
+      <div style={{padding:"10px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:7}}>
+        <span className="live-dot"/><span style={{fontSize:11,color:C.text3}}>En ligne</span>
+      </div>
+      <nav style={{flex:1,padding:"10px"}}>
+        {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 11px",borderRadius:8,marginBottom:2,background:page===item.id?C.accentDim:"transparent",border:page===item.id?`1px solid ${C.accentMid}`:"1px solid transparent",color:page===item.id?C.accent:C.text2,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}} onMouseEnter={e=>page!==item.id&&(e.currentTarget.style.background="#ffffff08")} onMouseLeave={e=>page!==item.id&&(e.currentTarget.style.background="transparent")}>
+          <span style={{fontSize:16,lineHeight:1}}>{item.icon}</span><span>{item.label}</span>
+          {item.id==="orders"&&newCount>0&&<span style={{marginLeft:"auto",background:C.accent,color:C.bg,borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{newCount}</span>}
+          {item.id==="messages"&&unreadMsg>0&&<span style={{marginLeft:"auto",background:C.red,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{unreadMsg}</span>}
+        </button>)}
+      </nav>
+      <div style={{padding:"14px 10px",borderTop:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",marginBottom:6}}>
+          <div style={{width:30,height:30,borderRadius:8,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.accent,fontWeight:700}}>A</div>
+          <div><div style={{fontSize:12,fontWeight:600,color:C.text1}}>Admin</div><div style={{fontSize:10,color:C.text3}}>admin@baltimore83.fr</div></div>
+        </div>
+        <button onClick={onLogout} style={{width:"100%",padding:"7px 10px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,color:C.text3,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red+"88";e.currentTarget.style.color=C.red}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text3}}>Déconnexion</button>
+      </div>
+    </div>
+    <MobileNav/>
+  </>;
+}
+
+/* ── DASHBOARD ── */
+function DashboardPage({orders,products,setPage}){
+  const now=new Date(),thisMonth=now.getMonth(),thisYear=now.getFullYear();
+  const active=orders.filter(o=>o.status!=="annulé");
+  const totalCA=active.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+  const monthOrders=active.filter(o=>{const d=new Date(o.created_at);return d.getMonth()===thisMonth&&d.getFullYear()===thisYear});
+  const monthCA=monthOrders.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+  const newOrders=orders.filter(o=>o.status==="nouveau").length;
+  const shipped=orders.filter(o=>o.status==="expédié").length;
+  const avgOrder=active.length?totalCA/active.length:0;
+  const lowStock=products.filter(p=>p.stock<50&&p.stock>0).length;
+  const outStock=products.filter(p=>p.stock===0).length;
+
+  // Tendance : cette semaine vs semaine précédente
+  const weekCA=(offset=0)=>{
+    const start=new Date(now);start.setDate(start.getDate()-offset*7-7);
+    const end=new Date(now);end.setDate(end.getDate()-offset*7);
+    return active.filter(o=>{const d=new Date(o.created_at);return d>=start&&d<=end}).reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+  };
+  const thisWeek=weekCA(0),lastWeek=weekCA(1);
+  const weekTrend=lastWeek>0?Math.round(((thisWeek-lastWeek)/lastWeek)*100):0;
+
+  // Top 5 produits vendus
+  const topProducts=useMemo(()=>{
+    const counts={};
+    active.forEach(o=>parseItems(o.items).forEach(i=>{counts[i.name]=(counts[i.name]||0)+i.qty}));
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  },[orders]);
+
+  // Sparkline CA 14 jours
+  const sparkData=useMemo(()=>{
+    const days=14;const data=Array(days).fill(0);
+    active.forEach(o=>{const d=new Date(o.created_at);const diff=Math.floor((now-d)/(1000*60*60*24));if(diff<days)data[days-1-diff]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
+    return data;
+  },[orders]);
+
+  // Commandes en attente de traitement
+  const pending=orders.filter(o=>["nouveau","payé"].includes(o.status)).length;
+
+  return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Dashboard</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>
+          {new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} ·{" "}
+          <a href="https://anserfj.github.io/BATIMORE-83/index.htm" target="_blank" style={{color:C.accent,textDecoration:"none"}}>Voir la boutique →</a>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        {pending>0&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",background:"#f0b42918",border:`1px solid ${C.gold}33`,borderRadius:8,fontSize:12,color:C.gold,cursor:"pointer"}} onClick={()=>setPage("orders")}>
+          ⏳ {pending} à traiter
+        </div>}
+        <Btn onClick={()=>setPage("orders")} style={{fontSize:12}}>Commandes →</Btn>
+      </div>
+    </div>
+
+    {/* Stats */}
+    <div className="stats-grid">
+      <StatCard icon="💰" label="CA total" value={fmt(totalCA)} sub={`${fmt(monthCA)} ce mois`} color={C.accent} trend={weekTrend} onClick={()=>setPage("orders")}/>
+      <StatCard icon="📦" label="Commandes" value={String(orders.length)} sub={`${newOrders} nouvelles`} color={C.gold} trend={8} onClick={()=>setPage("orders")}/>
+      <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub={`${active.length} actives`} color={C.green} onClick={()=>setPage("orders")}/>
+      <StatCard icon="💳" label="Panier moyen" value={fmt(avgOrder)} sub={`${monthOrders.length} cmd ce mois`} color={C.purple}/>
+    </div>
+
+    {/* Alertes */}
+    {(lowStock>0||outStock>0)&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+      {outStock>0&&<div style={{flex:1,minWidth:200,padding:"11px 14px",background:"#ff475710",border:`1px solid ${C.red}33`,borderRadius:10,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setPage("catalog")}>
+        <span style={{fontSize:18}}>⚠️</span>
+        <div><div style={{fontSize:13,fontWeight:600,color:C.red}}>{outStock} produit{outStock>1?"s":""} épuisé{outStock>1?"s":""}</div><div style={{fontSize:11,color:C.text3}}>Cliquer pour mettre à jour</div></div>
+      </div>}
+      {lowStock>0&&<div style={{flex:1,minWidth:200,padding:"11px 14px",background:"#ff9f4310",border:`1px solid ${C.orange}33`,borderRadius:10,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setPage("catalog")}>
+        <span style={{fontSize:18}}>📉</span>
+        <div><div style={{fontSize:13,fontWeight:600,color:C.orange}}>{lowStock} produit{lowStock>1?"s":""} stock faible</div><div style={{fontSize:11,color:C.text3}}>&lt; 50 unités</div></div>
+      </div>}
+    </div>}
+
+    <div className="dash-grid-2" style={{gap:16}}>
+      {/* CA 14 jours */}
+      <Card>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>CA — 14 derniers jours</div>
+            <div style={{fontSize:11,color:weekTrend>=0?C.green:C.red,marginTop:2,fontWeight:600}}>{weekTrend>=0?"↑":"↓"} {Math.abs(weekTrend)}% vs semaine précédente</div>
+          </div>
+          <span style={{fontSize:14,fontWeight:700,color:C.accent}}>{fmt(sparkData.reduce((a,b)=>a+b,0))}</span>
+        </div>
+        <Sparkline data={sparkData} color={C.accent} height={56}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
+          <span style={{fontSize:10,color:C.text3}}>J-14</span>
+          <span style={{fontSize:10,color:C.text3}}>Aujourd'hui</span>
+        </div>
+      </Card>
+
+      {/* Statuts */}
+      <Card>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>Statuts</div>
+        {Object.entries(STATUS).map(([k,v])=>{const n=orders.filter(o=>o.status===k).length;const pct=orders.length?Math.round(n/orders.length*100):0;return<div key={k} style={{marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:v.color,fontSize:12,fontWeight:600}}>{v.label}</span><span style={{color:C.text3,fontSize:11}}>{n}</span></div>
+          <div style={{height:4,background:C.border,borderRadius:2}}><div style={{height:"100%",width:`${pct}%`,background:v.color,borderRadius:2,transition:"width .4s"}}/></div>
+        </div>})}
+      </Card>
+    </div>
+
+    <div className="dash-grid-equal" style={{gap:16}}>
+      {/* Top produits */}
+      <Card>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🏆 Top produits</div>
+        {topProducts.length===0?<div style={{color:C.text3,fontSize:13}}>Aucune vente</div>:topProducts.map(([name,qty],i)=>{
+          const maxQty=topProducts[0][1];
+          return<div key={name} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:12,color:C.text1}}><span style={{color:C.text3,marginRight:6}}>#{i+1}</span>{name}</span>
+              <span style={{fontSize:12,fontWeight:700,color:C.accent}}>{qty} u.</span>
+            </div>
+            <div style={{height:3,background:C.border,borderRadius:2}}><div style={{height:"100%",width:`${(qty/maxQty)*100}%`,background:C.accent,borderRadius:2}}/></div>
+          </div>
+        })}
+      </Card>
+
+      {/* Dernières commandes */}
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>Récentes</div>
+          <button onClick={()=>setPage("orders")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer"}}>Tout voir →</button>
+        </div>
+        {orders.slice(0,5).map((o,i)=><div key={o.id} style={{padding:"10px 18px",borderBottom:i<4?`1px solid ${C.border}`:"none",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setPage("orders")} className="row-hover">
+          <div>
+            <div style={{fontSize:12,fontFamily:"'JetBrains Mono'",color:C.accent}}>{o.id}</div>
+            <div style={{fontSize:11,color:C.text3}}>{o.telegram_user}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:12,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</div>
+            <Badge status={o.status}/>
+          </div>
+        </div>)}
+      </Card>
+    </div>
+  </div>
+}
+
+
+/* ── ORDERS ── */
+function OrdersPage({orders,setOrders,products,setProducts,loading,reload,selectedOrder,setSelectedOrder,getSettings}){
+  const [filter,setFilter]=useState("tous");
+  const [search,setSearch]=useState("");
+  const [sort,setSort]=useState("date_desc");
+  const [selected,setSelected]=useState(null);
+  const [updating,setUpdating]=useState(false);
+  const [dateFrom,setDateFrom]=useState("");
+  const [dateTo,setDateTo]=useState("");
+  const [note,setNote]=useState("");
+  const [savingNote,setSavingNote]=useState(false);
+  const [bulkSelected,setBulkSelected]=useState([]);
+  const [bulkUpdating,setBulkUpdating]=useState(false);
+
+  useEffect(()=>{
+    if(selectedOrder&&orders.length>0){const o=orders.find(x=>x.id===selectedOrder);if(o){setSelected(o);setNote(o.note||"");if(setSelectedOrder)setSelectedOrder(null)}}
+  },[selectedOrder,orders]);
+
+  useEffect(()=>{if(selected)setNote(selected.note||"")},[selected]);
+
+  // ── Gestion intelligente du stock ──────────────────────────────
+  // Stock déduit quand : nouveau → payé
+  // Stock remis quand  : annulé (depuis n'importe quel statut sauf nouveau)
+  // Stock re-déduit si : annulé → payé
+  const updateStatus=async(id,status)=>{
+    setUpdating(true);
+    try{
+      const order=orders.find(o=>o.id===id);
+      if(!order){setUpdating(false);return;}
+      const prevStatus=order.status;
+      await sbPatch("orders",id,{status});
+      setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+      setSelected(prev=>prev?.id===id?{...prev,status}:prev);
+
+      const items=parseItems(order.items);
+
+      // Déduire le stock : nouveau/annulé → payé
+      if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
+        for(const item of items){
+          const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);
+          if(prod[0]){
+            const newStock=Math.max(0,prod[0].stock-item.qty);
+            await sbPatch("products",prod[0].id,{stock:newStock}).catch(()=>{});
+            if(setProducts)setProducts(prev=>prev.map(p=>p.id===prod[0].id?{...p,stock:newStock}:p));
+          }
+        }
+      }
+      // Remettre le stock : (payé/traité/expédié) → annulé
+      if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
+        for(const item of items){
+          const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);
+          if(prod[0]){
+            const newStock=prod[0].stock+item.qty;
+            await sbPatch("products",prod[0].id,{stock:newStock}).catch(()=>{});
+            if(setProducts)setProducts(prev=>prev.map(p=>p.id===prod[0].id?{...p,stock:newStock}:p));
+          }
+        }
+      }
+    }catch(e){alert(e.message)}
+
+    // Message automatique bot si activé dans paramètres
+    try{
+      const s=getSettings?getSettings():{};
+      const order=orders.find(o=>o.id===id);
+      if(order?.telegram_id){
+        if(status==="expédié"&&s.msgExpédie){
+          const msg=`📦 *Commande ${id} expédiée !*\n\nVotre commande est en route 🚚\nVous recevrez votre colis dans les prochains jours.\n\nMerci pour votre confiance ! 🙏`;
+          await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})});
+          await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:order.telegram_id,direction:"out",text:`📦 Commande ${id} expédiée`,created_at:new Date().toISOString()})});
+        }
+        if(status==="payé"&&s.msgPaye){
+          const msg=`✅ *Paiement confirmé — ${id}*\n\nNous avons bien reçu votre paiement.\nVotre commande est en cours de préparation 📦\n\nMerci ! 🙏`;
+          await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})});
+          await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:order.telegram_id,direction:"out",text:`✅ Paiement confirmé ${id}`,created_at:new Date().toISOString()})});
+        }
+      }
+    }catch(e){}
+    setUpdating(false);
+  };
+
+  // Multi-sélection : changer le statut de plusieurs commandes
+  const bulkUpdateStatus=async(status)=>{
+    if(!bulkSelected.length)return;
+    if(!confirm(`Passer ${bulkSelected.length} commande(s) au statut "${STATUS[status].label}" ?`))return;
+    setBulkUpdating(true);
+    for(const id of bulkSelected){await updateStatus(id,status).catch(()=>{});}
+    setBulkSelected([]);
+    setBulkUpdating(false);
+  };
+
+  const saveNote=async()=>{
+    if(!selected)return;setSavingNote(true);
+    try{await sbPatch("orders",selected.id,{note});setOrders(prev=>prev.map(o=>o.id===selected.id?{...o,note}:o));setSelected(prev=>prev?{...prev,note}:prev)}
+    catch(e){alert(e.message)}
+    setSavingNote(false);
+  };
+
+  const exportCSV=()=>{
+    const rows=[["ID","Client","Date","Total","Livraison","Statut","Articles"],...filtered.map(o=>[o.id,o.telegram_user,new Date(o.created_at).toLocaleDateString("fr-FR"),(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2),o.status,parseItems(o.items).map(i=>`${i.name}×${i.qty}`).join("|")])];
+    const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`commandes_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+  };
+
+  const printOrder=o=>{
+    const li=o.livraison_info?(typeof o.livraison_info==="string"?JSON.parse(o.livraison_info):o.livraison_info):null;
+    const items=parseItems(o.items);
+    const w=window.open("","_blank");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>BALTIMORE 83 · Dashboard</title><style>body{font-family:sans-serif;max-width:600px;margin:40px auto;color:#111;font-size:14px}h1{font-size:22px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin:16px 0}td,th{padding:8px 10px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}tfoot td{font-weight:700}@media print{button{display:none}}</style></head><body>
+    <button onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;cursor:pointer">🖨️ Imprimer</button>
+    <h1>Commande ${o.id}</h1><p style="color:#666">${new Date(o.created_at).toLocaleString("fr-FR")} · ${o.telegram_user}</p>
+    ${li?`<h3>Livraison</h3><p>${li.prenom||""} ${li.nom||""}<br>${li.adresse||""}<br>${li.cp||""} ${li.ville||""}<br>${li.tel||""}</p>`:""}
+    <h3>Articles</h3>
+    <table><thead><tr><th>Produit</th><th>Goût</th><th>Qté</th><th>P.U.</th><th>Total</th></tr></thead><tbody>
+    ${items.map(i=>`<tr><td>${i.name}</td><td>${i.gout||"-"}</td><td>${i.qty}</td><td>${parseFloat(i.price).toFixed(2)} €</td><td>${(i.qty*i.price).toFixed(2)} €</td></tr>`).join("")}
+    </tbody><tfoot><tr><td colspan="4">Livraison</td><td>${parseFloat(o.livraison||0)===0?"Offerte":parseFloat(o.livraison).toFixed(2)+" €"}</td></tr>
+    <tr><td colspan="4"><strong>Total TTC</strong></td><td><strong>${(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)} €</strong></td></tr></tfoot></table>
+    <p>Statut : <strong>${o.status}</strong></p>
+    ${o.note?`<p>Note : ${o.note}</p>`:""}
+    </body></html>`);w.document.close();
+  };
+
+  const copyId=id=>{navigator.clipboard.writeText(id).catch(()=>{});/* silent */};
+
+  const [currentPage,setCurrentPage]=useState(1);
+  const PAGE_SIZE=20;
+
+  const filtered=useMemo(()=>{
+    let r=orders.filter(o=>{
+      if(filter!=="tous"&&o.status!==filter)return false;
+      if(search&&!o.id.toLowerCase().includes(search.toLowerCase())&&!o.telegram_user.toLowerCase().includes(search.toLowerCase()))return false;
+      if(dateFrom&&new Date(o.created_at)<new Date(dateFrom))return false;
+      if(dateTo&&new Date(o.created_at)>new Date(dateTo+"T23:59:59"))return false;
+      return true;
+    });
+    if(sort==="date_desc")r.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    else if(sort==="date_asc")r.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    else if(sort==="total_desc")r.sort((a,b)=>parseFloat(b.total)-parseFloat(a.total));
+    else if(sort==="total_asc")r.sort((a,b)=>parseFloat(a.total)-parseFloat(b.total));
+    return r;
+  },[orders,filter,search,sort,dateFrom,dateTo]);
+
+  const totalPages=Math.ceil(filtered.length/PAGE_SIZE);
+  const paginated=filtered.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE);
+  const totalFiltered=filtered.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+
+  return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Commandes</div>
+      <div style={{display:"flex",gap:8}}>
+        <Btn variant="ghost" onClick={exportCSV} style={{fontSize:12}}>📥 CSV</Btn>
+        <Btn variant="ghost" onClick={reload} style={{fontSize:12}}>🔄</Btn>
+      </div>
+    </div>
+
+    {/* Filtres */}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher ID, client..." style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none",flex:1,minWidth:140}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,fontSize:12,padding:"8px 10px",outline:"none"}}/>
+      <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,fontSize:12,padding:"8px 10px",outline:"none"}}/>
+      <select value={sort} onChange={e=>setSort(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,fontSize:12,padding:"8px 10px",outline:"none",cursor:"pointer"}}>
+        <option value="date_desc">Plus récent</option>
+        <option value="date_asc">Plus ancien</option>
+        <option value="total_desc">Total ↓</option>
+        <option value="total_asc">Total ↑</option>
+      </select>
+    </div>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      {["tous","nouveau","payé","traité","expédié","annulé"].map(s=><button key={s} onClick={()=>{setFilter(s);setCurrentPage(1)}} style={{padding:"5px 12px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s?C.accent:"transparent",color:filter===s?C.bg:C.text2,border:`1px solid ${filter===s?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s}</button>)}
+      <span style={{marginLeft:"auto",fontSize:12,color:C.text3}}>{filtered.length} · {fmt(totalFiltered)}</span>
+    </div>
+
+    {/* Barre actions multi-sélection */}
+    {bulkSelected.length>0&&<div style={{padding:"10px 14px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:9,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span style={{fontSize:13,color:C.accent,fontWeight:600}}>{bulkSelected.length} sélectionné{bulkSelected.length>1?"s":""}</span>
+      {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>bulkUpdateStatus(key)} disabled={bulkUpdating} style={{padding:"4px 10px",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",border:`1px solid ${cfg.color}`,background:cfg.bg,color:cfg.color,fontFamily:"'DM Sans',sans-serif",opacity:bulkUpdating?0.5:1}}>{cfg.label}</button>)}
+      <button onClick={()=>setBulkSelected([])} style={{marginLeft:"auto",background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:14}}>✕ Annuler</button>
+    </div>}
+
+    {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
+    <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:280,overflow:"auto"}}>
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
+            <thead><tr style={{borderBottom:`1px solid ${C.border}`,background:C.surface}}>
+              <th style={{padding:"10px 10px",width:36}}><input type="checkbox" onChange={e=>setBulkSelected(e.target.checked?paginated.map(o=>o.id):[])} checked={paginated.length>0&&paginated.every(o=>bulkSelected.includes(o.id))}/></th>
+              {["ID","Client","Date","Total","Statut","Action"].map((h,i)=><th key={h} className={i>=2&&i<=3?"hide-mobile":""} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {paginated.map((o,i)=><tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)} className="row-hover" style={{borderBottom:i<paginated.length-1?`1px solid ${C.border}`:"none",background:bulkSelected.includes(o.id)?C.accentDim:selected?.id===o.id?C.accentDim:"transparent",transition:"background .1s"}}>
+                <td style={{padding:"11px 10px"}} onClick={e=>e.stopPropagation()}><input type="checkbox" checked={bulkSelected.includes(o.id)} onChange={e=>setBulkSelected(prev=>e.target.checked?[...prev,o.id]:prev.filter(x=>x!==o.id))}/></td>
+                <td style={{padding:"11px 14px",fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent,whiteSpace:"nowrap"}}>{o.id}</td>
+                <td style={{padding:"11px 14px",fontSize:13}}>{o.telegram_user}</td>
+                <td className="hide-mobile" style={{padding:"11px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap"}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
+                <td className="hide-mobile" style={{padding:"11px 14px",fontSize:13,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</td>
+                <td style={{padding:"11px 14px"}}><Badge status={o.status}/></td>
+                <td style={{padding:"11px 14px"}}>
+                  {o.status==="nouveau"&&<Btn variant="purple" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"payé")}}>💜 Payé</Btn>}
+                  {o.status==="payé"&&<Btn variant="gold" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"traité")}}>✓ Traiter</Btn>}
+                  {o.status==="traité"&&<Btn style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"expédié")}}>🚚</Btn>}
+                </td>
+              </tr>)}
+              {filtered.length===0&&<tr><td colSpan={6} style={{padding:40,textAlign:"center",color:C.text3}}>Aucune commande</td></tr>}
+            </tbody>
+          </table>
+        </Card>
+        {/* Pagination */}
+        {totalPages>1&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12}}>
+          <button onClick={()=>setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1} style={{padding:"5px 12px",background:C.card,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:currentPage===1?"not-allowed":"pointer",fontSize:12,opacity:currentPage===1?0.4:1}}>← Préc.</button>
+          <div style={{display:"flex",gap:4}}>
+            {Array.from({length:Math.min(5,totalPages)},(_, i)=>{
+              let p;
+              if(totalPages<=5)p=i+1;
+              else if(page<=3)p=i+1;
+              else if(page>=totalPages-2)p=totalPages-4+i;
+              else p=page-2+i;
+              return<button key={p} onClick={()=>setCurrentPage(p)} style={{width:30,height:30,borderRadius:7,border:`1px solid ${currentPage===p?C.accent:C.border}`,background:currentPage===p?C.accent:"transparent",color:currentPage===p?C.bg:C.text2,cursor:"pointer",fontSize:12,fontWeight:currentPage===p?700:400}}>{p}</button>
+            })}
+          </div>
+          <button onClick={()=>setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages} style={{padding:"5px 12px",background:C.card,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:currentPage===totalPages?"not-allowed":"pointer",fontSize:12,opacity:currentPage===totalPages?0.4:1}}>Suiv. →</button>
+          <span style={{fontSize:11,color:C.text3}}>Page {currentPage}/{totalPages} · {filtered.length} résultats</span>
+        </div>}
+      </div>
+
+      {/* Panneau détail */}
+      {selected&&<div className="scale-in" style={{width:"100%",maxWidth:340,flexShrink:0}}>
+        <Card style={{padding:18}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{fontFamily:"'JetBrains Mono'",fontSize:13,color:C.accent,fontWeight:700,cursor:"pointer"}} onClick={()=>copyId(selected.id)} title="Copier l'ID">{selected.id} 📋</div>
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>printOrder(selected)} title="Imprimer" style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:"pointer",padding:"4px 9px",fontSize:12}}>🖨️</button>
+              <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {/* Client */}
+            <div style={{padding:"10px 12px",background:C.surface,borderRadius:8}}>
+              <div style={{fontSize:11,color:C.text3,marginBottom:5,textTransform:"uppercase",letterSpacing:".06em"}}>Client</div>
+              <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>{selected.telegram_user}</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {selected.telegram_id&&<a href={`https://t.me/baltimore83_bot?start=user_${selected.telegram_id}`} target="_blank" style={{fontSize:10,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 7px"}}>💬 Contacter</a>}
+                {selected.telegram_user?.startsWith("@")&&<a href={`https://t.me/${selected.telegram_user.slice(1)}`} target="_blank" style={{fontSize:10,color:C.text2,textDecoration:"none",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 7px"}}>🔗 Profil</a>}
+              </div>
+              <div style={{fontSize:10,color:C.text3,marginTop:5}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div>
+            </div>
+
+            {/* Articles */}
+            <div>
+              <div style={{fontSize:11,color:C.text3,marginBottom:8,textTransform:"uppercase",letterSpacing:".06em"}}>Articles</div>
+              {parseItems(selected.items).map((item,i)=><div key={i} style={{marginBottom:6,padding:"7px 10px",background:C.surface,borderRadius:7}}>
+                <div style={{fontSize:12,fontWeight:600}}>{item.name}</div>
+                {item.gout&&<div style={{fontSize:11,color:C.accent,marginTop:1}}>🍬 {item.gout}</div>}
+                <div style={{fontSize:11,color:C.text3,marginTop:2}}>×{item.qty} · {fmt(item.price)} = <strong style={{color:C.text2}}>{fmt(item.qty*item.price)}</strong></div>
+              </div>)}
+            </div>
+
+            {/* Livraison */}
+            {selected.livraison_info&&(()=>{const li=typeof selected.livraison_info==="string"?JSON.parse(selected.livraison_info):selected.livraison_info;return<div style={{padding:"10px 12px",background:C.surface,borderRadius:8}}>
+              <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>📦 Livraison</div>
+              {[["Nom",`${li.prenom||""} ${li.nom||""}`.trim()],["Adresse",li.adresse],["Ville",`${li.cp||""} ${li.ville||""}`.trim()],["Tél",li.tel],["Note",li.note]].filter(([,v])=>v).map(([k,v])=><div key={k} style={{display:"flex",gap:8,marginBottom:3}}>
+                <span style={{fontSize:10,color:C.text3,minWidth:50}}>{k}</span>
+                <span style={{fontSize:12,color:k==="Tél"?C.accent:C.text1}}>{v}</span>
+              </div>)}
+            </div>})()}
+
+            {/* Total */}
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:C.text2}}>Sous-total</span><span style={{fontSize:12}}>{fmt(selected.total)}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,color:C.text2}}>Livraison</span><span style={{fontSize:12,color:parseFloat(selected.livraison||0)===0?C.green:C.text1}}>{parseFloat(selected.livraison||0)===0?"OFFERTE":fmt(selected.livraison)}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700}}>Total</span><span style={{fontWeight:700,color:C.accent,fontSize:16}}>{fmt(parseFloat(selected.total)+parseFloat(selected.livraison||0))}</span></div>
+            </div>
+
+            {/* Statut */}
+            <div>
+              <div style={{fontSize:11,color:C.text3,marginBottom:7,textTransform:"uppercase",letterSpacing:".06em"}}>Statut</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>updateStatus(selected.id,key)} disabled={updating} style={{padding:"4px 9px",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",border:`1px solid ${selected.status===key?cfg.color:C.border}`,background:selected.status===key?cfg.bg:"transparent",color:selected.status===key?cfg.color:C.text3,fontFamily:"'DM Sans',sans-serif"}}>{cfg.label}</button>)}
+              </div>
+            </div>
+
+            {/* Note interne */}
+            <div>
+              <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Note interne</div>
+              <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Ajouter une note..." rows={2} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 10px",outline:"none",resize:"vertical",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+              <Btn onClick={saveNote} disabled={savingNote} style={{marginTop:6,width:"100%",justifyContent:"center",fontSize:12,padding:"7px"}}>{savingNote?"Sauvegarde...":"💾 Sauvegarder la note"}</Btn>
+            </div>
+          </div>
+        </Card>
+      </div>}
+    </div>}
+  </div>
+}
+
+/* ── CLIENTS ── */
+function ClientsPage({orders,setOrders}){
+  const [clients,setClients]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [search,setSearch]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [updating,setUpdating]=useState(false);
+  const [sortBy,setSortBy]=useState("recent");
+
+  useEffect(()=>{setLoading(true);sbGet("bot_users","?order=last_seen.desc").then(u=>setClients(u)).catch(console.error).finally(()=>setLoading(false));},[]);
+
+  const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
+  const clientOrders=uid=>orders.filter(o=>String(o.telegram_id)===String(uid));
+  const ca=uid=>clientOrders(uid).filter(o=>o.status!=="annulé").reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+
+  const updateStatus=async(id,status)=>{
+    setUpdating(true);
+    try{
+      const order=orders.find(o=>o.id===id);
+      await sbPatch("orders",id,{status});
+      setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+      if(order){
+        const prevStatus=order.status;
+        const items=parseItems(order.items);
+        if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
+          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:Math.max(0,prod[0].stock-item.qty)}).catch(()=>{})}
+        }
+        if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
+          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{})}
+        }
+      }
+    }catch(e){alert(e.message)}
+    setUpdating(false);
+  };
+
+  const sorted=useMemo(()=>{
+    let r=[...clients].filter(c=>!search||dn(c).toLowerCase().includes(search.toLowerCase()));
+    if(sortBy==="ca")r.sort((a,b)=>ca(b.id)-ca(a.id));
+    else if(sortBy==="orders")r.sort((a,b)=>clientOrders(b.id).length-clientOrders(a.id).length);
+    else r.sort((a,b)=>new Date(b.last_seen)-new Date(a.last_seen));
+    return r;
+  },[clients,search,sortBy,orders]);
+
+  return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Clients</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{clients.length} clients · {clients.filter(c=>clientOrders(c.id).length>0).length} ont commandé</div>
+      </div>
+    </div>
+
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{flex:1,minWidth:140,background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,fontSize:12,padding:"8px 10px",outline:"none",cursor:"pointer"}}>
+        <option value="recent">Plus récent</option>
+        <option value="ca">CA ↓</option>
+        <option value="orders">Commandes ↓</option>
+      </select>
+    </div>
+
+    {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
+    <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:260}}>
+        {sorted.map(c=>{
+          const nb=clientOrders(c.id).length,caVal=ca(c.id),isSel=selected?.id===c.id;
+          return<div key={c.id} onClick={()=>setSelected(isSel?null:c)} className="row-hover" style={{padding:"13px 16px",background:isSel?C.accentDim:C.card,border:`1px solid ${isSel?C.accentMid:C.border}`,borderRadius:10,marginBottom:8,cursor:"pointer",transition:"all .15s"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:38,height:38,borderRadius:10,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:isSel?C.accent:C.text1}}>{dn(c)}</div>
+                  <div style={{fontSize:11,color:C.text3}}>Depuis {new Date(c.started_at).toLocaleDateString("fr-FR")} · Vu {new Date(c.last_seen).toLocaleDateString("fr-FR")}</div>
+                </div>
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.accent}}>{caVal>0?fmt(caVal):"—"}</div>
+                <div style={{fontSize:11,color:C.text3}}>{nb} cmd{nb>1?"s":""}</div>
+              </div>
+            </div>
+            {nb>0&&<div style={{display:"flex",gap:5,marginTop:8,flexWrap:"wrap"}}>
+              {clientOrders(c.id).slice(0,3).map(o=><span key={o.id} style={{fontSize:10,padding:"2px 7px",background:STATUS[o.status]?.bg||C.accentDim,color:STATUS[o.status]?.color||C.accent,borderRadius:4,border:`1px solid ${STATUS[o.status]?.color||C.accent}33`}}>{o.id}</span>)}
+              {nb>3&&<span style={{fontSize:10,color:C.text3}}>+{nb-3}</span>}
+            </div>}
+            {c.username&&<div style={{display:"flex",gap:5,marginTop:7}}>
+              <a href={`https://t.me/${c.username}`} target="_blank" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 7px"}}>🔗 Profil</a>
+              <a href={`https://t.me/baltimore83_bot?start=user_${c.id}`} target="_blank" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:C.green,textDecoration:"none",background:"#00e67612",border:"1px solid #00e67630",borderRadius:4,padding:"2px 7px"}}>💬 Contacter</a>
+            </div>}
+          </div>
+        })}
+        {sorted.length===0&&<div style={{padding:40,textAlign:"center",color:C.text3,fontSize:13}}>Aucun client</div>}
+      </div>
+
+      {selected&&<div className="scale-in" style={{width:"100%",maxWidth:340,flexShrink:0}}>
+        <Card style={{padding:18}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+            <div style={{fontSize:14,fontWeight:700}}>{dn(selected)}</div>
+            <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
+          </div>
+          <div style={{display:"flex",gap:10,marginBottom:14}}>
+            <div style={{flex:1,padding:"10px",background:C.surface,borderRadius:8,textAlign:"center"}}>
+              <div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.accent}}>{fmt(ca(selected.id))}</div>
+              <div style={{fontSize:11,color:C.text3}}>CA total</div>
+            </div>
+            <div style={{flex:1,padding:"10px",background:C.surface,borderRadius:8,textAlign:"center"}}>
+              <div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.gold}}>{clientOrders(selected.id).length}</div>
+              <div style={{fontSize:11,color:C.text3}}>Commandes</div>
+            </div>
+          </div>
+          <div style={{fontSize:11,color:C.text3,marginBottom:10,textTransform:"uppercase",letterSpacing:".06em"}}>Historique</div>
+          <div style={{maxHeight:400,overflowY:"auto"}}>
+            {clientOrders(selected.id).length===0
+              ?<div style={{textAlign:"center",padding:20,color:C.text3,fontSize:13}}>Aucune commande</div>
+              :clientOrders(selected.id).map(o=><div key={o.id} style={{marginBottom:10,padding:"10px 12px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                  <span style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent}}>{o.id}</span>
+                  <span style={{fontSize:11,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</span>
+                </div>
+                <div style={{fontSize:11,color:C.text3,marginBottom:7}}>{new Date(o.created_at).toLocaleDateString("fr-FR")} · <Badge status={o.status}/></div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>updateStatus(o.id,key)} disabled={updating||o.status===key} style={{padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600,cursor:o.status===key?"default":"pointer",border:`1px solid ${o.status===key?cfg.color:C.border}`,background:o.status===key?cfg.bg:"transparent",color:o.status===key?cfg.color:C.text3,fontFamily:"'DM Sans',sans-serif"}}>{cfg.label}</button>)}
+                </div>
+              </div>)
+            }
+          </div>
+        </Card>
+      </div>}
+    </div>}
+  </div>
+}
+
+/* ── CATALOG ── */
+const EMPTY={name:"",cat:"puff",emoji:"💨",price:"",compare_price:"",unit:"/ unité",min_qty:"10",badge:"",stock:"",low_stock_alert:"50",description:"",gouts:[],medias:[]};
+
+function CatalogPage({products,setProducts,loading,reload}){
+  const [filter,setFilter]=useState("tous");
+  const [search,setSearch]=useState("");
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState(EMPTY);
+  const [saving,setSaving]=useState(false);
+  const [toast,setToast]=useState("");
+  const [bulkSelected,setBulkSelected]=useState([]);
+  const [view,setView]=useState("grid"); // grid | list
+
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
+  const setF=patch=>setForm(f=>({...f,...patch}));
+
+  const openNew=()=>{setForm(EMPTY);setModal("new")};
+  const openEdit=p=>{
+    const em=[];
+    if(p.image_url)em.push({url:p.image_url,type:"image"});
+    if(p.video_url)em.push({url:p.video_url,type:"video"});
+    const gal=Array.isArray(p.gallery)?p.gallery:(p.gallery?JSON.parse(p.gallery||"[]"):[]);
+    gal.forEach(url=>{if(url&&!em.find(m=>m.url===url))em.push({url,type:isVideo(url)?"video":"image"})});
+    setForm({name:p.name,cat:p.cat,emoji:p.emoji||"💨",price:String(p.price),compare_price:String(p.compare_price||""),unit:p.unit,min_qty:String(p.min_qty),badge:p.badge||"",stock:String(p.stock),low_stock_alert:String(p.low_stock_alert||"50"),description:p.description||"",gouts:Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]),medias:em});
+    setModal(p);
+  };
+
+  const save=async()=>{
+    if(!form.name||!form.price)return;
+    setSaving(true);
+    const firstImg=form.medias.find(m=>m.type==="image");
+    const firstVid=form.medias.find(m=>m.type==="video");
+    const gallery=form.medias.filter(m=>m!==firstImg&&m!==firstVid).map(m=>m.url);
+    const body={name:form.name,cat:form.cat,emoji:form.emoji,price:parseFloat(form.price),compare_price:form.compare_price?parseFloat(form.compare_price):null,unit:form.unit,min_qty:parseInt(form.min_qty)||1,stock:parseInt(form.stock)||0,low_stock_alert:parseInt(form.low_stock_alert)||50,badge:form.badge||null,description:form.description||null,gouts:form.gouts,image_url:firstImg?.url||null,video_url:firstVid?.url||null,gallery};
+    try{
+      if(modal==="new"){const[r]=await sbPost("products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !")}
+      else{await sbPatch("products",modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body,id:modal.id}:p));showToast("✅ Modifié !")}
+      setModal(null);
+    }catch(e){alert("Erreur: "+e.message)}
+    setSaving(false);
+  };
+
+  const remove=async id=>{if(!confirm("Supprimer ?"))return;try{await sbDelete("products",id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Supprimé")}catch(e){alert(e.message)}};
+
+  const duplicate=async p=>{
+    const body={name:`${p.name} (copie)`,cat:p.cat,emoji:p.emoji,price:p.price,compare_price:p.compare_price||null,unit:p.unit,min_qty:p.min_qty,stock:0,badge:null,gouts:p.gouts||[],image_url:p.image_url||null,video_url:p.video_url||null,gallery:p.gallery||[]};
+    try{const[r]=await sbPost("products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué — stock mis à 0")}catch(e){alert(e.message)}
+  };
+
+  const bulkUpdateBadge=async badge=>{
+    for(const id of bulkSelected){try{await sbPatch("products",id,{badge:badge||null});setProducts(prev=>prev.map(p=>bulkSelected.includes(p.id)?{...p,badge:badge||null}:p))}catch(e){}}
+    setBulkSelected([]);showToast(`✅ ${bulkSelected.length} produits mis à jour`);
+  };
+
+  const updateStock=async(p,newStock)=>{
+    try{await sbPatch("products",p.id,{stock:newStock});setProducts(prev=>prev.map(x=>x.id===p.id?{...x,stock:newStock}:x))}catch(e){alert(e.message)}
+  };
+
+  const filtered=useMemo(()=>{
+    let r=products;
+    if(filter!=="tous")r=r.filter(p=>p.cat===filter);
+    if(search)r=r.filter(p=>p.name.toLowerCase().includes(search.toLowerCase()));
+    return r;
+  },[products,filter,search]);
+
+  return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16,position:"relative"}}>
+    <Toast msg={toast}/>
+
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Catalogue</div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={()=>setView(v=>v==="grid"?"list":"grid")} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,cursor:"pointer",padding:"7px 12px",fontSize:13}}>{view==="grid"?"☰ Liste":"⊞ Grille"}</button>
+        <Btn variant="ghost" onClick={reload} style={{fontSize:12}}>🔄</Btn>
+        <Btn onClick={openNew}>+ Produit</Btn>
+      </div>
+    </div>
+
+    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{flex:1,minWidth:140,background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      {["tous","puff","recharge","accessoire"].map(c=><button key={c} onClick={()=>setFilter(c)} style={{padding:"6px 14px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===c?C.accent:"transparent",color:filter===c?C.bg:C.text2,border:`1px solid ${filter===c?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{c}</button>)}
+      <span style={{marginLeft:"auto",fontSize:12,color:C.text3}}>{filtered.length} produit{filtered.length>1?"s":""}</span>
+    </div>
+
+    {/* Bulk actions */}
+    {bulkSelected.length>0&&<div style={{padding:"10px 14px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:9,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span style={{fontSize:13,color:C.accent,fontWeight:600}}>{bulkSelected.length} sélectionné{bulkSelected.length>1?"s":""}</span>
+      <Btn style={{padding:"4px 10px",fontSize:11}} onClick={()=>bulkUpdateBadge("promo")}>🔥 Promo</Btn>
+      <Btn style={{padding:"4px 10px",fontSize:11}} onClick={()=>bulkUpdateBadge("new")}>🆕 New</Btn>
+      <Btn variant="ghost" style={{padding:"4px 10px",fontSize:11}} onClick={()=>bulkUpdateBadge("")}>Effacer badge</Btn>
+      <button onClick={()=>setBulkSelected([])} style={{marginLeft:"auto",background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:14}}>×</button>
+    </div>}
+
+    {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
+
+    view==="list"?(
+      <Card style={{padding:0,overflow:"hidden"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead><tr style={{borderBottom:`1px solid ${C.border}`,background:C.surface}}>
+            <th style={{padding:"10px 14px",width:32}}><input type="checkbox" onChange={e=>setBulkSelected(e.target.checked?filtered.map(p=>p.id):[])}/></th>
+            {["Produit","Catégorie","Prix","Stock","Badge","Actions"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {filtered.map((p,i)=>{
+              const gouts=Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]);
+              const mainImg=p.image_url;
+              return<tr key={p.id} style={{borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none"}} className="row-hover">
+                <td style={{padding:"10px 14px"}}><input type="checkbox" checked={bulkSelected.includes(p.id)} onChange={e=>{e.stopPropagation();setBulkSelected(prev=>e.target.checked?[...prev,p.id]:prev.filter(x=>x!==p.id))}}/></td>
+                <td style={{padding:"10px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:40,height:40,borderRadius:8,background:C.surface,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      {mainImg?<img src={mainImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:<span style={{fontSize:20}}>{p.emoji||"💨"}</span>}
+                    </div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600}}>{p.name}</div>
+                      {gouts.length>0&&<div style={{fontSize:11,color:C.text3}}>{gouts.length} goûts</div>}
+                    </div>
+                  </div>
+                </td>
+                <td style={{padding:"10px 14px",fontSize:12,color:C.text2,textTransform:"capitalize"}}>{p.cat}</td>
+                <td style={{padding:"10px 14px"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.accent}}>{fmt(p.price)}</div>
+                  {p.compare_price&&<div style={{fontSize:11,color:C.text3,textDecoration:"line-through"}}>{fmt(p.compare_price)}</div>}
+                </td>
+                <td style={{padding:"10px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:14,fontWeight:700,color:p.stock===0?C.red:p.stock<50?C.orange:C.green}}>{p.stock}</span>
+                    <input type="number" defaultValue={p.stock} min="0" onBlur={e=>parseInt(e.target.value)!==p.stock&&updateStock(p,parseInt(e.target.value)||0)} style={{width:60,background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,color:C.text1,fontSize:12,padding:"3px 7px",outline:"none"}}/>
+                  </div>
+                </td>
+                <td style={{padding:"10px 14px"}}>{p.badge&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:4,background:p.badge==="new"?"#00e67618":p.badge==="promo"?"#ff475718":"#f0b42918",color:p.badge==="new"?C.green:p.badge==="promo"?C.red:C.gold,border:`1px solid currentColor`,fontWeight:700,textTransform:"uppercase"}}>{p.badge}</span>}</td>
+                <td style={{padding:"10px 14px"}}>
+                  <div style={{display:"flex",gap:6}}>
+                    <Btn variant="ghost" style={{padding:"4px 10px",fontSize:11}} onClick={()=>openEdit(p)}>✏️</Btn>
+                    <Btn variant="ghost" style={{padding:"4px 8px",fontSize:11}} title="Dupliquer" onClick={()=>duplicate(p)}>⧉</Btn>
+                    <Btn variant="danger" style={{padding:"4px 8px",fontSize:11}} onClick={()=>remove(p.id)}>🗑</Btn>
+                  </div>
+                </td>
+              </tr>
+            })}
+          </tbody>
+        </table>
+      </Card>
+    ):(
+      <div className="catalog-grid">
+        {filtered.map(p=>{
+          const gouts=Array.isArray(p.gouts)?p.gouts:(p.gouts?JSON.parse(p.gouts):[]);
+          const mainImg=p.image_url;const mainVid=p.video_url;
+          const epuise=p.stock===0;const faible=!epuise&&p.stock<(p.low_stock_alert||50);
+          const discount=p.compare_price&&p.compare_price>p.price?Math.round((1-p.price/p.compare_price)*100):0;
+          return<Card key={p.id} style={{padding:0,overflow:"hidden",cursor:"pointer"}} onClick={()=>openEdit(p)}>
+            <div style={{height:130,background:C.surface,position:"relative",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {mainVid?<video src={mainVid} style={{width:"100%",height:"100%",objectFit:"cover"}} autoPlay muted loop playsInline/>
+               :mainImg?<img src={mainImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
+               :<span style={{fontSize:40}}>{p.emoji||"💨"}</span>}
+              {epuise&&<div style={{position:"absolute",inset:0,background:"#00000066",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{background:C.red,color:"#fff",fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:5}}>ÉPUISÉ</span></div>}
+              {!epuise&&faible&&<span style={{position:"absolute",top:6,left:6,background:C.orange,color:"#000",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3}}>STOCK FAIBLE</span>}
+              {!epuise&&!faible&&p.badge&&<span style={{position:"absolute",top:6,left:6,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3,background:p.badge==="new"?C.green:p.badge==="promo"?C.red:p.badge==="top"?C.accent:C.orange,color:"#000",textTransform:"uppercase"}}>{p.badge}</span>}
+              {discount>0&&<span style={{position:"absolute",top:6,right:6,background:C.red,color:"#fff",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3}}>-{discount}%</span>}
+              <input type="checkbox" checked={bulkSelected.includes(p.id)} onChange={e=>{e.stopPropagation();setBulkSelected(prev=>e.target.checked?[...prev,p.id]:prev.filter(x=>x!==p.id))}} onClick={e=>e.stopPropagation()} style={{position:"absolute",bottom:6,right:6,width:16,height:16,cursor:"pointer"}}/>
+            </div>
+            <div style={{padding:12}}>
+              <div style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:2}}>{p.cat}</div>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:4,lineHeight:1.3}}>{p.name}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <span style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.accent}}>{fmt(p.price)}</span>
+                {p.compare_price&&<span style={{fontSize:11,color:C.text3,textDecoration:"line-through"}}>{fmt(p.compare_price)}</span>}
+              </div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontSize:11,color:p.stock===0?C.red:p.stock<50?C.orange:C.green,fontWeight:600}}>Stock: {p.stock}</span>
+                {gouts.length>0&&<span style={{fontSize:10,color:C.accent}}>{gouts.length} goûts</span>}
+              </div>
+              <div style={{display:"flex",gap:6,marginTop:8}} onClick={e=>e.stopPropagation()}>
+                <Btn variant="ghost" style={{flex:1,justifyContent:"center",padding:"5px",fontSize:11}} onClick={()=>openEdit(p)}>✏️</Btn>
+                <Btn variant="ghost" style={{padding:"5px 8px",fontSize:11}} title="Dupliquer" onClick={()=>duplicate(p)}>⧉</Btn>
+                <Btn variant="danger" style={{padding:"5px 8px",fontSize:11}} onClick={()=>remove(p.id)}>🗑</Btn>
+              </div>
+            </div>
+          </Card>
+        })}
+      </div>
+    )}
+
+    {/* MODAL PRODUIT */}
+    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"flex-start",justifyContent:"center",zIndex:500,overflowY:"auto",padding:"20px 0 40px"}} onClick={()=>setModal(null)}>
+      <div className="scale-in" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px",padding:24,width:"100%",maxWidth:600,maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:22,letterSpacing:"0.05em"}}>{modal==="new"?"Nouveau produit":"Modifier : "+form.name}</div>
+          <button onClick={()=>setModal(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:20}}>×</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          <div style={{display:"grid",gridTemplateColumns:"70px 1fr",gap:10}}>
+            <Inp label="Emoji" value={form.emoji} onChange={v=>setF({emoji:v})}/>
+            <Inp label="Nom" value={form.name} onChange={v=>setF({name:v})} placeholder="Ex: Elf Bar 600" required/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Sel label="Catégorie" value={form.cat} onChange={v=>setF({cat:v})} options={[{value:"puff",label:"Puff"},{value:"recharge",label:"Recharge"},{value:"accessoire",label:"Accessoire"}]}/>
+            <Sel label="Badge" value={form.badge} onChange={v=>setF({badge:v})} options={[{value:"",label:"Aucun"},{value:"new",label:"🆕 Nouveau"},{value:"promo",label:"🔥 Promo"},{value:"top",label:"⭐ Top"},{value:"stock",label:"⚠️ Stock faible"}]}/>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.text3,marginBottom:6}}>Description</div>
+              <textarea value={form.description} onChange={e=>setF({description:e.target.value})}
+                placeholder="Description du produit (optionnel)..."
+                rows={3}
+                style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,color:C.text1,fontSize:13,padding:"10px 13px",outline:"none",fontFamily:"'DM Sans',sans-serif",resize:"vertical",boxSizing:"border-box"}}
+                onFocus={e=>e.target.style.borderColor=C.accent}
+                onBlur={e=>e.target.style.borderColor=C.border}/>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <Inp label="Prix (€)" type="number" value={form.price} onChange={v=>setF({price:v})} required min="0" note="Prix de vente"/>
+            <Inp label="Prix barré (€)" type="number" value={form.compare_price} onChange={v=>setF({compare_price:v})} min="0" note="Optionnel — affiche -X%"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <Inp label="Stock" type="number" value={form.stock} onChange={v=>setF({stock:v})} min="0"/>
+            <Inp label="Alerte stock" type="number" value={form.low_stock_alert} onChange={v=>setF({low_stock_alert:v})} min="0" note="Seuil stock faible"/>
+            <Inp label="Qté min." type="number" value={form.min_qty} onChange={v=>setF({min_qty:v})} min="1"/>
+          </div>
+          <Inp label="Unité" value={form.unit} onChange={v=>setF({unit:v})} placeholder="/ unité"/>
+          <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}><GalerieEditor medias={form.medias} onChange={medias=>setF({medias})}/></div>
+          <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}><GoutsEditor gouts={form.gouts} onChange={gouts=>setF({gouts})}/></div>
+        </div>
+        <div style={{display:"flex",gap:10,marginTop:20,justifyContent:"flex-end"}}>
+          <Btn variant="ghost" onClick={()=>setModal(null)}>Annuler</Btn>
+          <Btn onClick={save} disabled={saving||!form.name||!form.price}>{saving?"Sauvegarde...":modal==="new"?"✅ Créer":"✅ Enregistrer"}</Btn>
+        </div>
+      </div>
+    </div>}
+  </div>
+}
+
+/* ── MESSAGES ── */
+function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSettings}){
+  const [users,setUsers]=useState([]);
+  const [messages,setMessages]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [reply,setReply]=useState("");
+  const [replyFile,setReplyFile]=useState(null);
+  const [sending,setSending]=useState(false);
+  const [broadcast,setBroadcast]=useState("");
+  const [broadcastFile,setBroadcastFile]=useState(null);
+  const [broadcasting,setBroadcasting]=useState(false);
+  const [tab,setTab]=useState("inbox");
+  const [toast,setToast]=useState("");
+  const [showOrders,setShowOrders]=useState(false);
+  const [updatingO,setUpdatingO]=useState(false);
+  const messagesEndRef=useRef(null);
+  const fileRef=useRef(null);
+  const broadcastFileRef=useRef(null);
+  const messagesContainerRef=useRef(null);
+
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
+  const readIds=()=>JSON.parse(localStorage.getItem("baltimore83_read_ids")||"[]");
+  const userMessages=uid=>messages.filter(m=>m.telegram_id===uid).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const lastMsg=u=>{const ms=messages.filter(m=>m.telegram_id===u.id);if(!ms.length)return null;return ms.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]};
+  const unreadForUser=uid=>messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
+  const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
+  const sortedUsers=useMemo(()=>[...users].sort((a,b)=>{const la=lastMsg(a),lb=lastMsg(b);if(!la&&!lb)return 0;if(!la)return 1;if(!lb)return -1;return new Date(lb.created_at)-new Date(la.created_at)}),[users,messages]);
+
+  const markRead=(uid,msgs)=>{
+    const ids=(msgs||messages).filter(m=>m.telegram_id===uid&&m.direction==="in").map(m=>m.id);
+    const merged=[...new Set([...readIds(),...ids])].slice(-1000);
+    localStorage.setItem("baltimore83_read_ids",JSON.stringify(merged));
+    if(onRead)onRead();
+  };
+  const markAllRead=msgs=>{
+    const ids=msgs.filter(m=>m.direction==="in").map(m=>m.id);
+    const merged=[...new Set([...readIds(),...ids])].slice(-1000);
+    localStorage.setItem("baltimore83_read_ids",JSON.stringify(merged));
+    if(onRead)onRead();
+  };
+
+  const fetchData=async(silent=false)=>{
+    if(!silent)setLoading(true);
+    try{
+      const[u,m]=await Promise.all([sbGet("bot_users","?order=last_seen.desc"),sbGet("bot_messages","?order=created_at.desc&limit=500")]);
+      setUsers(u);setMessages(m);
+      if(!silent)markAllRead(m);
+    }catch(e){console.error(e)}
+    if(!silent)setLoading(false);
+  };
+
+  useEffect(()=>{fetchData()},[]);
+  useEffect(()=>{const t=setInterval(()=>fetchData(true),5000);return()=>clearInterval(t)},[]);
+  useEffect(()=>{if(messagesEndRef.current)messagesEndRef.current.scrollIntoView({behavior:"smooth"})},[messages,selected]);
+  useEffect(()=>{if(selected)markRead(selected.id)},[selected]);
+
+  // IntersectionObserver pour marquer lus quand visibles
+  useEffect(()=>{
+    if(!selected||!messagesContainerRef.current)return;
+    const container=messagesContainerRef.current;
+    const observer=new IntersectionObserver(entries=>{
+      const ids=entries.filter(e=>e.isIntersecting).map(e=>parseInt(e.target.dataset.msgid)).filter(Boolean);
+      if(ids.length){const merged=[...new Set([...readIds(),...ids])].slice(-1000);localStorage.setItem("baltimore83_read_ids",JSON.stringify(merged));if(onRead)onRead()}
+    },{root:container,threshold:0.5});
+    container.querySelectorAll("[data-direction='in']").forEach(el=>observer.observe(el));
+    return()=>observer.disconnect();
+  },[selected,messages]);
+
+  const deleteMsg=async msg=>{
+    if(msg.direction==="out"&&msg.tg_message_id){try{await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:msg.telegram_id,message_id:msg.tg_message_id})})}catch(e){}}
+    try{await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${msg.id}`,{method:"DELETE",headers:SBH});setMessages(prev=>prev.filter(m=>m.id!==msg.id))}catch(e){}
+  };
+
+  const sendReply=async()=>{
+    if(!selected||(!reply.trim()&&!replyFile))return;
+    setSending(true);
+    try{
+      let tgMsgId=null,displayText=reply.trim();
+      if(replyFile){tgMsgId=await sendTgFile(selected.id,replyFile);if(reply.trim())await sendTgMsg(selected.id,reply.trim());displayText=`📎 ${replyFile.name}${reply.trim()?` — ${reply.trim()}`:""}` }
+      else{tgMsgId=await sendTgMsg(selected.id,reply.trim())}
+      const newMsg={id:Date.now(),telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:new Date().toISOString()};
+      await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId})});
+      await fetch(`${SB_URL}/rest/v1/bot_users?id=eq.${selected.id}`,{method:"PATCH",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({last_seen:new Date().toISOString()})});
+      setMessages(prev=>[...prev,newMsg]);
+      setUsers(prev=>prev.map(u=>u.id===selected.id?{...u,last_seen:new Date().toISOString()}:u));
+      setReply("");setReplyFile(null);if(fileRef.current)fileRef.current.value="";
+      showToast("✅ Envoyé !");
+    }catch(e){alert("Erreur: "+e.message)}
+    setSending(false);
+  };
+
+  const sendBroadcast=async()=>{
+    if(!broadcast.trim()&&!broadcastFile)return;
+    if(!confirm(`Envoyer à ${users.length} utilisateurs ?`))return;
+    setBroadcasting(true);let ok=0,fail=0;
+    const sentAt=new Date().toISOString();
+    const displayText=broadcastFile?`📎 ${broadcastFile.name}${broadcast.trim()?` — ${broadcast.trim()}`:""}`:broadcast.trim();
+    for(const u of users){
+      try{
+        let tgMsgId=null;
+        if(broadcastFile){tgMsgId=await sendTgFile(u.id,broadcastFile);if(broadcast.trim())await sendTgMsg(u.id,broadcast.trim())}
+        else{tgMsgId=await sendTgMsg(u.id,broadcast.trim())}
+        await fetch(`${SB_URL}/rest/v1/bot_messages`,{method:"POST",headers:{...SBH,"Prefer":"return=minimal"},body:JSON.stringify({telegram_id:u.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:sentAt,is_broadcast:true})});
+        ok++;
+      }catch(e){fail++}
+      await new Promise(r=>setTimeout(r,50));
+    }
+    showToast(`✅ ${ok} envoyés${fail>0?` · ${fail} échecs`:""}`);
+    setBroadcast("");setBroadcastFile(null);if(broadcastFileRef.current)broadcastFileRef.current.value="";
+    setBroadcasting(false);fetchData();
+  };
+
+  const broadcastGroups=()=>{
+    const out=messages.filter(m=>m.direction==="out"&&m.is_broadcast===true);
+    const groups={};
+    out.forEach(m=>{const key=m.text+"|"+m.created_at.slice(0,16);if(!groups[key])groups[key]={text:m.text,created_at:m.created_at,msgs:[]};groups[key].msgs.push(m)});
+    return Object.values(groups).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  };
+
+  const deleteBroadcastGroup=async group=>{
+    if(!confirm(`Supprimer ce broadcast pour ${group.msgs.length} utilisateurs ?`))return;
+    for(const m of group.msgs){
+      if(m.tg_message_id){try{await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:m.telegram_id,message_id:m.tg_message_id})})}catch(e){}}
+      try{await fetch(`${SB_URL}/rest/v1/bot_messages?id=eq.${m.id}`,{method:"DELETE",headers:SBH})}catch(e){}
+    }
+    setMessages(prev=>prev.filter(m=>!group.msgs.find(gm=>gm.id===m.id)));
+    showToast("🗑️ Broadcast supprimé");
+  };
+
+  const getOrderId=text=>text?.match(/CMD-\d+/)?.[0]||null;
+
+  const renderMessage=m=>{
+    const orderId=getOrderId(m.text);
+    const isOrderCard=m.direction==="out"&&orderId&&m.text?.includes("Récap commande");
+    if(isOrderCard)return<div onClick={()=>onGoToOrder&&onGoToOrder(orderId)} style={{padding:"10px 13px",background:C.bg,border:`1.5px solid ${C.accentMid}`,borderRadius:12,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=C.accentMid}>
+      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}><span>🧾</span><span style={{fontSize:12,fontWeight:700,color:C.accent}}>{orderId}</span></div>
+      <div style={{fontSize:11,color:C.text2}}>Récap commande · <span style={{color:C.accent}}>Voir →</span></div>
+    </div>;
+
+    // Détecter le type via media_type (worker v3) ou fallback extension URL
+    const mt = m.media_type;
+    const url = m.media_url;
+    const isImg  = url && (mt==="image"  || (!mt && /\.(jpg|jpeg|png|webp|gif|webp)(\?|$)/i.test(url)));
+    const isVid  = url && (mt==="video"  || (!mt && /\.(mp4|webm|mov|avi)(\?|$)/i.test(url)));
+    const isAud  = url && (mt==="audio"  || (!mt && /\.(ogg|oga|mp3|m4a|wav|aac)(\?|$)/i.test(url)));
+    const isFile = url && (mt==="file"   || (!mt && !isImg && !isVid && !isAud));
+
+    const bubble = <div style={{padding:url?"6px":"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word",overflow:"hidden"}}>
+      {isImg&&<img src={url} alt="" style={{width:"100%",maxWidth:240,borderRadius:8,display:"block",cursor:"pointer",marginBottom:m.text&&m.text!=="📷 Photo"?4:0}} onClick={()=>window.open(url,"_blank")}/>}
+      {isVid&&<video src={url} controls style={{width:"100%",maxWidth:240,borderRadius:8,display:"block",marginBottom:m.text&&m.text!=="🎬 Vidéo"&&m.text!=="⏺ Vidéo bulle"?4:0}}/>}
+      {isAud&&<div style={{padding:"6px 4px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <span style={{fontSize:18}}>{m.text?.includes("🎤")?"🎤":"🎵"}</span>
+          <span style={{fontSize:12,fontWeight:600,opacity:.9}}>{m.text||"Audio"}</span>
+        </div>
+        <audio controls src={url} style={{width:"100%",height:32,borderRadius:8}}/>
+      </div>}
+      {isFile&&<a href={url} target="_blank" style={{display:"flex",alignItems:"center",gap:7,padding:"4px 2px",color:m.direction==="out"?C.bg:C.accent,textDecoration:"none",marginBottom:m.text?4:0}}>
+        <span style={{fontSize:18}}>📎</span><span style={{fontSize:12,fontWeight:600,textDecoration:"underline"}}>{m.text?.replace("📎 ","")}</span>
+      </a>}
+      {m.text&&!isAud&&!isFile&&m.text!=="📷 Photo"&&m.text!=="🎬 Vidéo"&&m.text!=="⏺ Vidéo bulle"&&<span style={{padding:url?"0 4px 4px":0,display:"block"}}>{m.text}</span>}
+    </div>;
+    return bubble;
+  };
+
+  const clientOrders=selected?orders.filter(o=>String(o.telegram_id)===String(selected.id)):[];
+  const updateOrderStatus=async(id,status)=>{
+    setUpdatingO(true);
+    try{
+      const order=orders.find(o=>o.id===id);
+      await sbPatch("orders",id,{status});
+      if(setOrders)setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+      if(order){
+        const prevStatus=order.status;
+        const items=parseItems(order.items);
+        if(status==="payé"&&(prevStatus==="nouveau"||prevStatus==="annulé")){
+          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:Math.max(0,prod[0].stock-item.qty)}).catch(()=>{})}
+        }
+        if(status==="annulé"&&prevStatus!=="nouveau"&&prevStatus!=="annulé"){
+          for(const item of items){const prod=await sbGet("products",`?name=eq.${encodeURIComponent(item.name)}&select=id,stock`).catch(()=>[]);if(prod[0])await sbPatch("products",prod[0].id,{stock:prod[0].stock+item.qty}).catch(()=>{})}
+        }
+        // Messages auto
+        const s=getSettings?getSettings():{};
+        if(order.telegram_id){
+          if(status==="expédié"&&s.msgExpédie){
+            const msg=`📦 *Commande ${id} expédiée !*\n\nVotre commande est en route 🚚\nMerci pour votre confiance ! 🙏`;
+            await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})}).catch(()=>{});
+          }
+          if(status==="payé"&&s.msgPaye){
+            const msg=`✅ *Paiement confirmé — ${id}*\n\nNous avons bien reçu votre paiement.\nVotre commande est en cours de préparation 📦`;
+            await fetch(`${TG_API}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:order.telegram_id,text:msg,parse_mode:"Markdown"})}).catch(()=>{});
+          }
+        }
+      }
+    }catch(e){}
+    setUpdatingO(false);
+  };
+
+  return<div className="fade-in" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 64px)"}}>
+    <Toast msg={toast}/>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexShrink:0,flexWrap:"wrap",gap:8}}>
+      <div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Messages</div>
+        <div style={{fontSize:12,color:C.text3}}>{users.length} utilisateurs · {messages.filter(m=>m.direction==="in").length} reçus</div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <Btn variant="ghost" onClick={()=>fetchData()} style={{fontSize:12}}>🔄</Btn>
+        <div style={{display:"flex",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+          {["inbox","broadcast"].map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"7px 14px",background:tab===t?C.accent:"transparent",color:tab===t?C.bg:C.text2,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+            {t==="inbox"?"💬 Inbox":"📢 Broadcast"}
+          </button>)}
+        </div>
+      </div>
+    </div>
+
+    {loading?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spinner"/></div>:
+
+    tab==="broadcast"?(
+      <div style={{flex:1,overflowY:"auto"}}>
+        <div style={{maxWidth:580}}>
+          <Card style={{marginBottom:16}}>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:4}}>Envoyer à tous</div>
+            <div style={{fontSize:12,color:C.text3,marginBottom:14}}>{users.length} utilisateurs</div>
+            {broadcastFile&&<div style={{padding:"7px 11px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:7,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:12,color:C.accent}}>📎 {broadcastFile.name}</span>
+              <button onClick={()=>{setBroadcastFile(null);broadcastFileRef.current.value=""}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:14}}>×</button>
+            </div>}
+            <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Message... (*gras*, _italique_)" style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:14,padding:"11px 13px",outline:"none",resize:"vertical",minHeight:90,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,gap:10}}>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>broadcastFileRef.current?.click()} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:"pointer",padding:"6px 11px",fontSize:12}}>📎 Fichier</button>
+                <input ref={broadcastFileRef} type="file" accept="image/*,video/*,application/pdf,.doc,.docx" style={{display:"none"}} onChange={e=>setBroadcastFile(e.target.files[0]||null)}/>
+              </div>
+              <Btn onClick={sendBroadcast} disabled={broadcasting||(!broadcast.trim()&&!broadcastFile)}>{broadcasting?"⏳ Envoi...":`📢 Envoyer à ${users.length}`}</Btn>
+            </div>
+          </Card>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:10,color:C.text2}}>Historique ({broadcastGroups().length})</div>
+          {broadcastGroups().map((g,i)=><div key={i} style={{padding:"13px 15px",background:C.card,border:`1px solid ${C.border}`,borderRadius:9,marginBottom:9}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:7}}>
+              <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap",flex:1}}>{g.text}</div>
+              <button onClick={()=>deleteBroadcastGroup(g)} style={{background:"none",border:`1px solid ${C.red}33`,borderRadius:5,color:C.red,cursor:"pointer",fontSize:10,padding:"3px 8px",flexShrink:0}}>🗑️</button>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR")}</span>
+              <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 7px"}}>📢 {g.msgs.length} dest.</span>
+            </div>
+          </div>)}
+        </div>
+      </div>
+    ):(
+      <div className="inbox-wrap" style={{border:`1px solid ${C.border}`}}>
+        {/* Liste */}
+        <div className="inbox-users" style={{width:270,flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,overflowY:"auto"}}>
+          {sortedUsers.length===0&&<div style={{padding:24,textAlign:"center",color:C.text3,fontSize:13}}>Aucun utilisateur</div>}
+          {sortedUsers.map(u=>{
+            const last=lastMsg(u),isSelected=selected?.id===u.id,unread=unreadForUser(u.id);
+            return<div key={u.id} onClick={()=>{setSelected(u);setShowOrders(false);markRead(u.id)}} style={{padding:"11px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:isSelected?C.accentDim:"transparent",borderLeft:isSelected?`3px solid ${C.accent}`:"3px solid transparent",transition:"background .1s"}} onMouseEnter={e=>!isSelected&&(e.currentTarget.style.background="#ffffff06")} onMouseLeave={e=>!isSelected&&(e.currentTarget.style.background="transparent")}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
+                <span style={{fontSize:13,fontWeight:600,color:isSelected?C.accent:C.text1}}>{dn(u)}</span>
+                {unread>0&&<span style={{background:C.red,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{unread}</span>}
+              </div>
+              {last&&<div style={{fontSize:11,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{last.direction==="out"?"✓ ":""}{last.text}</div>}
+              <div style={{fontSize:10,color:C.text3,marginTop:2}}>{new Date(u.last_seen).toLocaleDateString("fr-FR")}</div>
+            </div>
+          })}
+        </div>
+
+        {/* Conversation */}
+        <div style={{flex:1,display:"flex",flexDirection:"column",background:C.card,minHeight:0}}>
+          {!selected?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.text3,fontSize:14}}>← Sélectionne une conversation</div>:<>
+            {/* Header */}
+            <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:14}}>{dn(selected)}</div>
+                <div style={{fontSize:10,color:C.text3}}>Depuis {new Date(selected.started_at).toLocaleDateString("fr-FR")}</div>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <button onClick={()=>setShowOrders(v=>!v)} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:showOrders?C.accentDim:"transparent",border:`1px solid ${showOrders?C.accentMid:C.border}`,borderRadius:7,color:showOrders?C.accent:C.text2,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                  🧾 {clientOrders.length} cmd{clientOrders.length!==1?"s":""}
+                </button>
+                <button onClick={()=>{setSelected(null);setShowOrders(false)}} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
+              </div>
+            </div>
+
+            {/* Panel commandes */}
+            {showOrders&&<div style={{borderBottom:`1px solid ${C.border}`,background:C.surface,padding:"10px 14px",maxHeight:220,overflowY:"auto",flexShrink:0}}>
+              {clientOrders.length===0?<div style={{textAlign:"center",color:C.text3,fontSize:12,padding:"6px 0"}}>Aucune commande</div>
+              :clientOrders.map(o=><div key={o.id} style={{marginBottom:9,padding:"9px 11px",background:C.card,borderRadius:7,border:`1px solid ${C.border}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent}}>{o.id}</span>
+                  <span style={{fontSize:11,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</span>
+                </div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>updateOrderStatus(o.id,key)} disabled={updatingO||o.status===key} style={{padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600,cursor:o.status===key?"default":"pointer",border:`1px solid ${o.status===key?cfg.color:C.border}`,background:o.status===key?cfg.bg:"transparent",color:o.status===key?cfg.color:C.text3,fontFamily:"'DM Sans',sans-serif"}}>{cfg.label}</button>)}
+                </div>
+              </div>)}
+            </div>}
+
+            {/* Messages */}
+            <div ref={messagesContainerRef} style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:7,minHeight:0}}>
+              {userMessages(selected.id).length===0&&<div style={{textAlign:"center",color:C.text3,fontSize:13,padding:20}}>Aucun message</div>}
+              {userMessages(selected.id).map(m=>(
+                <div key={m.id} data-msgid={m.id} data-direction={m.direction} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:5,alignItems:"flex-end"}}>
+                  {m.direction==="in"&&<div style={{width:26,height:26,borderRadius:"50%",background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>👤</div>}
+                  <div style={{maxWidth:"74%"}}>
+                    {renderMessage(m)}
+                    <div style={{fontSize:10,color:C.text3,marginTop:2,display:"flex",alignItems:"center",gap:5,justifyContent:m.direction==="out"?"flex-end":"flex-start"}}>
+                      {new Date(m.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
+                      {m.direction==="out"&&<button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:10,padding:0,opacity:.5}}>🗑</button>}
+                    </div>
+                  </div>
+                  {m.direction==="in"&&<button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:10,opacity:.4}}>🗑</button>}
+                </div>
+              ))}
+              <div ref={messagesEndRef}/>
+            </div>
+
+            {/* Zone réponse */}
+            <div style={{padding:"9px 13px",borderTop:`1px solid ${C.border}`,background:C.surface,flexShrink:0}}>
+              {replyFile&&<div style={{padding:"5px 10px",background:C.accentDim,borderRadius:7,marginBottom:7,fontSize:12,color:C.accent,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span>📎 {replyFile.name}</span>
+                <button onClick={()=>{setReplyFile(null);fileRef.current.value=""}} style={{background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:13}}>×</button>
+              </div>}
+              <div style={{display:"flex",gap:7,alignItems:"flex-end"}}>
+                <button onClick={()=>fileRef.current?.click()} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:9,color:C.text2,cursor:"pointer",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>📎</button>
+                <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" style={{display:"none"}} onChange={e=>setReplyFile(e.target.files[0]||null)}/>
+                <textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Message..." onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendReply())} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none",resize:"none",maxHeight:100,minHeight:36,fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border} rows={1}/>
+                <button onClick={sendReply} disabled={sending||(!reply.trim()&&!replyFile)} style={{background:sending||(!reply.trim()&&!replyFile)?C.border:C.accent,border:"none",borderRadius:9,color:C.bg,cursor:"pointer",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>
+                  {sending?"⏳":"➤"}
+                </button>
+              </div>
+            </div>
+          </>}
+        </div>
+      </div>
+    )}
+  </div>
+}
+
+/* ── SETTINGS PAGE ── */
+function SettingsPage({orders,logout}){
+  const [settings,setSettings]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}
+  });
+  const [saved,setSaved]=useState(false);
+  const [notifStatus,setNotifStatus]=useState(Notification?.permission||"default");
+
+  const setS=(k,v)=>{
+    const next={...settings,[k]:v};
+    setSettings(next);
+    localStorage.setItem("baltimore83_settings",JSON.stringify(next));
+    setSaved(true);
+    setTimeout(()=>setSaved(false),1500);
+  };
+
+  const requestNotif=async()=>{
+    if(!("Notification" in window)){alert("Navigateur non supporté");return;}
+    const p=await Notification.requestPermission();
+    setNotifStatus(p);
+    if(p==="granted")new Notification("Baltimore 83",{body:"🔔 Notifications activées !"});
+  };
+
+  const field=(label,key,placeholder,note)=><div style={{marginBottom:14}}>
+    <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>{label}</label>
+    <input value={settings[key]||""} onChange={e=>setS(key,e.target.value)} placeholder={placeholder}
+      style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+      onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+    {note&&<div style={{fontSize:11,color:C.text3,marginTop:4}}>{note}</div>}
+  </div>;
+
+  return<div className="fade-in" style={{maxWidth:620}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Paramètres</div>
+      {saved&&<span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sauvegardé</span>}
+    </div>
+
+    {/* Boutique */}
+    <Card style={{marginBottom:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:16}}>🛒 Boutique</div>
+      {field("Lien @contact (Telegram)","willyHandle","wilIIly","Pseudo Telegram où les commandes sont envoyées (sans @)")}
+      {field("Livraison offerte dès (€)","livraisonMin","200","Montant minimum pour livraison gratuite")}
+      {field("Prix livraison (€)","livraisonPrix","9.90","Frais de port si sous le minimum")}
+      {field("Message de bienvenue bot","welcomeMsg","👋 Bienvenue chez Baltimore 83...","Message envoyé aux nouveaux utilisateurs du bot")}
+    </Card>
+
+    {/* Notifications */}
+    <Card style={{marginBottom:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🔔 Notifications</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",background:C.surface,borderRadius:8,marginBottom:8}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Notifications navigateur</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2}}>
+            {notifStatus==="granted"?"✅ Activées — nouveaux messages notifiés":notifStatus==="denied"?"❌ Bloquées — autoriser dans les réglages navigateur":"En attente d'autorisation"}
+          </div>
+        </div>
+        {notifStatus!=="granted"&&<Btn onClick={requestNotif} style={{fontSize:12,padding:"6px 12px"}}>Activer</Btn>}
+      </div>
+      <div style={{padding:"10px 14px",background:C.surface,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Notif nouveaux messages</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2}}>Alerte quand un client écrit</div>
+        </div>
+        <div onClick={()=>setS("notifMessages",!settings.notifMessages)} style={{width:40,height:22,borderRadius:11,background:settings.notifMessages?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background .2s"}}>
+          <div style={{position:"absolute",top:2,left:settings.notifMessages?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+        </div>
+      </div>
+    </Card>
+
+    {/* Messages auto */}
+    <Card style={{marginBottom:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🤖 Messages automatiques</div>
+      <div style={{padding:"10px 14px",background:C.surface,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Message "Payé" reçu</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2}}>Confirme le paiement au client</div>
+        </div>
+        <div onClick={()=>setS("msgPaye",!settings.msgPaye)} style={{width:40,height:22,borderRadius:11,background:settings.msgPaye?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background .2s"}}>
+          <div style={{position:"absolute",top:2,left:settings.msgPaye?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+        </div>
+      </div>
+      <div style={{padding:"10px 14px",background:C.surface,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600}}>Message "Expédié" envoyé</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2}}>Notifie le client que son colis est parti</div>
+        </div>
+        <div onClick={()=>setS("msgExpédie",!settings.msgExpédie)} style={{width:40,height:22,borderRadius:11,background:settings.msgExpédie?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background .2s"}}>
+          <div style={{position:"absolute",top:2,left:settings.msgExpédie?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+        </div>
+      </div>
+    </Card>
+
+    {/* Liens rapides */}
+    <Card style={{marginBottom:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🔗 Liens rapides</div>
+      {[{label:"🛒 Boutique Telegram",url:"https://anserfj.github.io/BATIMORE-83/index.htm",sub:"anserfj.github.io/BATIMORE-83"},{label:"🗄️ Supabase",url:"https://supabase.com/dashboard/project/lkgyrqfdefwrmdvukmpl",sub:"lkgyrqfdefwrmdvukmpl"},{label:"⚙️ Cloudflare Worker",url:"https://dash.cloudflare.com",sub:"Bot webhook"}].map(l=>
+      <div key={l.url} style={{padding:"11px 14px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div><div style={{fontSize:13,fontWeight:600}}>{l.label}</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:1}}>{l.sub}</div></div>
+        <Btn variant="ghost" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>window.open(l.url,"_blank")}>Ouvrir</Btn>
+      </div>)}
+    </Card>
+
+    {/* Compte */}
+    <Card>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>👤 Compte</div>
+      <div style={{fontSize:13,color:C.text2,marginBottom:12}}>Connecté en tant que <strong style={{color:C.text1}}>admin@baltimore83.fr</strong></div>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>window.location.reload()} style={{padding:"9px 18px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,color:C.text2,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🔄 Recharger</button>
+        <button onClick={logout} style={{padding:"9px 18px",borderRadius:8,background:"transparent",border:`1px solid ${C.red}44`,color:C.red,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button>
+      </div>
+    </Card>
+  </div>;
+}
+
+/* ── APP ── */
+function App(){
+  const [logged,setLogged]=useState(()=>localStorage.getItem("baltimore83_logged")==="1");
+  const [page,setPage]=useState("dashboard");
+  const [orders,setOrders]=useState([]);
+  const [selectedOrder,setSelectedOrder]=useState(null);
+  const [products,setProducts]=useState([]);
+  const [loadO,setLoadO]=useState(false);
+  const [loadP,setLoadP]=useState(false);
+  const [unreadMsgCount,setUnreadMsgCount]=useState(0);
+
+  const login=()=>{localStorage.setItem("baltimore83_logged","1");setLogged(true)};
+  const logout=()=>{localStorage.removeItem("baltimore83_logged");setLogged(false)};
+
+  const getSettings=()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}};
+
+  const fetchOrders=async()=>{setLoadO(true);try{setOrders(await sbGet("orders","?order=created_at.desc"))}catch(e){console.error(e)}setLoadO(false)};
+  const fetchProducts=async()=>{setLoadP(true);try{setProducts(await sbGet("products","?order=id.asc"))}catch(e){console.error(e)}setLoadP(false)};
+
+  const pollUnread=async()=>{
+    try{
+      const msgs=await sbGet("bot_messages","?direction=eq.in&order=created_at.desc&limit=200");
+      const rids=JSON.parse(localStorage.getItem("baltimore83_read_ids")||"[]");
+      const unread=msgs.filter(m=>!rids.includes(m.id));
+      const prevCount=unreadMsgCount;
+      setUnreadMsgCount(unread.length);
+      // Notification browser si nouveau message
+      const s=getSettings();
+      if(s.notifMessages&&s.notifMessages&&Notification?.permission==="granted"&&unread.length>prevCount){
+        const newest=unread[0];
+        new Notification("Baltimore 83 — Nouveau message",{body:newest.text||"📷 Média",icon:"https://anserfj.github.io/telegram-shop/LOGO_ZK_PRO.jpg"});
+      }
+    }catch(e){}
+  };
+
+  useEffect(()=>{if(logged){fetchOrders();fetchProducts();pollUnread()}},[logged]);
+  useEffect(()=>{if(!logged)return;const t=setInterval(fetchOrders,30000);return()=>clearInterval(t)},[logged]);
+  useEffect(()=>{if(!logged)return;const t=setInterval(pollUnread,5000);return()=>clearInterval(t)},[logged]);
+
+  const newCount=orders.filter(o=>o.status==="nouveau").length;
+  if(!logged)return<LoginPage onLogin={login}/>;
+
+  return<div style={{display:"flex",minHeight:"100vh"}}>
+    <Sidebar page={page} setPage={setPage} onLogout={logout} newCount={newCount} unreadMsg={unreadMsgCount}/>
+    <main className="main-content" style={{flex:1}}>
+      {page==="dashboard"&&<DashboardPage orders={orders} products={products} setPage={setPage}/>}
+      {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder} getSettings={getSettings}/>}
+      {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
+      {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
+      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread()}} onGoToOrder={id=>{setSelectedOrder(id);setPage("orders");fetchOrders()}} orders={orders} setOrders={setOrders} setProducts={setProducts} getSettings={getSettings}/>}
+      {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
+    </main>
+  </div>
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
 </html>
