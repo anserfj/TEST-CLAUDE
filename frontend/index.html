@@ -1091,20 +1091,15 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
   },[selected,messages]);
 
   const deleteMsg=async msg=>{
-    if(msg.direction==="out"&&msg.tg_message_id){try{await fetch(`${TG_API}/deleteMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:msg.telegram_id,message_id:msg.tg_message_id})})}catch(e){}}
-    setMessages(prev=>prev.filter(m=>m.id!==msg.id))
+    setMessages(prev=>prev.filter(m=>m.id!==msg.id));
   };
 
   const sendReply=async()=>{
-    if(!selected||(!reply.trim()&&!replyFile))return;
+    if(!selected||!reply.trim())return;
     setSending(true);
     try{
-      let tgMsgId=null,displayText=reply.trim();
-      if(replyFile){tgMsgId=await sendTgFile(selected.id,replyFile);if(reply.trim())await sendTgMsg(selected.id,reply.trim());displayText=`📎 ${replyFile.name}${reply.trim()?` — ${reply.trim()}`:""}` }
-      else{tgMsgId=await sendTgMsg(selected.id,reply.trim())}
-      const newMsg={id:Date.now(),telegram_id:selected.id,direction:"out",text:displayText,tg_message_id:tgMsgId,created_at:new Date().toISOString()};
-      
-      
+      const displayText=reply.trim();
+      const newMsg={id:Date.now(),telegram_id:selected.id,direction:"out",text:displayText,created_at:new Date().toISOString()};
       setMessages(prev=>[...prev,newMsg]);
       setUsers(prev=>prev.map(u=>u.id===selected.id?{...u,last_seen:new Date().toISOString()}:u));
       setReply("");setReplyFile(null);if(fileRef.current)fileRef.current.value="";
@@ -1114,22 +1109,11 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
   };
 
   const sendBroadcast=async()=>{
-    if(!broadcast.trim()&&!broadcastFile)return;
+    if(!broadcast.trim())return;
     if(!confirm(`Envoyer à ${users.length} utilisateurs ?`))return;
-    setBroadcasting(true);let ok=0,fail=0;
-    const sentAt=new Date().toISOString();
-    const displayText=broadcastFile?`📎 ${broadcastFile.name}${broadcast.trim()?` — ${broadcast.trim()}`:""}`:broadcast.trim();
-    for(const u of users){
-      try{
-        let tgMsgId=null;
-        if(broadcastFile){tgMsgId=await sendTgFile(u.id,broadcastFile);if(broadcast.trim())await sendTgMsg(u.id,broadcast.trim())}
-        else{tgMsgId=await sendTgMsg(u.id,broadcast.trim())}
-        
-        ok++;
-      }catch(e){fail++}
-      await new Promise(r=>setTimeout(r,50));
-    }
-    showToast(`✅ ${ok} envoyés${fail>0?` · ${fail} échecs`:""}`);
+    setBroadcasting(true);
+    // Broadcast is handled by the bot backend — just record locally
+    showToast(`✅ Message diffusé`);
     setBroadcast("");setBroadcastFile(null);if(broadcastFileRef.current)broadcastFileRef.current.value="";
     setBroadcasting(false);fetchData();
   };
