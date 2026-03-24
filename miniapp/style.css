@@ -1,6 +1,5 @@
 /* ================================================
-   ZK PRO · Grossiste Puff · Telegram Mini App
-   style.css — rebuilt clean
+   BALTIMORE 83 · Shop · style.css
    ================================================ */
 
 :root {
@@ -9,8 +8,7 @@
   --bg3:       #191919;
   --surface:   #1e1e1e;
   --border:    rgba(255,255,255,0.08);
-  --accent: #ffffff;
-  --accent2: #d4d4d4;
+  --accent:    #ffffff;
   --accent-bg: rgba(255,255,255,0.07);
   --red:       #ff3d3d;
   --green:     #00e676;
@@ -50,14 +48,12 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   height: 100%; padding: 0 16px;
   display: flex; align-items: center; justify-content: space-between;
 }
-.logo { display: flex; align-items: center; height: 40px; }
-.logo-img { height: 38px; width: auto; object-fit: contain; border-radius: 6px; }
-.logo-fallback {
-  display: none; align-items: center; gap: 2px;
+.logo {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.6rem; letter-spacing: 0.05em; color: var(--text);
+  font-size: 1.5rem; letter-spacing: 0.08em;
+  color: var(--text);
 }
-.logo-fallback span { color: var(--accent); }
+.logo span { color: var(--accent); }
 .cart-btn {
   position: relative; width: 40px; height: 40px;
   border-radius: 10px; background: var(--surface);
@@ -103,29 +99,14 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 }
 .tab.active::before { opacity: 1; transform: scaleX(1); }
 
-/* ── MAIN & PAGES ──
-   Seule la page active est visible.
-   Les pages inactives sont cachées via display:none.
-   PAS d'animation sur .page — seulement sur .page.active
-   pour éviter que le browser alloue de l'espace aux pages cachées.
-*/
+/* ── MAIN ── */
 .main {
   padding-top: calc(var(--header-h) + 4px);
   padding-bottom: calc(var(--tabs-h) + 12px);
   max-width: 480px; margin: 0 auto;
 }
-
-/* Pages inactives : complètement hors du rendu */
-.page {
-  display: none;
-  padding: 0 14px 28px;
-}
-
-/* Page active : visible + animation d'entrée */
-.page.active {
-  display: block;
-  animation: fadeIn .25s ease;
-}
+.page { display: none; padding: 0 14px 28px; }
+.page.active { display: block; animation: fadeIn .25s ease; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -176,9 +157,7 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   font-size: 3.2rem; position: relative; overflow: hidden;
 }
 .product-img-wrap img,
-.product-img-wrap video {
-  width: 100%; height: 100%; object-fit: cover; display: block;
-}
+.product-img-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .product-badge {
   position: absolute; top: 7px; left: 7px; z-index: 1;
   padding: 3px 7px; border-radius: 4px;
@@ -193,7 +172,7 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 .product-price { font-size: .9rem; font-weight: 700; color: var(--accent); }
 .product-unit  { font-size: .65rem; color: var(--text3); display: block; margin-top: 1px; }
 
-/* ── INFO PAGE ── */
+/* ── INFO ── */
 .info-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
 .info-card {
   background: var(--surface); border: 1px solid var(--border);
@@ -247,23 +226,25 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px; margin-bottom: 8px;
 }
-.cart-item-emoji {
+.cart-item-thumb {
   width: 52px; height: 52px; border-radius: 10px; background: var(--bg3);
   display: flex; align-items: center; justify-content: center;
   font-size: 1.7rem; flex-shrink: 0; overflow: hidden;
 }
-.cart-item-emoji img,
-.cart-item-emoji video { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+.cart-item-thumb img,
+.cart-item-thumb video { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
 .cart-item-info { flex: 1; min-width: 0; }
 .cart-item-name { font-size: .83rem; font-weight: 600; color: var(--text); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cart-item-price { font-size: .82rem; color: var(--accent); font-weight: 700; }
+.qty-controls { display: flex; align-items: center; gap: 7px; }
 .qty-btn {
   width: 26px; height: 26px; border-radius: 7px; background: var(--bg3);
   border: 1px solid var(--border); color: var(--text); font-size: 15px;
   display: flex; align-items: center; justify-content: center; transition: all .15s;
 }
 .qty-btn:active { transform: scale(.85); }
-.qty-btn.del    { color: var(--red); }
+.qty-btn.del { color: var(--red); }
+.qty-num { font-size: .85rem; font-weight: 700; min-width: 18px; text-align: center; }
 .cart-summary {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
@@ -309,17 +290,20 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   position: absolute; top: 14px; right: 14px;
   width: 30px; height: 30px; border-radius: 50%; background: var(--surface);
   color: var(--text2); display: flex; align-items: center; justify-content: center;
-  font-size: 13px; transition: all .2s;
+  font-size: 13px;
 }
-.modal-emoji {
+.modal-media {
   width: 100%; aspect-ratio: 16/9; background: var(--bg3);
-  border-radius: var(--radius);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 5rem; margin-bottom: 18px; overflow: hidden;
+  border-radius: var(--radius); margin-bottom: 18px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-size: 5rem;
 }
+.modal-media img,
+.modal-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .modal-cat { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
 .modal-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; letter-spacing: .04em; color: var(--text); margin-bottom: 8px; }
-.modal-price-unit { font-size: .7rem; color: var(--text3); display: block; }
+.modal-desc { font-size: .83rem; color: var(--text2); line-height: 1.6; margin-bottom: 14px; }
+.modal-price { font-size: 1.4rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.modal-unit  { font-size: .7rem; color: var(--text3); display: block; margin-bottom: 16px; }
 .modal-add-btn {
   width: 100%; padding: 13px; border-radius: var(--radius-sm);
   background: var(--accent); color: #000;
@@ -332,32 +316,25 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 .toast {
   position: fixed; bottom: calc(var(--tabs-h) + 10px); left: 50%;
   transform: translateX(-50%) translateY(16px);
-  background: var(--surface); border: 1px solid rgba(255,255,255,.25); color: var(--text);
+  background: var(--surface); border: 1px solid rgba(255,255,255,.2); color: var(--text);
   font-size: .82rem; font-weight: 600; padding: 9px 18px; border-radius: 99px;
   white-space: nowrap; z-index: 300; opacity: 0; pointer-events: none; transition: all .25s;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ── GALLERY ── */
-.gallery-slide img,
-.gallery-slide video { display: block; width: 100%; }
-
-/* ── ANIMATIONS ── */
-@keyframes shake {
-  0%,100%{ transform:translateX(0) }
-  20%{ transform:translateX(-6px) }
-  40%{ transform:translateX(6px) }
-  60%{ transform:translateX(-4px) }
-  80%{ transform:translateX(4px) }
+/* ── SEARCH ── */
+.search-wrap { position: relative; margin-bottom: 10px; }
+.search-input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); font-size: 14px;
+  padding: 10px 14px; outline: none; font-family: inherit;
+  transition: border-color .2s;
 }
-@keyframes pulse {
-  0%,100%{ opacity:1 }
-  50%{ opacity:.4 }
-}
+.search-input:focus { border-color: var(--accent); }
 
-/* ── SCROLLBAR ── */
+/* ── SKELETON ── */
+@keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-@keyframes spin { to { transform: rotate(360deg); } }
