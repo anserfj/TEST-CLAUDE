@@ -13,8 +13,8 @@ services:
 
   frontend:
     build: ./frontend
-    ports:
-      - "5173:80"
+    expose:
+      - "80"
     depends_on:
       - backend
     restart: unless-stopped
@@ -24,8 +24,27 @@ services:
 
   miniapp:
     build: ./miniapp
-    ports:
-      - "5174:80"
+    expose:
+      - "80"
     depends_on:
       - backend
     restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "5174:5174"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - miniapp
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

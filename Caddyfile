@@ -1,0 +1,7 @@
+baltimore-83.duckdns.org {
+    reverse_proxy frontend:80
+}
+
+baltimore-83.duckdns.org:5174 {
+    reverse_proxy miniapp:80
+}
