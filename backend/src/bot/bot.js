@@ -8,9 +8,11 @@ export async function notifyGroup(text) {
   const groupId = process.env.NOTIFY_GROUP_ID;
   if (!bot || !groupId) return;
   try {
-    await bot.api.sendMessage(groupId, text, { parse_mode: 'Markdown' });
+    await bot.api.sendMessage(groupId, text, { parse_mode: 'HTML' });
   } catch (e) {
     console.error('notifyGroup error:', e.message);
+    // Retry without formatting
+    try { await bot.api.sendMessage(groupId, text.replace(/<[^>]+>/g, '')); } catch {}
   }
 }
 
@@ -55,12 +57,10 @@ export function createBot(token) {
       .text('💬 Contacter', 'contact');
 
     await ctx.reply(
-      `🌿 *Bienvenue chez CBD Shop!*\n\n` +
+      `🌿 <b>Bienvenue chez Baltimore 83!</b>\n\n` +
       `Bonjour ${name}! 👋\n\n` +
-      `Découvrez notre sélection premium de produits CBD.\n` +
-      `Tous légaux (< 0.3% THC) et testés en laboratoire. 🧪\n\n` +
-      `Appuyez sur le bouton pour ouvrir notre boutique:`,
-      { parse_mode: 'Markdown', reply_markup: keyboard }
+      `Appuyez sur le bouton pour ouvrir la boutique:`,
+      { parse_mode: 'HTML', reply_markup: keyboard }
     );
   });
 
@@ -84,11 +84,11 @@ export function createBot(token) {
     `).all(user.id);
     if (!orders.length) { await ctx.reply('📦 Vous n\'avez pas encore de commandes.'); return; }
     const statusLabel = { pending:'⏳ En attente', confirmed:'✅ Confirmée', preparing:'👨‍🍳 Préparation', shipped:'🚚 Expédiée', delivered:'📬 Livrée', cancelled:'❌ Annulée' };
-    let text = '📦 *Vos dernières commandes*\n\n';
+    let text = '📦 <b>Vos dernières commandes</b>\n\n';
     orders.forEach(o => {
-      text += `${statusLabel[o.status]||'❓'} *#${o.id}* — ${o.total?.toFixed(2)}€\n`;
+      text += `${statusLabel[o.status]||'❓'} <b>#${o.id}</b> — ${o.total?.toFixed(2)}€\n`;
     });
-    await ctx.reply(text, { parse_mode: 'Markdown' });
+    await ctx.reply(text, { parse_mode: 'HTML' });
   });
 
   bot.callbackQuery('contact', async (ctx) => {
@@ -167,45 +167,44 @@ async function showOrders(ctx) {
     shipped: 'Expédiée', delivered: 'Livrée', cancelled: 'Annulée'
   };
 
-  let text = '📦 *Vos Commandes*\n\n';
+  let text = '📦 <b>Vos Commandes</b>\n\n';
   orders.forEach(order => {
     const emoji = statusEmoji[order.status] || '❓';
     const label = statusLabel[order.status] || order.status;
     const date = new Date(order.created_at).toLocaleDateString('fr-FR');
-    text += `${emoji} *Commande #${order.id}* - ${date}\n`;
+    text += `${emoji} <b>Commande #${order.id}</b> - ${date}\n`;
     text += `   💰 ${order.total.toFixed(2)}€ | ${order.item_count} article(s) | ${label}\n\n`;
   });
 
-  await ctx.reply(text, { parse_mode: 'Markdown' });
+  await ctx.reply(text, { parse_mode: 'HTML' });
 }
 
 async function showContact(ctx) {
   await ctx.reply(
-    '💬 *Contactez-nous*\n\n' +
-    'Vous pouvez nous écrire directement ici et notre équipe vous répondra!\n\n' +
-    '📍 Adresse: 12 Rue des Fleurs, Paris\n' +
-    '📞 Tel: +33 1 23 45 67 89\n' +
-    '🕐 Horaires: Lun-Sam 10h-19h\n\n' +
-    'Tapez votre message ci-dessous:',
-    { parse_mode: 'Markdown' }
+    '💬 <b>Contactez-nous</b>\n\n' +
+    'Écrivez-nous directement ici, notre équipe vous répond rapidement!\n\n' +
+    '🕐 Horaires: 10h-23h',
+    { parse_mode: 'HTML' }
   );
 }
 
 async function showAbout(ctx) {
   await ctx.reply(
-    'ℹ️ *À propos de CBD Shop*\n\n' +
-    '🌿 Votre spécialiste CBD depuis 2020\n\n' +
-    'Tous nos produits sont:\n' +
-    '✅ Légaux (< 0.3% THC)\n' +
-    '✅ Testés en laboratoire\n' +
-    '✅ D\'origine UE\n' +
-    '✅ 100% naturels\n\n' +
-    '_Nos produits ne sont pas des médicaments et ne remplacent pas un avis médical._',
-    { parse_mode: 'Markdown' }
+    'ℹ️ <b>Baltimore 83</b>\n\n' +
+    'Votre shop dans le Var 83 🔥\n\n' +
+    '🚚 Livraison rapide\n' +
+    '💰 Meilleurs prix\n' +
+    '✅ Qualité garantie',
+    { parse_mode: 'HTML' }
   );
 }
 
 export async function sendMessageToUser(telegramId, text) {
   if (!bot) return;
-  await bot.api.sendMessage(telegramId, text, { parse_mode: 'Markdown' });
+  try {
+    await bot.api.sendMessage(telegramId, text, { parse_mode: 'HTML' });
+  } catch (e) {
+    console.error('sendMessageToUser error:', e.message);
+    try { await bot.api.sendMessage(telegramId, text.replace(/<[^>]+>/g, '')); } catch {}
+  }
 }
