@@ -18,6 +18,9 @@ const allowedOrigins = process.env.NODE_ENV === 'development'
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
+// Serve uploaded files
+app.use('/uploads', express.static('/app/data/uploads'));
+
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

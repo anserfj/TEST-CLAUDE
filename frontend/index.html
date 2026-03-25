@@ -129,9 +129,23 @@ function Sparkline({data,color=C.accent,height=40}){
 /* ── GALERIE EDITOR ── */
 function GalerieEditor({medias,onChange}){
   const [urlInput,setUrlInput]=useState("");
+  const [uploading,setUploading]=useState(false);
+  const fileRef=React.useRef();
   const addUrl=url=>{if(!url)return;onChange([...medias,{url,type:isVideo(url)?"video":"image"}])};
   const remove=idx=>onChange(medias.filter((_,i)=>i!==idx));
   const moveFirst=idx=>{const c=[...medias];const[item]=c.splice(idx,1);onChange([item,...c])};
+  const handleFile=async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    setUploading(true);
+    try{
+      const fd=new FormData();fd.append("file",file);
+      const r=await fetch("/api/upload",{method:"POST",body:fd});
+      if(!r.ok)throw new Error(await r.text());
+      const {url}=await r.json();
+      onChange([...medias,{url,type:isVideo(url)?"video":"image"}]);
+    }catch(err){alert("Erreur upload: "+err.message);}
+    finally{setUploading(false);e.target.value="";}
+  };
   return<div style={{display:"flex",flexDirection:"column",gap:10}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <label style={{fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase"}}>📸 Médias</label>
@@ -147,7 +161,9 @@ function GalerieEditor({medias,onChange}){
         </div>
       </div>)}
     </div>}
+    <input ref={fileRef} type="file" accept="image/*,video/*" style={{display:"none"}} onChange={handleFile}/>
     <div style={{display:"flex",gap:8}}>
+      <Btn onClick={()=>fileRef.current?.click()} disabled={uploading} style={{padding:"7px 12px",fontSize:12,whiteSpace:"nowrap"}}>{uploading?"⏳ Upload...":"📁 Fichier"}</Btn>
       <input value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder="https://... (URL photo ou vidéo)" onKeyDown={e=>e.key==="Enter"&&(addUrl(urlInput.trim()),setUrlInput(""))} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"7px 11px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
       <Btn onClick={()=>{addUrl(urlInput.trim());setUrlInput("")}} style={{padding:"7px 12px",fontSize:12}}>+ URL</Btn>
     </div>

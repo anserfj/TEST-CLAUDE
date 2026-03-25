@@ -133,10 +133,14 @@ function renderProducts() {
 
   grid.innerHTML = filtered.map(p => {
     const emoji = p.category_emoji || "🛍️";
+    const isVid = p.image_url && /\.(mp4|webm|ogg)$/i.test(p.image_url);
+    const mediaPart = p.image_url
+      ? (isVid
+          ? `<video src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>`
+          : `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}" loading="lazy">`)
+      : `<span style="font-size:3.2rem">${emoji}</span>`;
     return `<div class="product-card" onclick="openModal(${p.id})">
-      <div class="product-img-wrap">
-        <span style="font-size:3.2rem">${emoji}</span>
-      </div>
+      <div class="product-img-wrap">${mediaPart}</div>
       <div class="product-body">
         <div class="product-cat">${p.category_name || ""}</div>
         <div class="product-name">${p.name}</div>
@@ -154,9 +158,15 @@ function openModal(productId) {
   tg.HapticFeedback.impactOccurred("light");
 
   const emoji = p.category_emoji || "🛍️";
+  const isVid = p.image_url && /\.(mp4|webm|ogg)$/i.test(p.image_url);
+  const modalMedia = p.image_url
+    ? (isVid
+        ? `<video src="${p.image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:12px" autoplay muted loop playsinline></video>`
+        : `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:12px" alt="${p.name}">`)
+    : `<span style="font-size:5rem">${emoji}</span>`;
 
   document.getElementById("modalBody").innerHTML = `
-    <div class="modal-media"><span style="font-size:5rem">${emoji}</span></div>
+    <div class="modal-media">${modalMedia}</div>
     <div class="modal-cat">${p.category_name || ""}</div>
     <div class="modal-name">${p.name}</div>
     ${p.description ? `<div class="modal-desc">${p.description}</div>` : ""}

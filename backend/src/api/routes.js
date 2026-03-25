@@ -1,8 +1,38 @@
 import { Router } from 'express';
 import db from '../db/database.js';
 import { notifyGroup } from '../bot/bot.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
+
+// ── UPLOAD ────────────────────────────────────────────────────────────────────
+
+const UPLOAD_DIR = '/app/data/uploads';
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  fileFilter: (req, file, cb) => {
+    const allowed = /image\/(jpeg|png|gif|webp)|video\/(mp4|webm|ogg)/;
+    cb(null, allowed.test(file.mimetype));
+  }
+});
+
+router.post('/upload', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file or invalid type' });
+  res.json({ url: `/uploads/${req.file.filename}` });
+});
 
 // ── PRODUCTS ──────────────────────────────────────────────────────────────────
 
