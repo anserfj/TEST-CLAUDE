@@ -41,14 +41,22 @@ server.listen(PORT, () => {
 
 // Start Telegram bot
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const NOTIFY_GROUP_ID = process.env.NOTIFY_GROUP_ID;
 if (BOT_TOKEN && BOT_TOKEN !== 'your_telegram_bot_token_here') {
   const bot = createBot(BOT_TOKEN);
   bot.start({
-    onStart: (info) => console.log(`🤖 Bot @${info.username} started!`)
+    onStart: (info) => {
+      console.log(`🤖 Bot @${info.username} started!`);
+      if (!NOTIFY_GROUP_ID) {
+        console.warn('⚠️  NOTIFY_GROUP_ID non défini — les notifications groupe ne seront PAS envoyées.');
+        console.warn('   → Ajoute le bot dans ton groupe, tape /chatid, et mets l\'ID dans backend/.env');
+      } else {
+        console.log(`📣 Notifications groupe → ${NOTIFY_GROUP_ID}`);
+      }
+    }
   }).catch(console.error);
 } else {
   console.warn('⚠️  No BOT_TOKEN set. Bot will not start. Set BOT_TOKEN in .env');
-  // Still create bot instance for API calls (will fail gracefully)
   try { createBot('placeholder'); } catch (e) {}
 }
 

@@ -313,6 +313,7 @@ router.post('/miniapp/order', (req, res) => {
     `💰 <b>TOTAL: ${parseFloat(total).toFixed(2)}€</b>\n` +
     `📅 ${now}`;
 
+  console.log(`📦 Order #${orderId} | telegram_id=${user.telegram_id} | total=${total}€ | group=${process.env.NOTIFY_GROUP_ID || 'NOT SET'}`);
   notifyGroup(groupMsg);
 
   // ── PRIVATE recap to user (HTML format) ──

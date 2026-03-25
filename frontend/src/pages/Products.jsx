@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, X, AlertTriangle, Package } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Edit2, X, AlertTriangle, Upload } from 'lucide-react';
 import { api } from '../hooks/useApi.js';
 
 const UNITS = ['g', 'kg', 'flacon', 'sachet', 'tube', 'pot', 'unité'];
@@ -10,6 +10,8 @@ export default function Products({ wsData }) {
   const [editProd, setEditProd] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [filterCat, setFilterCat] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const fetchAll = async () => {
     const [prods, cats] = await Promise.all([api.get('/products'), api.get('/categories')]);
@@ -31,6 +33,23 @@ export default function Products({ wsData }) {
       category_id: categories[0]?.id || ''
     });
     setShowForm(true);
+  };
+
+  const handleMediaUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('Upload failed');
+      const { url } = await res.json();
+      setEditProd(p => ({ ...p, image_url: url }));
+    } catch {
+      alert('Erreur upload. Max 100MB, formats: jpg, png, gif, webp, mp4, webm');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const save = async () => {
@@ -216,9 +235,48 @@ export default function Products({ wsData }) {
               </div>
             </div>
 
+            <div className="form-group">
+              <label className="form-label">Photo / Vidéo</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/ogg"
+                style={{ display: 'none' }}
+                onChange={e => handleMediaUpload(e.target.files[0])}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}
+                >
+                  <Upload size={15} />
+                  {uploading ? 'Upload en cours...' : 'Choisir un fichier'}
+                </button>
+                {editProd.image_url && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/\.(mp4|webm|ogg|mov)$/i.test(editProd.image_url)
+                      ? <video src={editProd.image_url} style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6 }} muted loop />
+                      : <img src={editProd.image_url} style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6 }} alt="" />
+                    }
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => setEditProd(p => ({ ...p, image_url: null }))}
+                      style={{ color: '#f87171', padding: '2px 6px', fontSize: 12 }}
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex gap-2" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
               <button className="btn-ghost" onClick={() => setShowForm(false)}>Annuler</button>
-              <button className="btn-primary" onClick={save}>
+              <button className="btn-primary" onClick={save} disabled={uploading}>
                 {editProd.id ? 'Sauvegarder' : 'Créer le produit'}
               </button>
             </div>

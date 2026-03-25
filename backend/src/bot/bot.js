@@ -40,7 +40,7 @@ export function createBot(token) {
       if (isNew) {
         const name = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || 'Inconnu';
         const username = ctx.from.username ? `@${ctx.from.username}` : `#${ctx.from.id}`;
-        await notifyGroup(`👤 *Nouvel utilisateur*\n${name} (${username})`);
+        await notifyGroup(`👤 <b>Nouvel utilisateur</b>\n${name} (${username})`);
       }
     }
     await next();
@@ -62,6 +62,13 @@ export function createBot(token) {
       `Appuyez sur le bouton pour ouvrir la boutique:`,
       { parse_mode: 'HTML', reply_markup: keyboard }
     );
+  });
+
+  // /chatid — show current chat ID (for configuring NOTIFY_GROUP_ID)
+  bot.command('chatid', async (ctx) => {
+    const id = ctx.chat.id;
+    const type = ctx.chat.type;
+    await ctx.reply(`Chat ID: <code>${id}</code>\nType: ${type}\n\nCopie cet ID dans backend/.env → NOTIFY_GROUP_ID=${id}`, { parse_mode: 'HTML' });
   });
 
   // /shop command
