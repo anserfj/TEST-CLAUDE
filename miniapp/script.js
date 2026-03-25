@@ -302,6 +302,7 @@ function addToCartFromModal(productId) {
     name: label,
     price: unitPrice, // for gram products: fixed tier price; for others: unit price
     qty: 1,
+    gram_qty: isGram ? qty : null, // actual gram amount for gram products
     unit: p.unit,
     emoji: p.category_emoji || "🛍️",
     image_url: p.image_url || null,
@@ -484,8 +485,8 @@ async function confirmOrder() {
       notes: notes || null,
       items: cart.map(i => ({
         product_id: i.id,
-        quantity: i.qty,
-        unit_price: i.price,
+        quantity: i.gram_qty || i.qty,
+        unit_price: i.gram_qty ? parseFloat((i.price / i.gram_qty).toFixed(4)) : i.price,
       })),
       total: totalPrice,
     });
