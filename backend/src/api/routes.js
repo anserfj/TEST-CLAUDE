@@ -223,6 +223,21 @@ router.post('/messages/read/:userId', (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/messages/:userId/send', async (req, res) => {
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'Missing text' });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  try {
+    await sendMessageToUser(user.telegram_id, text.trim());
+    const result = db.prepare('INSERT INTO messages (user_id, telegram_id, text, from_admin) VALUES (?, ?, ?, 1)')
+      .run(user.id, user.telegram_id, text.trim());
+    res.json({ id: result.lastInsertRowid, user_id: user.id, telegram_id: user.telegram_id, text: text.trim(), from_admin: 1, created_at: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── STATS ─────────────────────────────────────────────────────────────────────
 
 router.get('/stats', (req, res) => {
