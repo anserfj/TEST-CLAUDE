@@ -96,6 +96,8 @@ db.exec(`
 });
 // Migrate: add tiers column to products
 try { db.exec(`ALTER TABLE products ADD COLUMN tiers TEXT`); } catch(e) {}
+// Migrate: add video_url column to products
+try { db.exec(`ALTER TABLE products ADD COLUMN video_url TEXT`); } catch(e) {}
 
 // Seed default data if empty
 const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get();

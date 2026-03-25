@@ -146,24 +146,27 @@ function renderProducts() {
 
   grid.innerHTML = filtered.map(p => {
     const emoji = p.category_emoji || "🛍️";
-    const isVid = p.image_url && /\.(mp4|webm|ogg|mov)$/i.test(p.image_url);
+    const vidUrl = p.video_url || (p.image_url && /\.(mp4|webm|ogg|mov)$/i.test(p.image_url) ? p.image_url : null);
+    const imgUrl = !vidUrl ? p.image_url : null;
     let mediaPart;
-    if (p.image_url) {
-      if (isVid) {
-        mediaPart = `
-          <video src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>
-          <div class="product-video-play">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="white" opacity=".85"><circle cx="12" cy="12" r="12" fill="rgba(0,0,0,.4)"/><polygon points="10,8 18,12 10,16" fill="white"/></svg>
-          </div>`;
-      } else {
-        mediaPart = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}" loading="lazy">`;
-      }
+    if (vidUrl) {
+      mediaPart = `
+        <video src="${vidUrl}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>
+        <div class="product-video-play">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="white" opacity=".85"><circle cx="12" cy="12" r="12" fill="rgba(0,0,0,.4)"/><polygon points="10,8 18,12 10,16" fill="white"/></svg>
+        </div>`;
+    } else if (imgUrl) {
+      mediaPart = `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}" loading="lazy">`;
     } else {
       mediaPart = `<span style="font-size:3.2rem">${emoji}</span>`;
     }
 
     const catName = p.category_name || "";
     const catEmoji = p.category_emoji || "";
+    const tiers = getProductTiers(p);
+    const priceTag = tiers && tiers.length > 0
+      ? `${tiers[0].price}€ – ${tiers[tiers.length-1].price}€`
+      : `${parseFloat(p.price||0).toFixed(0)} €/${p.unit || "u"}`;
 
     return `<div class="product-card" onclick="openModal(${p.id})">
       <div class="product-img-wrap">${mediaPart}</div>
@@ -171,7 +174,7 @@ function renderProducts() {
         <div class="product-name">${p.name}</div>
         <div class="product-tags">
           ${catName ? `<span class="product-tag cat-tag">${catEmoji} ${catName}</span>` : ""}
-          <span class="product-tag price-tag">${parseFloat(p.price).toFixed(0)} €/${p.unit || "u"}</span>
+          <span class="product-tag price-tag">${priceTag}</span>
         </div>
       </div>
     </div>`;
@@ -186,19 +189,18 @@ function openModal(productId) {
   selectedQtyIndex = 0;
 
   const emoji = p.category_emoji || "🛍️";
-  const isVid = p.image_url && /\.(mp4|webm|ogg|mov)$/i.test(p.image_url);
+  const vidUrl = p.video_url || (p.image_url && /\.(mp4|webm|ogg|mov)$/i.test(p.image_url) ? p.image_url : null);
+  const imgUrl = !vidUrl ? p.image_url : null;
 
   let mediaPart;
-  if (p.image_url) {
-    if (isVid) {
-      mediaPart = `
-        <video src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>
-        <div class="modal-play-btn">
-          <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="26" fill="rgba(0,0,0,.45)"/><polygon points="21,16 40,26 21,36" fill="white"/></svg>
-        </div>`;
-    } else {
-      mediaPart = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}">`;
-    }
+  if (vidUrl) {
+    mediaPart = `
+      <video src="${vidUrl}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>
+      <div class="modal-play-btn">
+        <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="26" fill="rgba(0,0,0,.45)"/><polygon points="21,16 40,26 21,36" fill="white"/></svg>
+      </div>`;
+  } else if (imgUrl) {
+    mediaPart = `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}">`;
   } else {
     mediaPart = `<span>${emoji}</span>`;
   }
