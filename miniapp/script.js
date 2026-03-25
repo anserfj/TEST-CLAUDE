@@ -392,52 +392,73 @@ function renderCart() {
   `;
 }
 
-// ── CHECKOUT — show delivery form first ──
+// ── CHECKOUT — show delivery form inline ──
 function checkout() {
   if (cart.length === 0) return;
-  openDeliveryForm();
+  renderDeliveryForm();
 }
 
-function openDeliveryForm() {
-  const overlay = document.getElementById("deliveryOverlay");
-  if (!overlay) return;
-  // Pre-fill if already filled
+function renderDeliveryForm() {
+  const el = document.getElementById("cartContent");
+  if (!el) return;
+
   const n = localStorage.getItem("b83_name") || "";
   const p = localStorage.getItem("b83_phone") || "";
   const a = localStorage.getItem("b83_address") || "";
-  document.getElementById("fieldName").value = n;
-  document.getElementById("fieldPhone").value = p;
-  document.getElementById("fieldAddress").value = a;
 
-  // Show order summary
   const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const summaryEl = document.getElementById("deliverySummary");
-  if (summaryEl) {
-    const lines = cart.map(i => `<div class="dsummary-row"><span>${i.name}</span><span>${(i.price * i.qty).toFixed(2).replace(".", ",")} €</span></div>`).join("");
-    summaryEl.innerHTML = `
-      <div class="dsummary-title">🛒 Récap de commande</div>
-      ${lines}
-      <div class="dsummary-total"><span>Total</span><span>${totalPrice.toFixed(2).replace(".", ",")} €</span></div>`;
-  }
+  const lines = cart.map(i =>
+    `<div class="dsummary-row"><span>${i.name}</span><span>${(i.price * i.qty).toFixed(2).replace(".", ",")} €</span></div>`
+  ).join("");
 
-  overlay.classList.add("open");
-}
+  el.innerHTML = `
+    <div class="delivery-form">
+      <div class="delivery-back" onclick="renderCart()">← Retour au panier</div>
+      <div class="delivery-title">📦 Informations de livraison</div>
+      <div class="delivery-subtitle">Remplissez vos coordonnées pour finaliser</div>
 
-function closeDeliveryForm() {
-  document.getElementById("deliveryOverlay").classList.remove("open");
+      <div class="delivery-summary">
+        <div class="dsummary-title">🛒 Récap commande</div>
+        ${lines}
+        <div class="dsummary-total"><span>Total</span><span>${totalPrice.toFixed(2).replace(".", ",")} €</span></div>
+      </div>
+
+      <div class="delivery-field">
+        <label class="delivery-label">Nom complet *</label>
+        <input id="fieldName" class="delivery-input" type="text" value="${n}" placeholder="Jean Dupont" autocomplete="name" />
+      </div>
+      <div class="delivery-field">
+        <label class="delivery-label">Numéro de téléphone *</label>
+        <input id="fieldPhone" class="delivery-input" type="tel" value="${p}" placeholder="+33 6 12 34 56 78" autocomplete="tel" />
+      </div>
+      <div class="delivery-field">
+        <label class="delivery-label">Adresse de livraison *</label>
+        <textarea id="fieldAddress" class="delivery-input delivery-textarea" placeholder="12 rue des Fleurs, 83000 Toulon" rows="3">${a}</textarea>
+      </div>
+      <div class="delivery-field">
+        <label class="delivery-label">Notes (optionnel)</label>
+        <input id="fieldNotes" class="delivery-input" type="text" placeholder="Digicode, étage, instructions..." />
+      </div>
+
+      <button class="btn-checkout" id="confirmOrderBtn" onclick="confirmOrder()">
+        ✅ Confirmer la commande
+      </button>
+    </div>
+  `;
+  // Scroll to top
+  el.scrollIntoView({ behavior: "smooth" });
 }
 
 async function confirmOrder() {
   const name    = document.getElementById("fieldName").value.trim();
   const phone   = document.getElementById("fieldPhone").value.trim();
   const address = document.getElementById("fieldAddress").value.trim();
-  const notes   = document.getElementById("fieldNotes").value.trim();
+  const notes   = document.getElementById("fieldNotes")?.value.trim() || "";
 
   if (!name)    { showToast("⚠️ Entrez votre nom complet"); return; }
   if (!phone)   { showToast("⚠️ Entrez votre numéro de téléphone"); return; }
   if (!address) { showToast("⚠️ Entrez votre adresse de livraison"); return; }
 
-  // Save for next time
   localStorage.setItem("b83_name", name);
   localStorage.setItem("b83_phone", phone);
   localStorage.setItem("b83_address", address);
@@ -467,7 +488,6 @@ async function confirmOrder() {
     cart = [];
     saveCart();
     updateCartBadge();
-    closeDeliveryForm();
     showToast("🎉 Commande envoyée !");
     setTimeout(() => switchTab("produits"), 1400);
   } catch(e) {

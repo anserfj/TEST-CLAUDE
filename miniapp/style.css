@@ -406,12 +406,16 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ── DELIVERY FORM ── */
-.delivery-modal { padding: 0; }
-.delivery-content {
-  padding: 22px 18px calc(28px + env(safe-area-inset-bottom));
+/* ── DELIVERY FORM (inline) ── */
+.delivery-form {
   display: flex; flex-direction: column; gap: 14px;
+  padding-bottom: 16px; animation: fadeIn .25s ease;
 }
+.delivery-back {
+  font-size: .82rem; color: var(--text2); cursor: pointer;
+  padding: 4px 0; display: inline-flex; align-items: center; gap: 4px;
+}
+.delivery-back:active { opacity: .6; }
 .delivery-title {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 1.6rem; letter-spacing: .05em; color: var(--text);

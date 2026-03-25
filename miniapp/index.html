@@ -167,40 +167,6 @@
     </div>
   </div>
 
-  <!-- DELIVERY FORM OVERLAY -->
-  <div class="modal-overlay" id="deliveryOverlay" onclick="closeDeliveryForm()">
-    <div class="modal delivery-modal" onclick="event.stopPropagation()">
-      <button class="modal-close" onclick="closeDeliveryForm()">✕</button>
-      <div class="delivery-content">
-        <div class="delivery-title">📦 Informations de livraison</div>
-        <div class="delivery-subtitle">Remplissez vos coordonnées pour finaliser la commande</div>
-
-        <div class="delivery-field">
-          <label class="delivery-label">Nom complet *</label>
-          <input id="fieldName" class="delivery-input" type="text" placeholder="Jean Dupont" autocomplete="name" />
-        </div>
-        <div class="delivery-field">
-          <label class="delivery-label">Numéro de téléphone *</label>
-          <input id="fieldPhone" class="delivery-input" type="tel" placeholder="+33 6 12 34 56 78" autocomplete="tel" />
-        </div>
-        <div class="delivery-field">
-          <label class="delivery-label">Adresse de livraison *</label>
-          <textarea id="fieldAddress" class="delivery-input delivery-textarea" placeholder="12 rue des Fleurs, 83000 Toulon" autocomplete="street-address" rows="2"></textarea>
-        </div>
-        <div class="delivery-field">
-          <label class="delivery-label">Notes (optionnel)</label>
-          <input id="fieldNotes" class="delivery-input" type="text" placeholder="Digicode, étage, instructions..." />
-        </div>
-
-        <div class="delivery-summary" id="deliverySummary"></div>
-
-        <button class="modal-add-btn" id="confirmOrderBtn" onclick="confirmOrder()">
-          ✅ Confirmer la commande
-        </button>
-      </div>
-    </div>
-  </div>
-
   <script src="script.js"></script>
 </body>
 </html>
