@@ -1,5 +1,5 @@
 // ================================================
-// BALTIMORE 83 — script.js (API locale)
+// BALTIMORE 83 — script.js
 // ================================================
 
 // ── TELEGRAM ──
@@ -13,9 +13,19 @@ tg.ready(); tg.expand(); tg.enableClosingConfirmation();
 
 // ── STATE ──
 let products = [];
+let categories = [];
 let cart = [];
 let currentFilter = "tous";
-let currentSearch = "";
+let selectedQtyIndex = 0; // for modal quantity selection
+
+// Preset quantity tiers (grammes → multiplier de prix)
+// Si le produit a un unit en "g", on génère des tiers
+const QTY_TIERS = [
+  { qty: 10, label: "10g" },
+  { qty: 25, label: "25g" },
+  { qty: 50, label: "50g" },
+  { qty: 100, label: "100g" },
+];
 
 // ── CART PERSISTENCE ──
 function saveCart() {
@@ -52,14 +62,31 @@ async function init() {
   loadCart();
   showSkeletons();
   try {
-    const data = await apiGet("/api/products");
-    products = data.filter(p => p.active !== 0 && p.active !== false);
+    const [cats, prods] = await Promise.all([
+      apiGet("/api/categories"),
+      apiGet("/api/products"),
+    ]);
+    categories = cats.filter(c => c.active !== 0 && c.active !== false);
+    products = prods.filter(p => p.active !== 0 && p.active !== false);
+    buildCatSelect();
   } catch(e) {
     console.warn("API indispo:", e);
     products = [];
   }
   renderProducts();
   updateCartBadge();
+}
+
+// ── BUILD CATEGORY SELECT ──
+function buildCatSelect() {
+  const sel = document.getElementById("catSelect");
+  if (!sel) return;
+  // Keep "Toutes les catégories" first
+  sel.innerHTML = `<option value="tous">Toutes les catégories</option>`;
+  categories.forEach(cat => {
+    const em = cat.emoji ? cat.emoji + " " : "";
+    sel.innerHTML += `<option value="${cat.name.toLowerCase()}">${em}${cat.name}</option>`;
+  });
 }
 
 // ── SKELETONS ──
@@ -70,9 +97,8 @@ function showSkeletons() {
     <div style="background:var(--surface);border-radius:14px;border:1px solid var(--border);overflow:hidden;animation:pulse 1.5s ease infinite">
       <div style="aspect-ratio:1/1;background:var(--bg3)"></div>
       <div style="padding:10px">
-        <div style="height:8px;background:var(--bg3);border-radius:4px;width:40%;margin-bottom:8px"></div>
         <div style="height:12px;background:var(--bg3);border-radius:4px;width:80%;margin-bottom:8px"></div>
-        <div style="height:10px;background:var(--bg3);border-radius:4px;width:50%"></div>
+        <div style="height:8px;background:var(--bg3);border-radius:4px;width:50%"></div>
       </div>
     </div>`).join("");
 }
@@ -88,32 +114,16 @@ function switchTab(tab) {
   if (tab === "panier") renderCart();
 }
 
-// ── FILTER & SEARCH ──
-function filterProducts(cat) {
-  currentFilter = cat;
-  currentSearch = "";
-  const si = document.getElementById("searchInput");
-  if (si) si.value = "";
-  document.querySelectorAll(".filter-btn").forEach(b =>
-    b.classList.toggle("active", b.dataset.cat === cat)
-  );
-  renderProducts();
-}
-
-function searchProducts(q) {
-  currentSearch = q.toLowerCase().trim();
+// ── FILTER ──
+function filterProducts(val) {
+  currentFilter = val;
   renderProducts();
 }
 
 function getFiltered() {
   return products.filter(p => {
-    const cat = (p.category_name || "").toLowerCase();
-    const matchCat = currentFilter === "tous" || cat === currentFilter;
-    const matchSearch = !currentSearch ||
-      p.name?.toLowerCase().includes(currentSearch) ||
-      p.description?.toLowerCase().includes(currentSearch) ||
-      cat.includes(currentSearch);
-    return matchCat && matchSearch;
+    if (currentFilter === "tous") return true;
+    return (p.category_name || "").toLowerCase() === currentFilter;
   });
 }
 
@@ -133,19 +143,33 @@ function renderProducts() {
 
   grid.innerHTML = filtered.map(p => {
     const emoji = p.category_emoji || "🛍️";
-    const isVid = p.image_url && /\.(mp4|webm|ogg)$/i.test(p.image_url);
-    const mediaPart = p.image_url
-      ? (isVid
-          ? `<video src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>`
-          : `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}" loading="lazy">`)
-      : `<span style="font-size:3.2rem">${emoji}</span>`;
+    const isVid = p.image_url && /\.(mp4|webm|ogg|mov)$/i.test(p.image_url);
+    let mediaPart;
+    if (p.image_url) {
+      if (isVid) {
+        mediaPart = `
+          <video src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>
+          <div class="product-video-play">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="white" opacity=".85"><circle cx="12" cy="12" r="12" fill="rgba(0,0,0,.4)"/><polygon points="10,8 18,12 10,16" fill="white"/></svg>
+          </div>`;
+      } else {
+        mediaPart = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}" loading="lazy">`;
+      }
+    } else {
+      mediaPart = `<span style="font-size:3.2rem">${emoji}</span>`;
+    }
+
+    const catName = p.category_name || "";
+    const catEmoji = p.category_emoji || "";
+
     return `<div class="product-card" onclick="openModal(${p.id})">
       <div class="product-img-wrap">${mediaPart}</div>
       <div class="product-body">
-        <div class="product-cat">${p.category_name || ""}</div>
         <div class="product-name">${p.name}</div>
-        <div class="product-price">${parseFloat(p.price).toFixed(2).replace(".", ",")} €</div>
-        <span class="product-unit">/ ${p.unit || "unité"}</span>
+        <div class="product-tags">
+          ${catName ? `<span class="product-tag cat-tag">${catEmoji} ${catName}</span>` : ""}
+          <span class="product-tag price-tag">${parseFloat(p.price).toFixed(0)} €/${p.unit || "u"}</span>
+        </div>
       </div>
     </div>`;
   }).join("");
@@ -156,28 +180,86 @@ function openModal(productId) {
   const p = products.find(x => x.id === productId);
   if (!p) return;
   tg.HapticFeedback.impactOccurred("light");
+  selectedQtyIndex = 0;
 
   const emoji = p.category_emoji || "🛍️";
-  const isVid = p.image_url && /\.(mp4|webm|ogg)$/i.test(p.image_url);
-  const modalMedia = p.image_url
-    ? (isVid
-        ? `<video src="${p.image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:12px" autoplay muted loop playsinline></video>`
-        : `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:12px" alt="${p.name}">`)
-    : `<span style="font-size:5rem">${emoji}</span>`;
+  const isVid = p.image_url && /\.(mp4|webm|ogg|mov)$/i.test(p.image_url);
+
+  let mediaPart;
+  if (p.image_url) {
+    if (isVid) {
+      mediaPart = `
+        <video src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>
+        <div class="modal-play-btn">
+          <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="26" fill="rgba(0,0,0,.45)"/><polygon points="21,16 40,26 21,36" fill="white"/></svg>
+        </div>`;
+    } else {
+      mediaPart = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}">`;
+    }
+  } else {
+    mediaPart = `<span>${emoji}</span>`;
+  }
+
+  // Check if product uses grams — build qty tiers
+  const isGram = (p.unit || "g").toLowerCase() === "g";
+  const pricePerGram = parseFloat(p.price);
+  let pricingHtml = "";
+
+  if (isGram && pricePerGram > 0) {
+    const tiers = QTY_TIERS;
+    pricingHtml = `
+      <div class="modal-price-section">
+        <div class="modal-price-label">Choisissez votre quantité</div>
+        <div class="qty-grid" id="qtyGrid">
+          ${tiers.map((t, i) => `
+            <div class="qty-option ${i === 0 ? 'selected' : ''}" onclick="selectQty(${i}, ${p.id})" id="qty-opt-${i}">
+              <div class="qty-option-qty">${t.label}</div>
+              <div class="qty-option-price">${(pricePerGram * t.qty).toFixed(0)}€</div>
+            </div>`).join("")}
+        </div>
+      </div>`;
+  } else {
+    pricingHtml = `
+      <div class="modal-price-section">
+        <div class="modal-price-simple">${parseFloat(p.price).toFixed(2).replace(".", ",")} €</div>
+        <div class="modal-unit">par ${p.unit || "unité"}</div>
+      </div>`;
+  }
+
+  const catName = p.category_name || "";
+  const catEmoji = p.category_emoji || "";
 
   document.getElementById("modalBody").innerHTML = `
-    <div class="modal-media">${modalMedia}</div>
-    <div class="modal-cat">${p.category_name || ""}</div>
-    <div class="modal-name">${p.name}</div>
-    ${p.description ? `<div class="modal-desc">${p.description}</div>` : ""}
-    <div class="modal-price">${parseFloat(p.price).toFixed(2).replace(".", ",")} €</div>
-    <span class="modal-unit">par ${p.unit || "unité"} · Stock : ${p.stock}</span>
-    <button class="modal-add-btn" onclick="addToCart(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>
-      ${p.stock <= 0 ? "Rupture de stock" : "Ajouter au panier"}
-    </button>
+    <div class="modal-media">${mediaPart}</div>
+    <div class="modal-content">
+      <div class="modal-tags">
+        ${catName ? `<span class="modal-tag">${catEmoji} ${catName}</span>` : ""}
+      </div>
+      <div class="modal-name">${p.name}</div>
+      ${p.description ? `<div class="modal-desc">${p.description}</div>` : ""}
+      ${pricingHtml}
+      <button class="modal-add-btn" id="modalAddBtn" onclick="addToCartFromModal(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>
+        ${p.stock <= 0 ? "Rupture de stock" : "Ajouter au panier"}
+      </button>
+      <div class="modal-stock">Stock : ${p.stock} ${p.unit || "unité"}${p.stock > 1 ? "s" : ""}</div>
+    </div>
   `;
 
   document.getElementById("modalOverlay").classList.add("open");
+}
+
+function selectQty(idx, productId) {
+  selectedQtyIndex = idx;
+  document.querySelectorAll(".qty-option").forEach((el, i) => {
+    el.classList.toggle("selected", i === idx);
+  });
+  const p = products.find(x => x.id === productId);
+  if (!p) return;
+  const tier = QTY_TIERS[idx];
+  const btn = document.getElementById("modalAddBtn");
+  if (btn && p.stock > 0) {
+    btn.textContent = `Ajouter ${tier.label} — ${(parseFloat(p.price) * tier.qty).toFixed(0)}€`;
+  }
 }
 
 function closeModal() {
@@ -185,35 +267,64 @@ function closeModal() {
 }
 
 // ── CART ──
-function addToCart(productId) {
+function addToCartFromModal(productId) {
   const p = products.find(x => x.id === productId);
   if (!p || p.stock <= 0) return;
-  const existing = cart.find(x => x.id === productId);
-  if (existing) {
-    if (existing.qty >= p.stock) { showToast("⚠️ Stock insuffisant"); return; }
-    existing.qty++;
-  } else {
-    cart.push({ id: p.id, name: p.name, price: p.price, qty: 1, unit: p.unit, emoji: p.category_emoji || "🛍️" });
+
+  const isGram = (p.unit || "g").toLowerCase() === "g";
+  let qty = 1;
+  let unitPrice = parseFloat(p.price);
+  let label = p.name;
+
+  if (isGram) {
+    const tier = QTY_TIERS[selectedQtyIndex];
+    qty = tier.qty;
+    unitPrice = parseFloat(p.price); // price per gram
+    label = `${p.name} (${tier.label})`;
   }
+
+  const cartItemId = isGram ? `${p.id}-${qty}g` : String(p.id);
+  const existing = cart.find(x => x.cartItemId === cartItemId);
+  if (existing) {
+    showToast(`✅ ${label} déjà dans le panier`);
+    closeModal();
+    return;
+  }
+
+  cart.push({
+    cartItemId,
+    id: p.id,
+    name: label,
+    price: isGram ? unitPrice * qty : unitPrice,
+    qty: 1,
+    unit: p.unit,
+    emoji: p.category_emoji || "🛍️",
+    image_url: p.image_url || null,
+  });
+
   saveCart();
   updateCartBadge();
-  showToast(`✅ ${p.name} ajouté`);
+  showToast(`✅ ${label} ajouté`);
   tg.HapticFeedback.impactOccurred("medium");
   closeModal();
 }
 
-function updateQty(productId, delta) {
-  const item = cart.find(x => x.id === productId);
+function addToCart(productId) {
+  addToCartFromModal(productId);
+}
+
+function updateQty(cartItemId, delta) {
+  const item = cart.find(x => x.cartItemId === cartItemId);
   if (!item) return;
   item.qty += delta;
-  if (item.qty <= 0) cart = cart.filter(x => x.id !== productId);
+  if (item.qty <= 0) cart = cart.filter(x => x.cartItemId !== cartItemId);
   saveCart();
   updateCartBadge();
   renderCart();
 }
 
-function removeFromCart(productId) {
-  cart = cart.filter(x => x.id !== productId);
+function removeFromCart(cartItemId) {
+  cart = cart.filter(x => x.cartItemId !== cartItemId);
   saveCart();
   updateCartBadge();
   renderCart();
@@ -245,20 +356,31 @@ function renderCart() {
   const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const totalQty = cart.reduce((s, i) => s + i.qty, 0);
 
-  const itemsHtml = cart.map(item => `
+  const itemsHtml = cart.map(item => {
+    let thumbHtml;
+    if (item.image_url) {
+      const isVid = /\.(mp4|webm|ogg|mov)$/i.test(item.image_url);
+      thumbHtml = isVid
+        ? `<video src="${item.image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" muted loop playsinline></video>`
+        : `<img src="${item.image_url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" alt="">`;
+    } else {
+      thumbHtml = item.emoji || "🛍️";
+    }
+    return `
     <div class="cart-item">
-      <div class="cart-item-thumb" style="font-size:1.7rem">${item.emoji || "🛍️"}</div>
+      <div class="cart-item-thumb">${thumbHtml}</div>
       <div class="cart-item-info">
         <div class="cart-item-name">${item.name}</div>
         <div class="cart-item-price">${(item.price * item.qty).toFixed(2).replace(".", ",")} €</div>
       </div>
       <div class="qty-controls">
-        <button class="qty-btn del" onclick="removeFromCart(${item.id})">🗑</button>
-        <button class="qty-btn" onclick="updateQty(${item.id}, -1)">−</button>
+        <button class="qty-btn del" onclick="removeFromCart('${item.cartItemId}')">🗑</button>
+        <button class="qty-btn" onclick="updateQty('${item.cartItemId}', -1)">−</button>
         <span class="qty-num">${item.qty}</span>
-        <button class="qty-btn" onclick="updateQty(${item.id}, 1)">+</button>
+        <button class="qty-btn" onclick="updateQty('${item.cartItemId}', 1)">+</button>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 
   el.innerHTML = `
     <div class="cart-items">${itemsHtml}</div>
