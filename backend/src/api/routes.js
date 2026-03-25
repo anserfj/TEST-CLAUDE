@@ -169,6 +169,29 @@ router.get('/users/:id', (req, res) => {
   res.json(user);
 });
 
+router.get('/users/:id/orders', (req, res) => {
+  const orders = db.prepare(`
+    SELECT o.*,
+      (SELECT json_group_array(json_object(
+        'name', p.name, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'subtotal', oi.subtotal, 'unit', p.unit
+      )) FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = o.id) as items_json
+    FROM orders o WHERE o.user_id = ? ORDER BY o.created_at DESC
+  `).all(req.params.id);
+  res.json(orders.map(o => ({ ...o, items: o.items_json ? JSON.parse(o.items_json) : [] })));
+});
+
+router.post('/broadcast', async (req, res) => {
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'Message vide' });
+  const { sendMessageToUser } = await import('../bot/bot.js');
+  const users = db.prepare('SELECT telegram_id FROM users').all();
+  let sent = 0, failed = 0;
+  for (const u of users) {
+    try { await sendMessageToUser(u.telegram_id, text); sent++; } catch { failed++; }
+  }
+  res.json({ sent, failed, total: users.length });
+});
+
 // ── MESSAGES ──────────────────────────────────────────────────────────────────
 
 router.get('/messages/:userId', (req, res) => {

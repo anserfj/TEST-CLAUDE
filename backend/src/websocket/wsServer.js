@@ -89,16 +89,16 @@ async function handleAdminMessage(msg, ws) {
 
     if (order) {
       const statusMsg = {
-        confirmed: '✅ Votre commande a été *confirmée*!',
-        preparing: '👨‍🍳 Votre commande est en *préparation*!',
-        shipped: '🚚 Votre commande a été *expédiée*!',
-        delivered: '📬 Votre commande a été *livrée*! Merci!',
-        cancelled: '❌ Votre commande a été *annulée*. Contactez-nous pour plus d\'infos.'
+        confirmed: '✅ Votre commande a été <b>confirmée</b> !',
+        preparing: '👨‍🍳 Votre commande est en <b>préparation</b> !',
+        shipped: '🚚 Votre commande a été <b>expédiée</b> !',
+        delivered: '📬 Votre commande a été <b>livrée</b> ! Merci !',
+        cancelled: '❌ Votre commande a été <b>annulée</b>. Contactez-nous pour plus d\'infos.'
       };
       const message = statusMsg[status];
       if (message) {
         try {
-          await sendMessageToUser(order.telegram_id, `${message}\n\n*Commande #${order_id}*`);
+          await sendMessageToUser(order.telegram_id, `${message}\n\n<b>Commande #${order_id}</b>`);
         } catch (e) {
           console.error('Failed to notify user:', e);
         }
