@@ -42,7 +42,7 @@ router.get('/products', (req, res) => {
     FROM products p LEFT JOIN categories c ON p.category_id = c.id
     ORDER BY c.sort_order, p.name
   `).all();
-  res.json(products);
+  res.json(products.map(p => ({ ...p, tiers: p.tiers ? JSON.parse(p.tiers) : null })));
 });
 
 router.get('/products/:id', (req, res) => {
@@ -55,20 +55,20 @@ router.get('/products/:id', (req, res) => {
 });
 
 router.post('/products', (req, res) => {
-  const { category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active, image_url } = req.body;
+  const { category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active, image_url, tiers } = req.body;
   const result = db.prepare(`
-    INSERT INTO products (category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active, image_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(category_id, name, description, price, stock || 0, unit || 'g', thc_percent || 0, cbd_percent || 0, active !== false ? 1 : 0, image_url || null);
+    INSERT INTO products (category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active, image_url, tiers)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(category_id, name, description, price, stock || 0, unit || 'g', thc_percent || 0, cbd_percent || 0, active !== false ? 1 : 0, image_url || null, tiers?.length ? JSON.stringify(tiers) : null);
   res.json({ id: result.lastInsertRowid, ...req.body });
 });
 
 router.put('/products/:id', (req, res) => {
-  const { name, description, price, stock, unit, thc_percent, cbd_percent, active, category_id, image_url } = req.body;
+  const { name, description, price, stock, unit, thc_percent, cbd_percent, active, category_id, image_url, tiers } = req.body;
   db.prepare(`
-    UPDATE products SET name=?, description=?, price=?, stock=?, unit=?, thc_percent=?, cbd_percent=?, active=?, category_id=?, image_url=?
+    UPDATE products SET name=?, description=?, price=?, stock=?, unit=?, thc_percent=?, cbd_percent=?, active=?, category_id=?, image_url=?, tiers=?
     WHERE id=?
-  `).run(name, description, price, stock, unit, thc_percent, cbd_percent, active ? 1 : 0, category_id, image_url || null, req.params.id);
+  `).run(name, description, price, stock, unit, thc_percent, cbd_percent, active ? 1 : 0, category_id, image_url || null, tiers?.length ? JSON.stringify(tiers) : null, req.params.id);
   res.json({ success: true });
 });
 

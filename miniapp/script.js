@@ -18,14 +18,17 @@ let cart = [];
 let currentFilter = "tous";
 let selectedQtyIndex = 0; // for modal quantity selection
 
-// Preset quantity tiers (grammes → multiplier de prix)
-// Si le produit a un unit en "g", on génère des tiers
+// Tiers par défaut si le produit n'a pas de tiers configurés
 const QTY_TIERS = [
-  { qty: 10, label: "10g" },
-  { qty: 25, label: "25g" },
-  { qty: 50, label: "50g" },
-  { qty: 100, label: "100g" },
+  { qty: 10 }, { qty: 25 }, { qty: 50 }, { qty: 100 },
 ];
+
+// Retourne les tiers d'un produit (custom ou calculés depuis prix/g)
+function getProductTiers(p) {
+  if (p.tiers && p.tiers.length > 0) return p.tiers;
+  const pricePerGram = parseFloat(p.price);
+  return QTY_TIERS.map(t => ({ qty: t.qty, price: pricePerGram * t.qty }));
+}
 
 // ── CART PERSISTENCE ──
 function saveCart() {
@@ -205,16 +208,16 @@ function openModal(productId) {
   const pricePerGram = parseFloat(p.price);
   let pricingHtml = "";
 
-  if (isGram && pricePerGram > 0) {
-    const tiers = QTY_TIERS;
+  if (isGram) {
+    const tiers = getProductTiers(p);
     pricingHtml = `
       <div class="modal-price-section">
         <div class="modal-price-label">Choisissez votre quantité</div>
         <div class="qty-grid" id="qtyGrid">
           ${tiers.map((t, i) => `
             <div class="qty-option ${i === 0 ? 'selected' : ''}" onclick="selectQty(${i}, ${p.id})" id="qty-opt-${i}">
-              <div class="qty-option-qty">${t.label}</div>
-              <div class="qty-option-price">${(pricePerGram * t.qty).toFixed(0)}€</div>
+              <div class="qty-option-qty">${t.qty}g</div>
+              <div class="qty-option-price">${t.price.toFixed(0)}€</div>
             </div>`).join("")}
         </div>
       </div>`;
@@ -255,10 +258,10 @@ function selectQty(idx, productId) {
   });
   const p = products.find(x => x.id === productId);
   if (!p) return;
-  const tier = QTY_TIERS[idx];
+  const tier = getProductTiers(p)[idx];
   const btn = document.getElementById("modalAddBtn");
   if (btn && p.stock > 0) {
-    btn.textContent = `Ajouter ${tier.label} — ${(parseFloat(p.price) * tier.qty).toFixed(0)}€`;
+    btn.textContent = `Ajouter ${tier.qty}g — ${tier.price.toFixed(0)}€`;
   }
 }
 
@@ -277,10 +280,10 @@ function addToCartFromModal(productId) {
   let label = p.name;
 
   if (isGram) {
-    const tier = QTY_TIERS[selectedQtyIndex];
+    const tier = getProductTiers(p)[selectedQtyIndex];
     qty = tier.qty;
-    unitPrice = parseFloat(p.price); // price per gram
-    label = `${p.name} (${tier.label})`;
+    unitPrice = tier.price; // fixed price for this tier
+    label = `${p.name} (${tier.qty}g)`;
   }
 
   const cartItemId = isGram ? `${p.id}-${qty}g` : String(p.id);
@@ -295,7 +298,7 @@ function addToCartFromModal(productId) {
     cartItemId,
     id: p.id,
     name: label,
-    price: isGram ? unitPrice * qty : unitPrice,
+    price: unitPrice, // for gram products: fixed tier price; for others: unit price
     qty: 1,
     unit: p.unit,
     emoji: p.category_emoji || "🛍️",

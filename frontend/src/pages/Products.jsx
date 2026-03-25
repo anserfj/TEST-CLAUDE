@@ -235,6 +235,58 @@ export default function Products({ wsData }) {
               </div>
             </div>
 
+            {/* ── Paliers de quantité (uniquement pour g) ── */}
+            {editProd.unit === 'g' && (
+              <div className="form-group">
+                <label className="form-label">Paliers de quantité</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(editProd.tiers || []).map((tier, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input
+                        type="number" min="1" placeholder="Qtité (g)"
+                        value={tier.qty}
+                        onChange={e => {
+                          const t = [...(editProd.tiers || [])];
+                          t[i] = { ...t[i], qty: parseInt(e.target.value) || 0 };
+                          setEditProd({ ...editProd, tiers: t });
+                        }}
+                        style={{ width: 90 }}
+                      />
+                      <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>g →</span>
+                      <input
+                        type="number" min="0" step="0.01" placeholder="Prix (€)"
+                        value={tier.price}
+                        onChange={e => {
+                          const t = [...(editProd.tiers || [])];
+                          t[i] = { ...t[i], price: parseFloat(e.target.value) || 0 };
+                          setEditProd({ ...editProd, tiers: t });
+                        }}
+                        style={{ width: 90 }}
+                      />
+                      <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>€</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditProd({ ...editProd, tiers: editProd.tiers.filter((_, idx) => idx !== i) })}
+                        style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}
+                      >✕</button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={() => setEditProd({ ...editProd, tiers: [...(editProd.tiers || []), { qty: 10, price: 0 }] })}
+                    style={{ width: 'fit-content', fontSize: 13 }}
+                  >+ Ajouter un palier</button>
+                  {(!editProd.tiers || editProd.tiers.length === 0) && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      Sans paliers → prix calculé automatiquement depuis le prix/g
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Photo / Vidéo ── */}
             <div className="form-group">
               <label className="form-label">Photo / Vidéo</label>
               <input
@@ -253,7 +305,7 @@ export default function Products({ wsData }) {
                   style={{ display: 'flex', alignItems: 'center', gap: 6, width: 'fit-content' }}
                 >
                   <Upload size={15} />
-                  {uploading ? 'Upload en cours...' : 'Choisir un fichier'}
+                  {uploading ? 'Upload en cours...' : 'Choisir une photo / vidéo'}
                 </button>
                 {editProd.image_url && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

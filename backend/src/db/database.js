@@ -94,6 +94,8 @@ db.exec(`
 ['delivery_name', 'delivery_phone'].forEach(col => {
   try { db.exec(`ALTER TABLE orders ADD COLUMN ${col} TEXT`); } catch(e) {}
 });
+// Migrate: add tiers column to products
+try { db.exec(`ALTER TABLE products ADD COLUMN tiers TEXT`); } catch(e) {}
 
 // Seed default data if empty
 const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get();
