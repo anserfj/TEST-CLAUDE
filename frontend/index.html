@@ -819,16 +819,19 @@ function CatalogPage({products,setProducts,loading,reload}){
     setModal(p);
   };
 
+  const hasTiers=form.tiers?.length>0;
   const save=async()=>{
-    if(!form.name||!form.price)return;
+    if(!form.name)return;
+    if(!hasTiers&&!form.price)return;
     setSaving(true);
     const firstImg=form.medias.find(m=>m.type==="image");
     const firstVid=form.medias.find(m=>m.type==="video");
+    const tiersClean=hasTiers?form.tiers.map(t=>({qty:parseFloat(t.qty)||0,price:parseFloat(t.price)||0})).filter(t=>t.qty>0&&t.price>0):null;
     const body={
       category_id:form.category_id?parseInt(form.category_id):null,
       name:form.name,
       description:form.description||null,
-      price:parseFloat(form.price),
+      price:form.price?parseFloat(form.price):0,
       stock:parseInt(form.stock)||0,
       unit:form.unit||"g",
       thc_percent:form.thc_percent?parseFloat(form.thc_percent):null,
@@ -836,7 +839,7 @@ function CatalogPage({products,setProducts,loading,reload}){
       active:form.active?1:0,
       image_url:firstImg?.url||null,
       video_url:firstVid?.url||null,
-      tiers:form.tiers?.length>0?form.tiers:null,
+      tiers:tiersClean?.length>0?tiersClean:null,
     };
     try{
       if(modal==="new"){const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !")}
@@ -1007,7 +1010,7 @@ function CatalogPage({products,setProducts,loading,reload}){
               onBlur={e=>e.target.style.borderColor=C.border}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <Inp label="Prix (€)" type="number" value={form.price} onChange={v=>setF({price:v})} required min="0" note="Prix de vente"/>
+            <Inp label={hasTiers?"Prix (€) — optionnel si paliers":"Prix (€)"} type="number" value={form.price} onChange={v=>setF({price:v})} required={!hasTiers} min="0" note={hasTiers?"Laissez vide si uniquement des paliers":"Prix de vente"}/>
             <Inp label="Stock" type="number" value={form.stock} onChange={v=>setF({stock:v})} min="0"/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
@@ -1033,7 +1036,7 @@ function CatalogPage({products,setProducts,loading,reload}){
         </div>
         <div style={{display:"flex",gap:10,marginTop:20,justifyContent:"flex-end"}}>
           <Btn variant="ghost" onClick={()=>setModal(null)}>Annuler</Btn>
-          <Btn onClick={save} disabled={saving||!form.name||!form.price}>{saving?"Sauvegarde...":modal==="new"?"✅ Créer":"✅ Enregistrer"}</Btn>
+          <Btn onClick={save} disabled={saving||!form.name||(!hasTiers&&!form.price)}>{saving?"Sauvegarde...":modal==="new"?"✅ Créer":"✅ Enregistrer"}</Btn>
         </div>
       </div>
     </div>}
