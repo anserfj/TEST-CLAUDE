@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from '../db/database.js';
-import { notifyGroup } from '../bot/bot.js';
+import { notifyGroup, sendMessageToUser } from '../bot/bot.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -233,27 +233,38 @@ router.get('/stats', (req, res) => {
 
 // Post an order from the mini app
 router.post('/miniapp/order', (req, res) => {
-  const { telegram_id, items, notes, total } = req.body;
+  const { telegram_id, items, notes, total, delivery_name, delivery_phone, delivery_address } = req.body;
   if (!telegram_id || !items?.length) return res.status(400).json({ error: 'Missing fields' });
+  if (!delivery_name || !delivery_phone || !delivery_address)
+    return res.status(400).json({ error: 'Nom, téléphone et adresse requis' });
 
   const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegram_id);
   if (!user) return res.status(404).json({ error: 'User not found. Start the bot first.' });
 
-  // Check stock
-  for (const item of items) {
+  // Fetch product details for recap
+  const itemsWithDetails = items.map(item => {
     const prod = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id);
-    if (!prod || prod.stock < item.quantity) {
-      return res.status(400).json({ error: `Stock insuffisant pour ${prod?.name || 'un produit'}` });
+    return { ...item, prod };
+  });
+
+  // Check stock
+  for (const item of itemsWithDetails) {
+    if (!item.prod || item.prod.stock < item.quantity) {
+      return res.status(400).json({ error: `Stock insuffisant pour ${item.prod?.name || 'un produit'}` });
     }
   }
 
+  // Update user phone/address
+  db.prepare('UPDATE users SET phone = ?, address = ? WHERE telegram_id = ?')
+    .run(delivery_phone, delivery_address, telegram_id);
+
   const createOrder = db.transaction(() => {
     const order = db.prepare(
-      'INSERT INTO orders (user_id, total, status, notes) VALUES (?, ?, ?, ?)'
-    ).run(user.id, total, 'pending', notes || null);
+      'INSERT INTO orders (user_id, total, status, notes, delivery_address, delivery_name, delivery_phone) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(user.id, total, 'pending', notes || null, delivery_address, delivery_name, delivery_phone);
 
     const orderId = order.lastInsertRowid;
-    for (const item of items) {
+    for (const item of itemsWithDetails) {
       db.prepare(
         'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)'
       ).run(orderId, item.product_id, item.quantity, item.unit_price, item.quantity * item.unit_price);
@@ -272,16 +283,50 @@ router.post('/miniapp/order', (req, res) => {
     });
   });
 
-  // Notify group
-  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Inconnu';
-  const username = user.username ? `@${user.username}` : `#${user.telegram_id}`;
-  const itemsList = items.map(i => `• ${i.product_id} x${i.quantity}`).join('\n');
-  notifyGroup(
-    `🛍️ *Nouvelle commande #${orderId}* (Mini App)\n` +
-    `👤 ${name} (${username})\n` +
-    `💰 Total: *${total.toFixed(2)}€*\n` +
-    `📦 ${items.length} article(s)`
-  );
+  const tgName = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Inconnu';
+  const tgHandle = user.username ? `@${user.username}` : `ID: ${user.telegram_id}`;
+  const now = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+  const sep = '━━━━━━━━━━━━━━━━━━━━';
+
+  // Build items list with real product names
+  const itemsLines = itemsWithDetails.map(i => {
+    const prodName = i.prod?.name || `Produit #${i.product_id}`;
+    const unit = i.prod?.unit || 'u';
+    const subtotal = (i.unit_price * i.quantity).toFixed(2);
+    return `• ${prodName} × ${i.quantity}${unit} — *${subtotal}€*`;
+  }).join('\n');
+
+  // ── GROUP notification (max details) ──
+  const groupMsg =
+    `🛍️ *NOUVELLE COMMANDE #${orderId}*\n${sep}\n\n` +
+    `👤 *CLIENT*\n` +
+    `📛 Nom: ${delivery_name}\n` +
+    `📱 Tél: ${delivery_phone}\n` +
+    `🔗 Telegram: ${tgHandle} (${tgName})\n` +
+    `🪪 ID: ${user.telegram_id}\n` +
+    `🏠 Adresse: ${delivery_address}\n` +
+    (notes ? `📝 Notes: ${notes}\n` : '') +
+    `\n${sep}\n\n` +
+    `🛒 *ARTICLES*\n${itemsLines}\n\n` +
+    `${sep}\n` +
+    `💰 *TOTAL: ${parseFloat(total).toFixed(2)}€*\n` +
+    `📅 ${now}\n` +
+    `${sep}`;
+
+  notifyGroup(groupMsg);
+
+  // ── PRIVATE recap to user ──
+  const userRecap =
+    `✅ *Commande #${orderId} confirmée !*\n\n` +
+    `🛒 *Vos articles:*\n${itemsLines}\n\n` +
+    `💰 *Total: ${parseFloat(total).toFixed(2)}€*\n\n` +
+    `📦 *Livraison à:*\n` +
+    `${delivery_name}\n` +
+    `${delivery_address}\n\n` +
+    `Notre équipe vous contactera bientôt au ${delivery_phone} 🚀\n\n` +
+    `_Merci pour votre commande !_`;
+
+  sendMessageToUser(user.telegram_id, userRecap).catch(() => {});
 
   res.json({ success: true, order_id: orderId });
 });

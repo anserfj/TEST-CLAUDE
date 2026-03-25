@@ -392,19 +392,70 @@ function renderCart() {
   `;
 }
 
-// ── CHECKOUT ──
-async function checkout() {
+// ── CHECKOUT — show delivery form first ──
+function checkout() {
   if (cart.length === 0) return;
+  openDeliveryForm();
+}
+
+function openDeliveryForm() {
+  const overlay = document.getElementById("deliveryOverlay");
+  if (!overlay) return;
+  // Pre-fill if already filled
+  const n = localStorage.getItem("b83_name") || "";
+  const p = localStorage.getItem("b83_phone") || "";
+  const a = localStorage.getItem("b83_address") || "";
+  document.getElementById("fieldName").value = n;
+  document.getElementById("fieldPhone").value = p;
+  document.getElementById("fieldAddress").value = a;
+
+  // Show order summary
+  const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const summaryEl = document.getElementById("deliverySummary");
+  if (summaryEl) {
+    const lines = cart.map(i => `<div class="dsummary-row"><span>${i.name}</span><span>${(i.price * i.qty).toFixed(2).replace(".", ",")} €</span></div>`).join("");
+    summaryEl.innerHTML = `
+      <div class="dsummary-title">🛒 Récap de commande</div>
+      ${lines}
+      <div class="dsummary-total"><span>Total</span><span>${totalPrice.toFixed(2).replace(".", ",")} €</span></div>`;
+  }
+
+  overlay.classList.add("open");
+}
+
+function closeDeliveryForm() {
+  document.getElementById("deliveryOverlay").classList.remove("open");
+}
+
+async function confirmOrder() {
+  const name    = document.getElementById("fieldName").value.trim();
+  const phone   = document.getElementById("fieldPhone").value.trim();
+  const address = document.getElementById("fieldAddress").value.trim();
+  const notes   = document.getElementById("fieldNotes").value.trim();
+
+  if (!name)    { showToast("⚠️ Entrez votre nom complet"); return; }
+  if (!phone)   { showToast("⚠️ Entrez votre numéro de téléphone"); return; }
+  if (!address) { showToast("⚠️ Entrez votre adresse de livraison"); return; }
+
+  // Save for next time
+  localStorage.setItem("b83_name", name);
+  localStorage.setItem("b83_phone", phone);
+  localStorage.setItem("b83_address", address);
+
+  const btn = document.getElementById("confirmOrderBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Envoi en cours..."; }
+
   const user = tg.initDataUnsafe?.user || {};
   const telegramId = user.id || 0;
-
-  const btn = document.querySelector(".btn-checkout");
-  if (btn) { btn.disabled = true; btn.textContent = "Envoi..."; }
 
   try {
     const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
     await apiPost("/api/miniapp/order", {
       telegram_id: telegramId,
+      delivery_name: name,
+      delivery_phone: phone,
+      delivery_address: address,
+      notes: notes || null,
       items: cart.map(i => ({
         product_id: i.id,
         quantity: i.qty,
@@ -416,11 +467,12 @@ async function checkout() {
     cart = [];
     saveCart();
     updateCartBadge();
+    closeDeliveryForm();
     showToast("🎉 Commande envoyée !");
-    setTimeout(() => switchTab("produits"), 1200);
+    setTimeout(() => switchTab("produits"), 1400);
   } catch(e) {
     showToast("❌ " + (e.message || "Erreur, réessaie"));
-    if (btn) { btn.disabled = false; btn.textContent = "Passer la commande"; }
+    if (btn) { btn.disabled = false; btn.textContent = "✅ Confirmer la commande"; }
   }
 }
 

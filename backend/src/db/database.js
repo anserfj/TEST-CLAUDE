@@ -90,6 +90,11 @@ db.exec(`
   );
 `);
 
+// Migrate: add delivery columns if missing
+['delivery_name', 'delivery_phone'].forEach(col => {
+  try { db.exec(`ALTER TABLE orders ADD COLUMN ${col} TEXT`); } catch(e) {}
+});
+
 // Seed default data if empty
 const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get();
 if (catCount.c === 0) {
