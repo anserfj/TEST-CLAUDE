@@ -1220,115 +1220,99 @@ function CategoriesPage(){
 }
 
 /* ── MESSAGES ── */
-function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSettings}){
-  const [users,setUsers]=useState([]);
-  const [messages,setMessages]=useState([]);
+function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
+  // conversations = sidebar list from /api/messages (one entry per user with unread_count)
+  // chatMessages  = individual messages for selected user from /api/messages/:id
+  const [conversations,setConversations]=useState([]);
+  const [chatMessages,setChatMessages]=useState([]);
   const [selected,setSelected]=useState(null);
   const [loading,setLoading]=useState(false);
   const [reply,setReply]=useState("");
-  const [replyFile,setReplyFile]=useState(null);
   const [sending,setSending]=useState(false);
   const [broadcast,setBroadcast]=useState("");
-  const [broadcastFile,setBroadcastFile]=useState(null);
   const [broadcasting,setBroadcasting]=useState(false);
   const [broadcastHistory,setBroadcastHistory]=useState([]);
   const [tab,setTab]=useState("inbox");
   const [toast,setToast]=useState("");
   const [showOrders,setShowOrders]=useState(false);
   const [updatingO,setUpdatingO]=useState(false);
+  const [searchConv,setSearchConv]=useState("");
   const messagesEndRef=useRef(null);
-  const fileRef=useRef(null);
-  const broadcastFileRef=useRef(null);
-  const messagesContainerRef=useRef(null);
+  const selectedRef=useRef(null);
+  selectedRef.current=selected;
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
-  const readIds=()=>JSON.parse(localStorage.getItem("baltimore83_read_ids")||"[]");
-  const userMessages=uid=>messages.filter(m=>m.telegram_id===uid).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-  const lastMsg=u=>{const ms=messages.filter(m=>m.telegram_id===u.id);if(!ms.length)return null;return ms.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]};
-  const unreadForUser=uid=>messages.filter(m=>m.telegram_id===uid&&m.direction==="in"&&!readIds().includes(m.id)).length;
   const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
-  const sortedUsers=useMemo(()=>[...users].sort((a,b)=>{const la=lastMsg(a),lb=lastMsg(b);if(!la&&!lb)return 0;if(!la)return 1;if(!lb)return -1;return new Date(lb.created_at)-new Date(la.created_at)}),[users,messages]);
 
-  const markRead=(uid,msgs)=>{
-    const ids=(msgs||messages).filter(m=>m.telegram_id===uid&&m.direction==="in").map(m=>m.id);
-    const merged=[...new Set([...readIds(),...ids])].slice(-1000);
-    localStorage.setItem("baltimore83_read_ids",JSON.stringify(merged));
-    if(onRead)onRead();
-  };
-  const markAllRead=msgs=>{
-    const ids=msgs.filter(m=>m.direction==="in").map(m=>m.id);
-    const merged=[...new Set([...readIds(),...ids])].slice(-1000);
-    localStorage.setItem("baltimore83_read_ids",JSON.stringify(merged));
-    if(onRead)onRead();
-  };
-
-  const fetchData=async(silent=false)=>{
+  // Fetch sidebar conversations (does NOT touch chatMessages)
+  const fetchConversations=async(silent=false)=>{
     if(!silent)setLoading(true);
     try{
-      const[u,conversations,bh]=await Promise.all([apiGet("/api/users"),apiGet("/api/messages"),apiGet("/api/broadcasts")]);
+      const[convs,bh]=await Promise.all([apiGet("/api/messages"),apiGet("/api/broadcasts")]);
+      setConversations(Array.isArray(convs)?convs:[]);
       setBroadcastHistory(Array.isArray(bh)?bh:[]);
-      setUsers(u);
-      // /api/messages returns array: {id, telegram_id, username, first_name, last_name,
-      //   last_message, last_message_time, from_admin, unread_count}
-      const convArr=Array.isArray(conversations)?conversations:[];
-      // Map conversations to message objects for sidebar display
-      const m=convArr.map(c=>({
-        id:c.id,
-        user_id:c.id,
-        telegram_id:c.id,
-        text:c.last_message||"",
-        direction:c.from_admin?"out":"in",
-        created_at:c.last_message_time||new Date().toISOString(),
-        unread_count:c.unread_count||0
-      }));
-      setMessages(m);
-      if(!silent)markAllRead(m);
     }catch(e){console.error(e)}
     if(!silent)setLoading(false);
   };
 
-  const fetchUserMessages=async(userId)=>{
+  // Fetch individual messages for selected user
+  const fetchChatMessages=async(userId)=>{
     try{
       const msgs=await apiGet("/api/messages/"+userId);
-      const mapped=msgs.map(m=>({...m,telegram_id:m.user_id,direction:m.from_admin?"out":"in"}));
-      setMessages(prev=>{
-        const other=prev.filter(m=>m.telegram_id!==userId);
-        return [...other,...mapped];
-      });
+      setChatMessages(msgs.map(m=>({...m,direction:m.from_admin?"out":"in"})));
     }catch(e){console.error(e)}
   };
 
-  useEffect(()=>{fetchData()},[]);
-  useEffect(()=>{const t=setInterval(()=>fetchData(true),5000);return()=>clearInterval(t)},[]);
-  useEffect(()=>{if(messagesEndRef.current)messagesEndRef.current.scrollIntoView({behavior:"smooth"})},[messages,selected]);
-  useEffect(()=>{if(selected){markRead(selected.id);fetchUserMessages(selected.id)}},[selected?.id]);
-
-  // IntersectionObserver pour marquer lus quand visibles
-  useEffect(()=>{
-    if(!selected||!messagesContainerRef.current)return;
-    const container=messagesContainerRef.current;
-    const observer=new IntersectionObserver(entries=>{
-      const ids=entries.filter(e=>e.isIntersecting).map(e=>parseInt(e.target.dataset.msgid)).filter(Boolean);
-      if(ids.length){const merged=[...new Set([...readIds(),...ids])].slice(-1000);localStorage.setItem("baltimore83_read_ids",JSON.stringify(merged));if(onRead)onRead()}
-    },{root:container,threshold:0.5});
-    container.querySelectorAll("[data-direction='in']").forEach(el=>observer.observe(el));
-    return()=>observer.disconnect();
-  },[selected,messages]);
-
-  const deleteMsg=async msg=>{
-    setMessages(prev=>prev.filter(m=>m.id!==msg.id));
+  // Mark read in DB and update local unread_count to 0
+  const markRead=async(userId)=>{
+    try{
+      await apiPost("/api/messages/read/"+userId,{});
+      setConversations(prev=>prev.map(c=>c.id===userId?{...c,unread_count:0}:c));
+      if(onRead)onRead();
+    }catch(e){}
   };
+
+  const filteredConvs=useMemo(()=>{
+    const sorted=[...conversations].sort((a,b)=>new Date(b.last_message_time)-new Date(a.last_message_time));
+    if(!searchConv)return sorted;
+    const q=searchConv.toLowerCase();
+    return sorted.filter(c=>{
+      const name=c.username?`@${c.username}`:`${c.first_name||""} ${c.last_name||""}`.trim();
+      return name.toLowerCase().includes(q)||String(c.telegram_id).includes(q);
+    });
+  },[conversations,searchConv]);
+
+  // Initial load
+  useEffect(()=>{fetchConversations()},[]);
+
+  // Poll every 5s: refresh conversations + current chat without resetting state
+  useEffect(()=>{
+    const t=setInterval(async()=>{
+      await fetchConversations(true);
+      if(selectedRef.current)await fetchChatMessages(selectedRef.current.id);
+    },5000);
+    return()=>clearInterval(t);
+  },[]);
+
+  // When selecting a user: load messages + mark read
+  useEffect(()=>{
+    if(!selected){setChatMessages([]);return;}
+    fetchChatMessages(selected.id);
+    markRead(selected.id);
+  },[selected?.id]);
+
+  // Scroll to bottom on new messages
+  useEffect(()=>{messagesEndRef.current?.scrollIntoView({behavior:"smooth"})},[chatMessages]);
 
   const sendReply=async()=>{
     if(!selected||!reply.trim())return;
     setSending(true);
     try{
-      const displayText=reply.trim();
-      const sent=await apiPost("/api/messages/"+selected.id+"/send",{text:displayText});
-      const newMsg={...sent,telegram_id:selected.id,direction:"out"};
-      setMessages(prev=>[...prev,newMsg]);
-      setUsers(prev=>prev.map(u=>u.id===selected.id?{...u,last_seen:new Date().toISOString()}:u));
-      setReply("");setReplyFile(null);if(fileRef.current)fileRef.current.value="";
+      const text=reply.trim();
+      const sent=await apiPost("/api/messages/"+selected.id+"/send",{text});
+      setChatMessages(prev=>[...prev,{...sent,direction:"out"}]);
+      setConversations(prev=>prev.map(c=>c.id===selected.id?{...c,last_message:text,last_message_time:new Date().toISOString(),from_admin:1}:c));
+      setReply("");
       showToast("✅ Envoyé !");
     }catch(e){alert("Erreur: "+e.message)}
     setSending(false);
@@ -1336,84 +1320,52 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
 
   const sendBroadcast=async()=>{
     if(!broadcast.trim())return;
-    if(!confirm(`Envoyer à ${users.length} utilisateurs ?`))return;
+    if(!confirm("Envoyer à tous les utilisateurs ?"))return;
     setBroadcasting(true);
     try{
       const r=await apiPost("/api/broadcast",{text:broadcast.trim()});
       showToast(`✅ Envoyé à ${r.sent}/${r.total} clients`);
-      setBroadcast("");setBroadcastFile(null);if(broadcastFileRef.current)broadcastFileRef.current.value="";
+      setBroadcast("");
+      fetchConversations(true);
     }catch(e){showToast("❌ Erreur: "+e.message)}
-    setBroadcasting(false);fetchData();
+    setBroadcasting(false);
   };
 
 
-  const getOrderId=text=>text?.match(/CMD-\d+/)?.[0]||null;
-
   const renderMessage=m=>{
-    const orderId=getOrderId(m.text);
-    const isOrderCard=m.direction==="out"&&orderId&&m.text?.includes("Récap commande");
-    if(isOrderCard)return<div onClick={()=>onGoToOrder&&onGoToOrder(orderId)} style={{padding:"10px 13px",background:C.bg,border:`1.5px solid ${C.accentMid}`,borderRadius:12,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=C.accentMid}>
-      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}><span>🧾</span><span style={{fontSize:12,fontWeight:700,color:C.accent}}>{orderId}</span></div>
-      <div style={{fontSize:11,color:C.text2}}>Récap commande · <span style={{color:C.accent}}>Voir →</span></div>
+    const mt=m.media_type,url=m.media_url;
+    const isImg=url&&(mt==="image"||(!mt&&/\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url)));
+    const isVid=url&&(mt==="video"||(!mt&&/\.(mp4|webm|mov)(\?|$)/i.test(url)));
+    const isAud=url&&(mt==="audio"||(!mt&&/\.(ogg|mp3|m4a|wav)(\?|$)/i.test(url)));
+    return<div style={{padding:url?"6px":"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word",overflow:"hidden"}}>
+      {isImg&&<img src={url} alt="" style={{width:"100%",maxWidth:240,borderRadius:8,display:"block",cursor:"pointer"}} onClick={()=>window.open(url,"_blank")}/>}
+      {isVid&&<video src={url} controls style={{width:"100%",maxWidth:240,borderRadius:8,display:"block"}}/>}
+      {isAud&&<audio controls src={url} style={{width:"100%",height:32,borderRadius:8}}/>}
+      {m.text&&m.text!=="📷 Photo"&&m.text!=="🎬 Vidéo"&&<span style={{padding:url?"0 4px 4px":0,display:"block"}}>{m.text}</span>}
     </div>;
-
-    // Détecter le type via media_type (worker v3) ou fallback extension URL
-    const mt = m.media_type;
-    const url = m.media_url;
-    const isImg  = url && (mt==="image"  || (!mt && /\.(jpg|jpeg|png|webp|gif|webp)(\?|$)/i.test(url)));
-    const isVid  = url && (mt==="video"  || (!mt && /\.(mp4|webm|mov|avi)(\?|$)/i.test(url)));
-    const isAud  = url && (mt==="audio"  || (!mt && /\.(ogg|oga|mp3|m4a|wav|aac)(\?|$)/i.test(url)));
-    const isFile = url && (mt==="file"   || (!mt && !isImg && !isVid && !isAud));
-
-    const bubble = <div style={{padding:url?"6px":"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word",overflow:"hidden"}}>
-      {isImg&&<img src={url} alt="" style={{width:"100%",maxWidth:240,borderRadius:8,display:"block",cursor:"pointer",marginBottom:m.text&&m.text!=="📷 Photo"?4:0}} onClick={()=>window.open(url,"_blank")}/>}
-      {isVid&&<video src={url} controls style={{width:"100%",maxWidth:240,borderRadius:8,display:"block",marginBottom:m.text&&m.text!=="🎬 Vidéo"&&m.text!=="⏺ Vidéo bulle"?4:0}}/>}
-      {isAud&&<div style={{padding:"6px 4px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-          <span style={{fontSize:18}}>{m.text?.includes("🎤")?"🎤":"🎵"}</span>
-          <span style={{fontSize:12,fontWeight:600,opacity:.9}}>{m.text||"Audio"}</span>
-        </div>
-        <audio controls src={url} style={{width:"100%",height:32,borderRadius:8}}/>
-      </div>}
-      {isFile&&<a href={url} target="_blank" style={{display:"flex",alignItems:"center",gap:7,padding:"4px 2px",color:m.direction==="out"?C.bg:C.accent,textDecoration:"none",marginBottom:m.text?4:0}}>
-        <span style={{fontSize:18}}>📎</span><span style={{fontSize:12,fontWeight:600,textDecoration:"underline"}}>{m.text?.replace("📎 ","")}</span>
-      </a>}
-      {m.text&&!isAud&&!isFile&&m.text!=="📷 Photo"&&m.text!=="🎬 Vidéo"&&m.text!=="⏺ Vidéo bulle"&&<span style={{padding:url?"0 4px 4px":0,display:"block"}}>{m.text}</span>}
-    </div>;
-    return bubble;
   };
 
   const clientOrders=selected?orders.filter(o=>String(o.user_id)===String(selected.id)):[];
   const updateOrderStatus=async(id,status)=>{
     setUpdatingO(true);
-    try{
-      const order=orders.find(o=>o.id===id);
-      await apiPatch("/api/orders/"+id+"/status",{status});
-      if(setOrders)setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
-      if(order){
-        const prevStatus=order.status;
-        const items=parseItems(order.items);
-        if(status==="confirmed"&&(prevStatus==="pending"||prevStatus==="cancelled")){
-          for(const item of items){/* stock auto-adjust removed */}
-        }
-        if(status==="cancelled"&&prevStatus!=="pending"&&prevStatus!=="cancelled"){
-          for(const item of items){/* stock auto-adjust removed */}
-        }
-        // Messages auto handled by bot backend
-      }
-    }catch(e){}
+    try{await apiPatch("/api/orders/"+id+"/status",{status});if(setOrders)setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));}catch(e){}
     setUpdatingO(false);
   };
+
+  const totalUnread=conversations.reduce((s,c)=>s+(c.unread_count||0),0);
 
   return<div className="fade-in" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 64px)"}}>
     <Toast msg={toast}/>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexShrink:0,flexWrap:"wrap",gap:8}}>
       <div>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Messages</div>
-        <div style={{fontSize:12,color:C.text3}}>{users.length} utilisateurs · {messages.filter(m=>m.direction==="in").length} reçus</div>
+        <div style={{fontSize:12,color:C.text3}}>
+          {conversations.length} conversations
+          {totalUnread>0&&<span style={{color:C.red,fontWeight:700,marginLeft:8}}>· {totalUnread} non lu{totalUnread>1?"s":""}</span>}
+        </div>
       </div>
       <div style={{display:"flex",gap:8}}>
-        <Btn variant="ghost" onClick={()=>fetchData()} style={{fontSize:12}}>🔄</Btn>
+        <Btn variant="ghost" onClick={()=>fetchConversations()} style={{fontSize:12}}>🔄</Btn>
         <div style={{display:"flex",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
           {["inbox","broadcast"].map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"7px 14px",background:tab===t?C.accent:"transparent",color:tab===t?C.bg:C.text2,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
             {t==="inbox"?"💬 Inbox":"📢 Broadcast"}
@@ -1423,16 +1375,15 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
     </div>
 
     {loading?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spinner"/></div>:
-
     tab==="broadcast"?(
       <div style={{flex:1,overflowY:"auto"}}>
         <div style={{maxWidth:580}}>
           <Card style={{marginBottom:16}}>
             <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:4}}>Envoyer à tous</div>
-            <div style={{fontSize:12,color:C.text3,marginBottom:14}}>{users.length} utilisateurs</div>
+            <div style={{fontSize:12,color:C.text3,marginBottom:14}}>{conversations.length} utilisateurs</div>
             <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Message..." style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:14,padding:"11px 13px",outline:"none",resize:"vertical",minHeight:90,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-            <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",marginTop:10,gap:10}}>
-              <Btn onClick={sendBroadcast} disabled={broadcasting||!broadcast.trim()}>{broadcasting?"⏳ Envoi...":`📢 Envoyer à ${users.length}`}</Btn>
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
+              <Btn onClick={sendBroadcast} disabled={broadcasting||!broadcast.trim()}>{broadcasting?"⏳ Envoi...":"📢 Envoyer à tous"}</Btn>
             </div>
           </Card>
           <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:10,color:C.text2}}>Historique ({broadcastHistory.length})</div>
@@ -1448,46 +1399,49 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
       </div>
     ):(
       <div className="inbox-wrap" style={{border:`1px solid ${C.border}`}}>
-        {/* Liste */}
-        <div className="inbox-users" style={{width:270,flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,overflowY:"auto"}}>
-          {sortedUsers.length===0&&<div style={{padding:24,textAlign:"center",color:C.text3,fontSize:13}}>Aucun utilisateur</div>}
-          {sortedUsers.map(u=>{
-            const last=lastMsg(u),isSelected=selected?.id===u.id,unread=unreadForUser(u.id);
-            return<div key={u.id} onClick={()=>{setSelected(u);setShowOrders(false);markRead(u.id)}} style={{padding:"11px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:isSelected?C.accentDim:"transparent",borderLeft:isSelected?`3px solid ${C.accent}`:"3px solid transparent",transition:"background .1s"}} onMouseEnter={e=>!isSelected&&(e.currentTarget.style.background="#ffffff06")} onMouseLeave={e=>!isSelected&&(e.currentTarget.style.background="transparent")}>
+        {/* Sidebar conversations */}
+        <div className="inbox-users" style={{background:C.surface,borderRight:`1px solid ${C.border}`}}>
+          <div style={{padding:"8px 10px",borderBottom:`1px solid ${C.border}`}}>
+            <input value={searchConv} onChange={e=>setSearchConv(e.target.value)} placeholder="🔍 Rechercher..." style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:12,padding:"6px 10px",outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+          </div>
+          {filteredConvs.length===0&&<div style={{padding:24,textAlign:"center",color:C.text3,fontSize:13}}>Aucun message reçu</div>}
+          {filteredConvs.map(c=>{
+            const isSel=selected?.id===c.id,hasUnread=c.unread_count>0;
+            const name=c.username?`@${c.username}`:`${c.first_name||""}${c.last_name?` ${c.last_name}`:""}`.trim()||`User ${c.id}`;
+            return<div key={c.id} onClick={()=>{setSelected(c);setShowOrders(false);}} style={{padding:"11px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:isSel?C.accentDim:"transparent",borderLeft:isSel?`3px solid ${C.accent}`:hasUnread?`3px solid ${C.red}`:"3px solid transparent",transition:"background .1s"}} onMouseEnter={e=>!isSel&&(e.currentTarget.style.background="#ffffff06")} onMouseLeave={e=>!isSel&&(e.currentTarget.style.background="transparent")}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
-                <span style={{fontSize:13,fontWeight:600,color:isSelected?C.accent:C.text1}}>{dn(u)}</span>
-                {unread>0&&<span style={{background:C.red,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{unread}</span>}
+                <span style={{fontSize:13,fontWeight:hasUnread?700:600,color:isSel?C.accent:C.text1}}>{name}</span>
+                {hasUnread&&<span style={{background:C.red,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{c.unread_count}</span>}
               </div>
-              {last&&<div style={{fontSize:11,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{last.direction==="out"?"✓ ":""}{last.text}</div>}
-              <div style={{fontSize:10,color:C.text3,marginTop:2}}>{new Date(u.last_seen).toLocaleDateString("fr-FR")}</div>
-            </div>
+              <div style={{fontSize:11,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.from_admin?"✓ ":""}{c.last_message||"—"}</div>
+              <div style={{fontSize:10,color:C.text3,marginTop:2}}>{c.last_message_time?new Date(c.last_message_time).toLocaleString("fr-FR",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}):""}</div>
+            </div>;
           })}
         </div>
 
-        {/* Conversation */}
+        {/* Chat view */}
         <div style={{flex:1,display:"flex",flexDirection:"column",background:C.card,minHeight:0}}>
           {!selected?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.text3,fontSize:14}}>← Sélectionne une conversation</div>:<>
-            {/* Header */}
             <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,flexWrap:"wrap",gap:8}}>
               <div>
                 <div style={{fontWeight:700,fontSize:14}}>{dn(selected)}</div>
-                <div style={{fontSize:10,color:C.text3}}>Depuis {new Date(selected.started_at).toLocaleDateString("fr-FR")}</div>
+                {selected.telegram_id&&<div style={{fontSize:10,color:C.text3}}>TG: {selected.telegram_id}</div>}
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <button onClick={()=>setShowOrders(v=>!v)} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:showOrders?C.accentDim:"transparent",border:`1px solid ${showOrders?C.accentMid:C.border}`,borderRadius:7,color:showOrders?C.accent:C.text2,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                {selected.username&&<a href={`https://t.me/${selected.username}`} target="_blank" style={{fontSize:11,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:6,padding:"3px 9px"}}>🔗 Profil TG</a>}
+                <button onClick={()=>setShowOrders(v=>!v)} style={{padding:"4px 10px",background:showOrders?C.accentDim:"transparent",border:`1px solid ${showOrders?C.accentMid:C.border}`,borderRadius:7,color:showOrders?C.accent:C.text2,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
                   🧾 {clientOrders.length} cmd{clientOrders.length!==1?"s":""}
                 </button>
                 <button onClick={()=>{setSelected(null);setShowOrders(false)}} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
               </div>
             </div>
 
-            {/* Panel commandes */}
             {showOrders&&<div style={{borderBottom:`1px solid ${C.border}`,background:C.surface,padding:"10px 14px",maxHeight:220,overflowY:"auto",flexShrink:0}}>
-              {clientOrders.length===0?<div style={{textAlign:"center",color:C.text3,fontSize:12,padding:"6px 0"}}>Aucune commande</div>
+              {clientOrders.length===0?<div style={{textAlign:"center",color:C.text3,fontSize:12}}>Aucune commande</div>
               :clientOrders.map(o=><div key={o.id} style={{marginBottom:9,padding:"9px 11px",background:C.card,borderRadius:7,border:`1px solid ${C.border}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                  <span style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent}}>{o.id}</span>
-                  <span style={{fontSize:11,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</span>
+                  <span style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent}}>#{o.id}</span>
+                  <span style={{fontSize:11,fontWeight:700}}>{fmt(parseFloat(o.total))}</span>
                 </div>
                 <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                   {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>updateOrderStatus(o.id,key)} disabled={updatingO||o.status===key} style={{padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600,cursor:o.status===key?"default":"pointer",border:`1px solid ${o.status===key?cfg.color:C.border}`,background:o.status===key?cfg.bg:"transparent",color:o.status===key?cfg.color:C.text3,fontFamily:"'DM Sans',sans-serif"}}>{cfg.label}</button>)}
@@ -1495,29 +1449,26 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
               </div>)}
             </div>}
 
-            {/* Messages */}
-            <div ref={messagesContainerRef} style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:7,minHeight:0}}>
-              {userMessages(selected.id).length===0&&<div style={{textAlign:"center",color:C.text3,fontSize:13,padding:20}}>Aucun message</div>}
-              {userMessages(selected.id).map(m=>(
-                <div key={m.id} data-msgid={m.id} data-direction={m.direction} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:5,alignItems:"flex-end"}}>
+            <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:7,minHeight:0}}>
+              {chatMessages.length===0&&<div style={{textAlign:"center",color:C.text3,fontSize:13,padding:20}}>Aucun message</div>}
+              {chatMessages.map(m=>(
+                <div key={m.id} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:5,alignItems:"flex-end"}}>
                   {m.direction==="in"&&<div style={{width:26,height:26,borderRadius:"50%",background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>👤</div>}
                   <div style={{maxWidth:"74%"}}>
                     {renderMessage(m)}
-                    <div style={{fontSize:10,color:C.text3,marginTop:2,display:"flex",alignItems:"center",gap:5,justifyContent:m.direction==="out"?"flex-end":"flex-start"}}>
+                    <div style={{fontSize:10,color:C.text3,marginTop:2,textAlign:m.direction==="out"?"right":"left"}}>
                       {new Date(m.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
-                      {m.direction==="out"&&<button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:10,padding:0,opacity:.5}}>🗑</button>}
+                      {m.direction==="out"&&" ✓"}
                     </div>
                   </div>
-                  {m.direction==="in"&&<button onClick={()=>deleteMsg(m)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:10,opacity:.4}}>🗑</button>}
                 </div>
               ))}
               <div ref={messagesEndRef}/>
             </div>
 
-            {/* Zone réponse */}
             <div style={{padding:"9px 13px",borderTop:`1px solid ${C.border}`,background:C.surface,flexShrink:0}}>
               <div style={{display:"flex",gap:7,alignItems:"flex-end"}}>
-                <textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Message..." onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendReply())} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none",resize:"none",maxHeight:100,minHeight:36,fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border} rows={1}/>
+                <textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Message... (Entrée pour envoyer)" onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendReply())} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none",resize:"none",maxHeight:100,minHeight:36,fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border} rows={1}/>
                 <button onClick={sendReply} disabled={sending||!reply.trim()} style={{background:sending||!reply.trim()?C.border:C.accent,border:"none",borderRadius:9,color:C.bg,cursor:"pointer",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>
                   {sending?"⏳":"➤"}
                 </button>
