@@ -1322,10 +1322,14 @@ function PromosPage(){
 }
 
 /* ── MESSAGES ── */
+// Module-level cache: survives page navigation (component remounts)
+let _convCache=[];
+let _bcastCache=[];
+
 function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
   // conversations = sidebar list from /api/messages (one entry per user with unread_count)
   // chatMessages  = individual messages for selected user from /api/messages/:id
-  const [conversations,setConversations]=useState([]);
+  const [conversations,setConversations]=useState(_convCache);
   const [chatMessages,setChatMessages]=useState([]);
   const [selected,setSelected]=useState(null);
   const [loading,setLoading]=useState(false);
@@ -1333,7 +1337,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
   const [sending,setSending]=useState(false);
   const [broadcast,setBroadcast]=useState("");
   const [broadcasting,setBroadcasting]=useState(false);
-  const [broadcastHistory,setBroadcastHistory]=useState([]);
+  const [broadcastHistory,setBroadcastHistory]=useState(_bcastCache);
   const [tab,setTab]=useState("inbox");
   const [toast,setToast]=useState("");
   const [showOrders,setShowOrders]=useState(false);
@@ -1347,13 +1351,17 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
   const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
 
   // Fetch sidebar conversations (does NOT touch chatMessages)
+  // Conversations and broadcasts are fetched INDEPENDENTLY — one failure doesn't block the other
   const fetchConversations=async(silent=false)=>{
     if(!silent)setLoading(true);
     try{
-      const[convs,bh]=await Promise.all([apiGet("/api/messages"),apiGet("/api/broadcasts")]);
-      setConversations(Array.isArray(convs)?convs:[]);
-      setBroadcastHistory(Array.isArray(bh)?bh:[]);
-    }catch(e){console.error(e)}
+      const convs=await apiGet("/api/messages");
+      if(Array.isArray(convs)){_convCache=convs;setConversations(convs);}
+    }catch(e){if(!silent)console.error("conversations:",e)}
+    try{
+      const bh=await apiGet("/api/broadcasts");
+      if(Array.isArray(bh)){_bcastCache=bh;setBroadcastHistory(bh);}
+    }catch(e){if(!silent)console.error("broadcasts:",e)}
     if(!silent)setLoading(false);
   };
 
@@ -1387,12 +1395,12 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
   // Initial load
   useEffect(()=>{fetchConversations()},[]);
 
-  // Poll every 5s: refresh conversations + current chat without resetting state
+  // Poll every 3s: refresh conversations + current chat independently
   useEffect(()=>{
     const t=setInterval(async()=>{
-      await fetchConversations(true);
-      if(selectedRef.current)await fetchChatMessages(selectedRef.current.id);
-    },5000);
+      fetchConversations(true); // fire and forget — don't block chat refresh
+      if(selectedRef.current)fetchChatMessages(selectedRef.current.id);
+    },3000);
     return()=>clearInterval(t);
   },[]);
 
@@ -1407,29 +1415,43 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
   useEffect(()=>{messagesEndRef.current?.scrollIntoView({behavior:"smooth"})},[chatMessages]);
 
   const sendReply=async()=>{
-    if(!selected||!reply.trim())return;
+    if(!selected||!reply.trim()||sending)return;
+    const text=reply.trim();
+    setReply("");
     setSending(true);
+    // Optimistic message (temp id)
+    const tmpMsg={id:"tmp_"+Date.now(),user_id:selected.id,text,from_admin:1,direction:"out",created_at:new Date().toISOString()};
+    setChatMessages(prev=>[...prev,tmpMsg]);
     try{
-      const text=reply.trim();
       const sent=await apiPost("/api/messages/"+selected.id+"/send",{text});
-      setChatMessages(prev=>[...prev,{...sent,direction:"out"}]);
+      // Replace temp message with real one from server
+      setChatMessages(prev=>prev.map(m=>m.id===tmpMsg.id?{...sent,direction:"out"}:m));
       setConversations(prev=>prev.map(c=>c.id===selected.id?{...c,last_message:text,last_message_time:new Date().toISOString(),from_admin:1}:c));
-      setReply("");
-      showToast("✅ Envoyé !");
-    }catch(e){alert("Erreur: "+e.message)}
+    }catch(e){
+      // Remove failed optimistic message, restore input
+      setChatMessages(prev=>prev.filter(m=>m.id!==tmpMsg.id));
+      setReply(text);
+      const msg=e.message&&e.message.length<120?e.message:"Service temporairement indisponible";
+      showToast("❌ Envoi échoué : "+msg);
+    }
     setSending(false);
   };
 
   const sendBroadcast=async()=>{
     if(!broadcast.trim())return;
-    if(!confirm("Envoyer à tous les utilisateurs ?"))return;
+    if(!confirm(`Envoyer à tous les utilisateurs (${conversations.length} contacts) ?`))return;
     setBroadcasting(true);
+    const text=broadcast.trim();
     try{
-      const r=await apiPost("/api/broadcast",{text:broadcast.trim()});
+      const r=await apiPost("/api/broadcast",{text});
       showToast(`✅ Envoyé à ${r.sent}/${r.total} clients`);
       setBroadcast("");
-      fetchConversations(true);
-    }catch(e){showToast("❌ Erreur: "+e.message)}
+      // Refresh broadcast history only (don't risk wiping conversations)
+      apiGet("/api/broadcasts").then(bh=>{if(Array.isArray(bh)){_bcastCache=bh;setBroadcastHistory(bh);}}).catch(()=>{});
+    }catch(e){
+      const msg=e.message&&e.message.length<120?e.message:"Service indisponible";
+      showToast("❌ Broadcast échoué : "+msg);
+    }
     setBroadcasting(false);
   };
 
