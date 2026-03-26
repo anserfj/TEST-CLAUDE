@@ -458,6 +458,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
   const [search,setSearch]=useState("");
   const [sort,setSort]=useState("date_desc");
   const [selected,setSelected]=useState(null);
+  const [loadingDetail,setLoadingDetail]=useState(false);
   const [updating,setUpdating]=useState(false);
   const [dateFrom,setDateFrom]=useState("");
   const [dateTo,setDateTo]=useState("");
@@ -466,8 +467,22 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
   const [bulkSelected,setBulkSelected]=useState([]);
   const [bulkUpdating,setBulkUpdating]=useState(false);
 
+  // Fetch full order detail (with items) when selecting an order
+  const selectOrder=async(o)=>{
+    if(selected?.id===o.id){setSelected(null);return;}
+    setSelected(o); // immediate: shows panel right away
+    setLoadingDetail(true);
+    try{
+      const detail=await apiGet("/api/orders/"+o.id);
+      const tu=detail.username?`@${detail.username}`:[detail.first_name,detail.last_name].filter(Boolean).join(" ")||`User #${detail.telegram_id}`;
+      setSelected({...detail,telegram_user:tu});
+      setNote(detail.notes||"");
+    }catch(e){console.error(e)}
+    setLoadingDetail(false);
+  };
+
   useEffect(()=>{
-    if(selectedOrder&&orders.length>0){const o=orders.find(x=>x.id===selectedOrder);if(o){setSelected(o);setNote(o.note||"");if(setSelectedOrder)setSelectedOrder(null)}}
+    if(selectedOrder&&orders.length>0){const o=orders.find(x=>x.id===selectedOrder);if(o){selectOrder(o);if(setSelectedOrder)setSelectedOrder(null)}}
   },[selectedOrder,orders]);
 
   useEffect(()=>{if(selected)setNote(selected.note||"")},[selected]);
@@ -603,7 +618,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
               {["ID","Client","Date","Total","Statut","Action"].map((h,i)=><th key={h} className={i>=2&&i<=3?"hide-mobile":""} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {paginated.map((o,i)=><tr key={o.id} onClick={()=>setSelected(selected?.id===o.id?null:o)} className="row-hover" style={{borderBottom:i<paginated.length-1?`1px solid ${C.border}`:"none",background:bulkSelected.includes(o.id)?C.accentDim:selected?.id===o.id?C.accentDim:"transparent",transition:"background .1s"}}>
+              {paginated.map((o,i)=><tr key={o.id} onClick={()=>selectOrder(o)} className="row-hover" style={{borderBottom:i<paginated.length-1?`1px solid ${C.border}`:"none",background:bulkSelected.includes(o.id)?C.accentDim:selected?.id===o.id?C.accentDim:"transparent",transition:"background .1s"}}>
                 <td style={{padding:"11px 10px"}} onClick={e=>e.stopPropagation()}><input type="checkbox" checked={bulkSelected.includes(o.id)} onChange={e=>setBulkSelected(prev=>e.target.checked?[...prev,o.id]:prev.filter(x=>x!==o.id))}/></td>
                 <td style={{padding:"11px 14px",fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent,whiteSpace:"nowrap"}}>{o.id}</td>
                 <td style={{padding:"11px 14px",fontSize:13}}>{o.telegram_user}</td>
@@ -664,22 +679,26 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
 
             {/* Articles */}
             <div>
-              <div style={{fontSize:11,color:C.text3,marginBottom:8,textTransform:"uppercase",letterSpacing:".06em"}}>Articles</div>
-              {parseItems(selected.items).map((item,i)=><div key={i} style={{marginBottom:6,padding:"7px 10px",background:C.surface,borderRadius:7}}>
-                <div style={{fontSize:12,fontWeight:600}}>{item.name}</div>
-                {item.gout&&<div style={{fontSize:11,color:C.accent,marginTop:1}}>🍬 {item.gout}</div>}
-                <div style={{fontSize:11,color:C.text3,marginTop:2}}>×{item.qty} · {fmt(item.price)} = <strong style={{color:C.text2}}>{fmt(item.qty*item.price)}</strong></div>
-              </div>)}
+              <div style={{fontSize:11,color:C.text3,marginBottom:8,textTransform:"uppercase",letterSpacing:".06em"}}>Articles ({selected.item_count||0})</div>
+              {loadingDetail
+                ?<div style={{textAlign:"center",padding:"10px 0",color:C.text3,fontSize:12}}>Chargement...</div>
+                :Array.isArray(selected.items)&&selected.items.length>0
+                  ?selected.items.map((item,i)=><div key={i} style={{marginBottom:6,padding:"7px 10px",background:C.surface,borderRadius:7}}>
+                      <div style={{fontSize:12,fontWeight:600}}>{item.name}</div>
+                      <div style={{fontSize:11,color:C.text3,marginTop:2}}>×{item.quantity}{item.unit||""} · {fmt(item.unit_price)} = <strong style={{color:C.text2}}>{fmt(item.subtotal||item.unit_price*item.quantity)}</strong></div>
+                    </div>)
+                  :<div style={{fontSize:12,color:C.text3,padding:"6px 0"}}>Aucun article</div>
+              }
             </div>
 
             {/* Livraison */}
-            {selected.livraison_info&&(()=>{const li=typeof selected.livraison_info==="string"?JSON.parse(selected.livraison_info):selected.livraison_info;return<div style={{padding:"10px 12px",background:C.surface,borderRadius:8}}>
+            {(selected.delivery_name||selected.delivery_address)&&<div style={{padding:"10px 12px",background:C.surface,borderRadius:8}}>
               <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>📦 Livraison</div>
-              {[["Nom",`${li.prenom||""} ${li.nom||""}`.trim()],["Adresse",li.adresse],["Ville",`${li.cp||""} ${li.ville||""}`.trim()],["Tél",li.tel],["Note",li.note]].filter(([,v])=>v).map(([k,v])=><div key={k} style={{display:"flex",gap:8,marginBottom:3}}>
+              {[["Nom",selected.delivery_name],["Tél",selected.delivery_phone],["Adresse",selected.delivery_address],["Notes",selected.notes]].filter(([,v])=>v).map(([k,v])=><div key={k} style={{display:"flex",gap:8,marginBottom:3}}>
                 <span style={{fontSize:10,color:C.text3,minWidth:50}}>{k}</span>
-                <span style={{fontSize:12,color:k==="Tél"?C.accent:C.text1}}>{v}</span>
+                <span style={{fontSize:12,color:k==="Tél"?C.accent:C.text1,wordBreak:"break-word"}}>{v}</span>
               </div>)}
-            </div>})()}
+            </div>}
 
             {/* Total */}
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10}}>
