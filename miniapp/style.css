@@ -453,3 +453,84 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+
+/* ── SEARCH BAR ── */
+.search-wrap {
+  padding: 0 14px 10px;
+}
+.search-input {
+  width: 100%; padding: 11px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text); font-size: 14px; font-family: inherit;
+  outline: none; transition: border-color .2s;
+  -webkit-appearance: none;
+}
+.search-input:focus { border-color: rgba(255,255,255,.3); }
+.search-input::placeholder { color: var(--text3); }
+
+/* ── DELIVERY FEE IN CART ── */
+.summary-row.delivery { color: var(--text2); font-size: .88rem; }
+.summary-row.delivery.free span:last-child { color: var(--green); }
+.delivery-msg {
+  font-size: .78rem; color: var(--text2);
+  background: rgba(255,255,255,.05);
+  border-radius: 8px; padding: 8px 12px;
+  text-align: center;
+}
+
+/* ── ORDERS PAGE ── */
+.orders-empty {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 60px 24px; text-align: center; gap: 10px;
+}
+.orders-empty .empty-icon { font-size: 2.8rem; }
+.orders-empty h3 { font-size: 1.1rem; font-weight: 700; }
+.orders-empty p { font-size: .85rem; color: var(--text2); }
+.orders-spinner {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.order-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px;
+  margin: 0 14px 12px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.order-card-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.order-card-id {
+  font-weight: 700; font-size: .92rem; color: var(--text);
+}
+.order-card-date {
+  font-size: .78rem; color: var(--text2); margin-top: 3px;
+}
+.order-status-badge {
+  font-size: .72rem; font-weight: 700; padding: 3px 10px;
+  border-radius: 20px; text-transform: uppercase; letter-spacing: .06em;
+  white-space: nowrap;
+}
+.order-items {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg3); border-radius: 10px;
+}
+.order-item-row {
+  display: flex; justify-content: space-between;
+  font-size: .82rem; color: var(--text2);
+}
+.order-item-row span:last-child { color: var(--text); font-weight: 600; }
+.order-card-total {
+  display: flex; justify-content: space-between;
+  font-size: .92rem; font-weight: 700;
+  border-top: 1px solid var(--border); padding-top: 10px;
+  color: var(--text);
+}

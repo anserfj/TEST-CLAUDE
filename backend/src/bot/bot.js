@@ -4,14 +4,27 @@ import { broadcastToAdmins } from '../websocket/wsServer.js';
 
 let bot = null;
 
-export async function notifyGroup(text) {
+export async function notifyGroup(text, extra = {}) {
   const groupId = process.env.NOTIFY_GROUP_ID;
   if (!bot || !groupId) return;
   try {
-    await bot.api.sendMessage(groupId, text, { parse_mode: 'HTML' });
+    await bot.api.sendMessage(groupId, text, { parse_mode: 'HTML', ...extra });
   } catch (e) {
     console.error('notifyGroup error:', e.message);
-    // Retry without formatting
+    try { await bot.api.sendMessage(groupId, text.replace(/<[^>]+>/g, '')); } catch {}
+  }
+}
+
+export async function notifyGroupOrder(text, orderId) {
+  const groupId = process.env.NOTIFY_GROUP_ID;
+  if (!bot || !groupId) return;
+  const keyboard = new InlineKeyboard()
+    .text('✅ Confirmer', `order_confirm_${orderId}`)
+    .text('❌ Annuler', `order_cancel_${orderId}`);
+  try {
+    await bot.api.sendMessage(groupId, text, { parse_mode: 'HTML', reply_markup: keyboard });
+  } catch (e) {
+    console.error('notifyGroupOrder error:', e.message);
     try { await bot.api.sendMessage(groupId, text.replace(/<[^>]+>/g, '')); } catch {}
   }
 }
@@ -102,6 +115,43 @@ export function createBot(token) {
     await ctx.answerCallbackQuery();
     await ctx.reply('💬 Écrivez-nous directement ici, notre équipe vous répond rapidement!\n\n📍 12 Rue des Fleurs, Paris\n🕐 Lun-Sam 10h-19h');
   });
+
+  // Inline order confirm/cancel from group notifications
+  bot.callbackQuery(/^order_confirm_(\d+)$/, async (ctx) => {
+    const orderId = ctx.match[1];
+    try {
+      db.prepare("UPDATE orders SET status = 'confirmed', updated_at = datetime('now') WHERE id = ?").run(orderId);
+      const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(orderId);
+      await ctx.answerCallbackQuery('✅ Commande confirmée !');
+      await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(`✅ Confirmée par ${ctx.from.first_name || 'admin'}`, 'noop') });
+      if (order) {
+        sendMessageToUser(order.telegram_id,
+          `✅ <b>Bonne nouvelle ! Votre commande #${orderId} est confirmée.</b>\n\nNotre équipe la prépare et vous contactera très bientôt 🚀`
+        ).catch(() => {});
+      }
+    } catch (e) {
+      await ctx.answerCallbackQuery('Erreur: ' + e.message);
+    }
+  });
+
+  bot.callbackQuery(/^order_cancel_(\d+)$/, async (ctx) => {
+    const orderId = ctx.match[1];
+    try {
+      db.prepare("UPDATE orders SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(orderId);
+      const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(orderId);
+      await ctx.answerCallbackQuery('❌ Commande annulée');
+      await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(`❌ Annulée par ${ctx.from.first_name || 'admin'}`, 'noop') });
+      if (order) {
+        sendMessageToUser(order.telegram_id,
+          `❌ <b>Commande #${orderId} annulée.</b>\n\nN'hésitez pas à nous contacter pour plus d'informations.`
+        ).catch(() => {});
+      }
+    } catch (e) {
+      await ctx.answerCallbackQuery('Erreur: ' + e.message);
+    }
+  });
+
+  bot.callbackQuery('noop', async (ctx) => { await ctx.answerCallbackQuery(); });
 
   bot.catch((err) => {
     console.error('Bot error:', err.message);

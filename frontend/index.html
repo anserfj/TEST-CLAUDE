@@ -219,7 +219,7 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 2px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:18,lineHeight:1}}>{item.icon}</span>
@@ -397,6 +397,57 @@ function DashboardPage({orders,products,setPage}){
         </div>)}
       </Card>
     </div>
+
+    <AnalyticsSection orders={orders} setPage={setPage}/>
+  </div>
+}
+
+/* ── ANALYTICS (revenue by category + top clients) ── */
+function AnalyticsSection({orders,setPage}){
+  const [stats,setStats]=useState(null);
+  useEffect(()=>{apiGet("/api/stats").then(s=>setStats(s)).catch(()=>{});},[orders.length]);
+
+  if(!stats)return null;
+  const {revenueByCategory=[],topClients=[]}=stats;
+  const maxCatRev=revenueByCategory[0]?.revenue||1;
+  const maxClientSpend=topClients[0]?.total_spent||1;
+  const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
+
+  return<div className="dash-grid-equal" style={{gap:16}}>
+    {/* CA par catégorie */}
+    <Card>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>📊 CA par catégorie</div>
+      {revenueByCategory.filter(c=>c.revenue>0).length===0
+        ?<div style={{color:C.text3,fontSize:13}}>Aucune vente par catégorie</div>
+        :revenueByCategory.filter(c=>c.revenue>0).map((c,i)=><div key={c.name} style={{marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+            <span style={{fontSize:12,color:C.text1}}>{c.emoji||""} {c.name}</span>
+            <span style={{fontSize:12,fontWeight:700,color:C.gold}}>{fmt(c.revenue)}</span>
+          </div>
+          <div style={{height:3,background:C.border,borderRadius:2}}><div style={{height:"100%",width:`${(c.revenue/maxCatRev)*100}%`,background:C.gold,borderRadius:2,transition:"width .4s"}}/></div>
+          <div style={{fontSize:10,color:C.text3,marginTop:2}}>{c.sold||0} unités vendues</div>
+        </div>)
+      }
+    </Card>
+
+    {/* Top clients */}
+    <Card>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>👑 Meilleurs clients</div>
+        <button onClick={()=>setPage("clients")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer"}}>Voir tous →</button>
+      </div>
+      {topClients.filter(c=>c.total_spent>0).length===0
+        ?<div style={{color:C.text3,fontSize:13}}>Aucun client avec commandes</div>
+        :topClients.filter(c=>c.total_spent>0).map((c,i)=><div key={c.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <div style={{width:24,height:24,borderRadius:6,background:i===0?"#f0b42922":C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:i===0?C.gold:C.text2,flexShrink:0}}>#{i+1}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:600,color:C.text1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dn(c)}</div>
+            <div style={{fontSize:10,color:C.text3}}>{c.order_count} commande{c.order_count>1?"s":""}</div>
+          </div>
+          <div style={{fontSize:13,fontWeight:700,color:i===0?C.gold:C.accent,flexShrink:0}}>{fmt(c.total_spent)}</div>
+        </div>)
+      }
+    </Card>
   </div>
 }
 
@@ -666,8 +717,11 @@ function ClientsPage({orders,setOrders}){
   const [loading,setLoading]=useState(false);
   const [updating,setUpdating]=useState(false);
   const [sortBy,setSortBy]=useState("recent");
+  const [noteText,setNoteText]=useState("");
+  const [savingNote,setSavingNote]=useState(false);
 
   useEffect(()=>{setLoading(true);apiGet("/api/users").then(u=>setClients(u)).catch(console.error).finally(()=>setLoading(false));},[]);
+  useEffect(()=>{if(selected)setNoteText(selected.notes||"")},[selected?.id]);
 
   const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
   const clientOrders=uid=>orders.filter(o=>String(o.user_id)===String(uid));
@@ -691,6 +745,17 @@ function ClientsPage({orders,setOrders}){
       }
     }catch(e){alert(e.message)}
     setUpdating(false);
+  };
+
+  const saveNote=async()=>{
+    if(!selected)return;
+    setSavingNote(true);
+    try{
+      await apiPatch("/api/users/"+selected.id+"/notes",{notes:noteText.trim()||null});
+      setClients(prev=>prev.map(c=>c.id===selected.id?{...c,notes:noteText.trim()||null}:c));
+      setSelected(prev=>({...prev,notes:noteText.trim()||null}));
+    }catch(e){alert(e.message);}
+    setSavingNote(false);
   };
 
   const sorted=useMemo(()=>{
@@ -765,6 +830,14 @@ function ClientsPage({orders,setOrders}){
               <div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.gold}}>{clientOrders(selected.id).length}</div>
               <div style={{fontSize:11,color:C.text3}}>Commandes</div>
             </div>
+          </div>
+          {/* Notes internes */}
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>📝 Note interne</div>
+            <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="Note privée sur ce client..." rows={3}
+              style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"9px 12px",outline:"none",resize:"vertical",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}
+              onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+            <Btn onClick={saveNote} disabled={savingNote} style={{fontSize:11,padding:"5px 12px",marginTop:5}}>{savingNote?"...":"💾 Sauvegarder"}</Btn>
           </div>
           <div style={{fontSize:11,color:C.text3,marginBottom:10,textTransform:"uppercase",letterSpacing:".06em"}}>Historique</div>
           <div style={{maxHeight:400,overflowY:"auto"}}>
@@ -1039,6 +1112,109 @@ function CatalogPage({products,setProducts,loading,reload}){
           <Btn onClick={save} disabled={saving||!form.name||(!hasTiers&&!form.price)}>{saving?"Sauvegarde...":modal==="new"?"✅ Créer":"✅ Enregistrer"}</Btn>
         </div>
       </div>
+    </div>}
+  </div>
+}
+
+/* ── CATEGORIES ── */
+function CategoriesPage(){
+  const [cats,setCats]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [toast,setToast]=useState("");
+  const [editId,setEditId]=useState(null);
+  const [form,setForm]=useState({name:"",emoji:"🌿",sort_order:"",active:1});
+  const [showNew,setShowNew]=useState(false);
+
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
+
+  const load=()=>{setLoading(true);apiGet("/api/categories").then(d=>setCats(Array.isArray(d)?d:[])).catch(e=>showToast("Erreur: "+e.message)).finally(()=>setLoading(false))};
+  useEffect(()=>{load()},[]);
+
+  const startEdit=c=>{setEditId(c.id);setForm({name:c.name,emoji:c.emoji||"🌿",sort_order:String(c.sort_order||0),active:c.active??1});setShowNew(false)};
+  const startNew=()=>{setEditId(null);setForm({name:"",emoji:"🌿",sort_order:"",active:1});setShowNew(true)};
+  const cancel=()=>{setEditId(null);setShowNew(false)};
+
+  const save=async()=>{
+    if(!form.name.trim())return;
+    setSaving(true);
+    try{
+      if(editId){
+        await apiPut("/api/categories/"+editId,{name:form.name.trim(),emoji:form.emoji||"🌿",active:form.active?1:0,sort_order:parseInt(form.sort_order)||0});
+        setCats(prev=>prev.map(c=>c.id===editId?{...c,...form,sort_order:parseInt(form.sort_order)||0}:c));
+        setEditId(null);
+      } else {
+        const res=await apiPost("/api/categories",{name:form.name.trim(),emoji:form.emoji||"🌿",sort_order:parseInt(form.sort_order)||0});
+        setCats(prev=>[...prev,{...res,active:1}]);
+        setShowNew(false);
+      }
+      showToast("✓ Sauvegardé");
+    }catch(e){showToast("Erreur: "+e.message);}
+    setSaving(false);
+  };
+
+  const del=async(id,name)=>{
+    if(!confirm(`Désactiver "${name}" ?`))return;
+    try{await apiDelete("/api/categories/"+id);setCats(prev=>prev.map(c=>c.id===id?{...c,active:0}:c));showToast("✓ Désactivée")}catch(e){showToast("Erreur: "+e.message)}
+  };
+
+  const restore=async(id)=>{
+    const cat=cats.find(c=>c.id===id);if(!cat)return;
+    try{await apiPut("/api/categories/"+id,{name:cat.name,emoji:cat.emoji,active:1,sort_order:cat.sort_order});setCats(prev=>prev.map(c=>c.id===id?{...c,active:1}:c));showToast("✓ Réactivée")}catch(e){showToast("Erreur: "+e.message)}
+  };
+
+  const InlineForm=()=><div style={{display:"flex",flexDirection:"column",gap:10,padding:"16px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:10}}>
+    <div style={{display:"grid",gridTemplateColumns:"60px 1fr 80px",gap:8}}>
+      <input value={form.emoji} onChange={e=>setForm(f=>({...f,emoji:e.target.value}))} placeholder="🌿" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:22,padding:"7px",outline:"none",textAlign:"center"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Nom de la catégorie" onKeyDown={e=>e.key==="Enter"&&save()} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"8px 12px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <input type="number" value={form.sort_order} onChange={e=>setForm(f=>({...f,sort_order:e.target.value}))} placeholder="Ordre" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"8px 10px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+    </div>
+    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+      <label style={{fontSize:12,color:C.text2,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+        <input type="checkbox" checked={form.active===1||form.active===true} onChange={e=>setForm(f=>({...f,active:e.target.checked?1:0}))} style={{cursor:"pointer"}}/>
+        Active
+      </label>
+      <div style={{flex:1}}/>
+      <Btn variant="ghost" onClick={cancel} style={{fontSize:12,padding:"6px 12px"}}>Annuler</Btn>
+      <Btn onClick={save} disabled={saving||!form.name.trim()} style={{fontSize:12,padding:"6px 14px"}}>{saving?"...":"✓ Sauvegarder"}</Btn>
+    </div>
+  </div>;
+
+  return<div className="fade-in" style={{maxWidth:620}}>
+    <Toast msg={toast}/>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+      <div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Catégories</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{cats.filter(c=>c.active!==0).length} actives · {cats.filter(c=>c.active===0).length} inactives</div>
+      </div>
+      <Btn onClick={startNew} style={{fontSize:13}}>+ Nouvelle</Btn>
+    </div>
+
+    {showNew&&<InlineForm/>}
+
+    {loading?<div style={{padding:40,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {cats.map(c=>{
+        const isEditing=editId===c.id;
+        return<div key={c.id}>
+          {isEditing&&<InlineForm/>}
+          {!isEditing&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:C.card,border:`1px solid ${c.active!==0?C.border:"#ff475730"}`,borderRadius:10,opacity:c.active===0?.6:1}}>
+            <span style={{fontSize:22,width:30,textAlign:"center",flexShrink:0}}>{c.emoji||"🌿"}</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:600,color:c.active===0?C.text3:C.text1}}>{c.name}</div>
+              <div style={{fontSize:11,color:C.text3}}>Ordre #{c.sort_order||0} · {c.active===0?"Inactive":"Active"}</div>
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              {c.active===0
+                ?<Btn variant="ghost" onClick={()=>restore(c.id)} style={{fontSize:11,padding:"4px 10px"}}>Réactiver</Btn>
+                :<><Btn variant="ghost" onClick={()=>startEdit(c)} style={{fontSize:11,padding:"4px 10px"}}>Modifier</Btn>
+                  <Btn variant="danger" onClick={()=>del(c.id,c.name)} style={{fontSize:11,padding:"4px 10px"}}>Désactiver</Btn></>
+              }
+            </div>
+          </div>}
+        </div>
+      })}
+      {cats.length===0&&<div style={{padding:40,textAlign:"center",color:C.text3,fontSize:13}}>Aucune catégorie</div>}
     </div>}
   </div>
 }
@@ -1359,8 +1535,12 @@ function SettingsPage({orders,logout}){
   const [settings,setSettings]=useState(()=>{
     try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}
   });
+  const [apiSettings,setApiSettings]=useState({delivery_fee:"3.00",free_delivery_threshold:"50.00",shop_banner:""});
   const [saved,setSaved]=useState(false);
+  const [apiSaved,setApiSaved]=useState(false);
   const [notifStatus,setNotifStatus]=useState(Notification?.permission||"default");
+
+  useEffect(()=>{apiGet("/api/settings").then(s=>setApiSettings(prev=>({...prev,...s}))).catch(()=>{});},[]);
 
   const setS=(k,v)=>{
     const next={...settings,[k]:v};
@@ -1368,6 +1548,10 @@ function SettingsPage({orders,logout}){
     localStorage.setItem("baltimore83_settings",JSON.stringify(next));
     setSaved(true);
     setTimeout(()=>setSaved(false),1500);
+  };
+
+  const saveApiSettings=async()=>{
+    try{await apiPut("/api/settings",apiSettings);setApiSaved(true);setTimeout(()=>setApiSaved(false),2000);}catch(e){alert("Erreur: "+e.message);}
   };
 
   const requestNotif=async()=>{
@@ -1391,12 +1575,39 @@ function SettingsPage({orders,logout}){
       {saved&&<span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sauvegardé</span>}
     </div>
 
+    {/* Livraison — sauvegardé dans la DB */}
+    <Card style={{marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>🚚 Livraison</div>
+        {apiSaved&&<span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sauvegardé</span>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+        <div>
+          <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Frais de livraison (€)</label>
+          <input type="number" step="0.01" value={apiSettings.delivery_fee||""} onChange={e=>setApiSettings(s=>({...s,delivery_fee:e.target.value}))} placeholder="3.00"
+            style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+        </div>
+        <div>
+          <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Livraison offerte dès (€)</label>
+          <input type="number" step="0.01" value={apiSettings.free_delivery_threshold||""} onChange={e=>setApiSettings(s=>({...s,free_delivery_threshold:e.target.value}))} placeholder="50.00"
+            style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+        </div>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Bandeau boutique (miniapp)</label>
+        <input value={apiSettings.shop_banner||""} onChange={e=>setApiSettings(s=>({...s,shop_banner:e.target.value}))} placeholder="Baltimore 83 · Le meilleur dans le Var 🔥"
+          style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      </div>
+      <Btn onClick={saveApiSettings} style={{fontSize:13}}>Sauvegarder la configuration</Btn>
+    </Card>
+
     {/* Boutique */}
     <Card style={{marginBottom:14}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:16}}>🛒 Boutique</div>
       {field("Lien @contact (Telegram)","willyHandle","baltimore83","Pseudo Telegram où les commandes sont envoyées (sans @)")}
-      {field("Livraison offerte dès (€)","livraisonMin","200","Montant minimum pour livraison gratuite")}
-      {field("Prix livraison (€)","livraisonPrix","9.90","Frais de port si sous le minimum")}
       {field("Message de bienvenue bot","welcomeMsg","👋 Bienvenue chez Baltimore 83...","Message envoyé aux nouveaux utilisateurs du bot")}
     </Card>
 
@@ -1515,6 +1726,7 @@ function App(){
       {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder} getSettings={getSettings}/>}
       {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
+      {page==="categories"&&<CategoriesPage/>}
       {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread()}} onGoToOrder={id=>{setSelectedOrder(id);setPage("orders");fetchOrders()}} orders={orders} setOrders={setOrders} setProducts={setProducts} getSettings={getSettings}/>}
       {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
     </main>

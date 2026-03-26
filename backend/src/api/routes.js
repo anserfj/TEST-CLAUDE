@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from '../db/database.js';
-import { notifyGroup, sendMessageToUser } from '../bot/bot.js';
+import { notifyGroupOrder, notifyGroup, sendMessageToUser } from '../bot/bot.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -103,6 +103,12 @@ router.put('/categories/:id', (req, res) => {
   res.json({ success: true });
 });
 
+router.delete('/categories/:id', (req, res) => {
+  // Soft-delete: set active=0, preserve products
+  db.prepare('UPDATE categories SET active = 0 WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
 // ── ORDERS ────────────────────────────────────────────────────────────────────
 
 router.get('/orders', (req, res) => {
@@ -167,6 +173,12 @@ router.get('/users/:id', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(user);
+});
+
+router.patch('/users/:id/notes', (req, res) => {
+  const { notes } = req.body;
+  db.prepare('UPDATE users SET notes = ? WHERE id = ?').run(notes || null, req.params.id);
+  res.json({ success: true });
 });
 
 router.get('/users/:id/orders', (req, res) => {
@@ -253,6 +265,21 @@ router.post('/messages/:userId/send', async (req, res) => {
   }
 });
 
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+
+router.get('/settings', (req, res) => {
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const settings = {};
+  rows.forEach(r => settings[r.key] = r.value);
+  res.json(settings);
+});
+
+router.put('/settings', (req, res) => {
+  const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+  Object.entries(req.body).forEach(([k, v]) => upsert.run(k, String(v)));
+  res.json({ success: true });
+});
+
 // ── STATS ─────────────────────────────────────────────────────────────────────
 
 router.get('/stats', (req, res) => {
@@ -276,9 +303,27 @@ router.get('/stats', (req, res) => {
     GROUP BY p.id ORDER BY sold DESC LIMIT 5
   `).all();
 
+  const revenueByCategory = db.prepare(`
+    SELECT c.name, c.emoji, COALESCE(SUM(oi.subtotal), 0) as revenue, COALESCE(SUM(oi.quantity), 0) as sold
+    FROM categories c
+    LEFT JOIN products p ON p.category_id = c.id
+    LEFT JOIN order_items oi ON oi.product_id = p.id
+    LEFT JOIN orders o ON oi.order_id = o.id AND o.status != 'cancelled'
+    WHERE c.active = 1
+    GROUP BY c.id ORDER BY revenue DESC
+  `).all();
+
+  const topClients = db.prepare(`
+    SELECT u.id, u.username, u.first_name, u.last_name, u.telegram_id,
+           COUNT(o.id) as order_count, COALESCE(SUM(o.total), 0) as total_spent
+    FROM users u
+    LEFT JOIN orders o ON o.user_id = u.id AND o.status != 'cancelled'
+    GROUP BY u.id ORDER BY total_spent DESC LIMIT 5
+  `).all();
+
   res.json({
     totalOrders, pendingOrders, totalRevenue, totalUsers,
-    lowStock, unreadMessages, recentOrders, topProducts
+    lowStock, unreadMessages, recentOrders, topProducts, revenueByCategory, topClients
   });
 });
 
@@ -367,7 +412,7 @@ router.post('/miniapp/order', (req, res) => {
     `📅 ${now}`;
 
   console.log(`📦 Order #${orderId} | telegram_id=${user.telegram_id} | total=${total}€ | group=${process.env.NOTIFY_GROUP_ID || 'NOT SET'}`);
-  notifyGroup(groupMsg);
+  notifyGroupOrder(groupMsg, orderId);
 
   // ── PRIVATE recap to user (HTML format) ──
   const userRecap =

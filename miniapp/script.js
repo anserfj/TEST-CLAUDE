@@ -16,7 +16,9 @@ let products = [];
 let categories = [];
 let cart = [];
 let currentFilter = "tous";
+let currentSearch = "";
 let selectedQtyIndex = 0; // for modal quantity selection
+let shopSettings = { delivery_fee: "3.00", free_delivery_threshold: "50.00" };
 
 // Tiers par défaut si le produit n'a pas de tiers configurés
 const QTY_TIERS = [
@@ -65,12 +67,14 @@ async function init() {
   loadCart();
   showSkeletons();
   try {
-    const [cats, prods] = await Promise.all([
+    const [cats, prods, settings] = await Promise.all([
       apiGet("/api/categories"),
       apiGet("/api/products"),
+      apiGet("/api/settings").catch(() => ({})),
     ]);
     categories = cats.filter(c => c.active !== 0 && c.active !== false);
     products = prods.filter(p => p.active !== 0 && p.active !== false);
+    if (settings) shopSettings = { ...shopSettings, ...settings };
     buildCatSelect();
   } catch(e) {
     console.warn("API indispo:", e);
@@ -116,18 +120,27 @@ function switchTab(tab) {
     p.classList.toggle("active", p.id === `page-${tab}`)
   );
   if (tab === "panier") renderCart();
+  if (tab === "commandes") loadOrders();
 }
 
-// ── FILTER ──
+// ── FILTER / SEARCH ──
 function filterProducts(val) {
   currentFilter = val;
   renderProducts();
 }
 
+function searchProducts(val) {
+  currentSearch = val.trim().toLowerCase();
+  renderProducts();
+}
+
 function getFiltered() {
   return products.filter(p => {
-    if (currentFilter === "tous") return true;
-    return (p.category_name || "").toLowerCase() === currentFilter;
+    const matchCat = currentFilter === "tous" || (p.category_name || "").toLowerCase() === currentFilter;
+    const matchSearch = !currentSearch ||
+      (p.name || "").toLowerCase().includes(currentSearch) ||
+      (p.description || "").toLowerCase().includes(currentSearch);
+    return matchCat && matchSearch;
   });
 }
 
@@ -360,8 +373,12 @@ function renderCart() {
     return;
   }
 
-  const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const totalQty = cart.reduce((s, i) => s + i.qty, 0);
+  const deliveryFee = parseFloat(shopSettings.delivery_fee || 3);
+  const freeThreshold = parseFloat(shopSettings.free_delivery_threshold || 50);
+  const isFreeDelivery = subtotal >= freeThreshold;
+  const totalPrice = subtotal + (isFreeDelivery ? 0 : deliveryFee);
 
   const itemsHtml = cart.map(item => {
     let thumbHtml;
@@ -389,10 +406,20 @@ function renderCart() {
     </div>`;
   }).join("");
 
+  const deliveryRow = isFreeDelivery
+    ? `<div class="summary-row delivery free"><span>🚚 Livraison</span><span style="color:#00e676">Offerte ✓</span></div>`
+    : `<div class="summary-row delivery"><span>🚚 Livraison</span><span>${deliveryFee.toFixed(2).replace(".", ",")} €</span></div>`;
+  const freeMsg = !isFreeDelivery
+    ? `<div class="delivery-msg">Plus que ${(freeThreshold - subtotal).toFixed(2).replace(".", ",")} € pour la livraison offerte</div>`
+    : "";
+
   el.innerHTML = `
     <div class="cart-items">${itemsHtml}</div>
     <div class="cart-summary">
       <div class="summary-row"><span>Articles</span><span>${totalQty}</span></div>
+      <div class="summary-row"><span>Sous-total</span><span>${subtotal.toFixed(2).replace(".", ",")} €</span></div>
+      ${deliveryRow}
+      ${freeMsg}
       <div class="summary-row total"><span>Total</span><span>${totalPrice.toFixed(2).replace(".", ",")} €</span></div>
     </div>
     <button class="btn-checkout" onclick="checkout()">Passer la commande</button>
@@ -477,7 +504,10 @@ async function confirmOrder() {
   const telegramId = user.id || 0;
 
   try {
-    const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
+    const subtotalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
+    const deliveryFee = parseFloat(shopSettings.delivery_fee || 3);
+    const freeThreshold = parseFloat(shopSettings.free_delivery_threshold || 50);
+    const totalPrice = subtotalPrice + (subtotalPrice >= freeThreshold ? 0 : deliveryFee);
     await apiPost("/api/miniapp/order", {
       telegram_id: telegramId,
       delivery_name: name,
@@ -500,6 +530,83 @@ async function confirmOrder() {
   } catch(e) {
     showToast("❌ " + (e.message || "Erreur, réessaie"));
     if (btn) { btn.disabled = false; btn.textContent = "✅ Confirmer la commande"; }
+  }
+}
+
+// ── ORDERS HISTORY ──
+async function loadOrders() {
+  const el = document.getElementById("ordersContent");
+  if (!el) return;
+
+  const user = tg.initDataUnsafe?.user || {};
+  const telegramId = user.id || 0;
+
+  if (!telegramId) {
+    el.innerHTML = `<div class="orders-empty">
+      <div class="empty-icon">🔒</div>
+      <h3>Non connecté</h3>
+      <p>Ouvrez cette page via Telegram</p>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="display:flex;justify-content:center;padding:40px 0"><div class="orders-spinner"></div></div>`;
+
+  try {
+    const orders = await apiGet(`/api/miniapp/orders/${telegramId}`);
+
+    if (!orders.length) {
+      el.innerHTML = `<div class="orders-empty">
+        <div class="empty-icon">📦</div>
+        <h3>Aucune commande</h3>
+        <p>Parcourez le catalogue pour passer votre première commande</p>
+        <button class="btn-shop" onclick="switchTab('produits')">Voir le catalogue</button>
+      </div>`;
+      return;
+    }
+
+    const statusLabel = {
+      pending: { label: "En attente", color: "#fff", bg: "rgba(255,255,255,.12)" },
+      confirmed: { label: "Confirmée", color: "#a78bfa", bg: "rgba(167,139,250,.15)" },
+      preparing: { label: "En prépa", color: "#f0b429", bg: "rgba(240,180,41,.15)" },
+      shipped: { label: "Expédiée", color: "#00e676", bg: "rgba(0,230,118,.15)" },
+      delivered: { label: "Livrée", color: "#00e676", bg: "rgba(0,230,118,.15)" },
+      cancelled: { label: "Annulée", color: "#ff4757", bg: "rgba(255,71,87,.15)" },
+    };
+
+    el.innerHTML = orders.map(o => {
+      const st = statusLabel[o.status] || statusLabel.pending;
+      const date = new Date(o.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+      const itemsHtml = (o.items || []).map(i =>
+        `<div class="order-item-row">
+          <span>${i.name}</span>
+          <span>×${i.quantity}${i.unit || ""} — ${(i.subtotal || i.unit_price * i.quantity).toFixed(0)}€</span>
+        </div>`
+      ).join("");
+
+      return `<div class="order-card">
+        <div class="order-card-header">
+          <div>
+            <div class="order-card-id">Commande #${o.id}</div>
+            <div class="order-card-date">${date}</div>
+          </div>
+          <span class="order-status-badge" style="color:${st.color};background:${st.bg}">${st.label}</span>
+        </div>
+        <div class="order-items">${itemsHtml}</div>
+        <div class="order-card-total">
+          <span>Total</span>
+          <span>${parseFloat(o.total).toFixed(2).replace(".", ",")} €</span>
+        </div>
+      </div>`;
+    }).join("");
+
+  } catch(e) {
+    el.innerHTML = `<div class="orders-empty">
+      <div class="empty-icon">⚠️</div>
+      <h3>Erreur</h3>
+      <p>Impossible de charger les commandes</p>
+      <button class="btn-shop" onclick="loadOrders()">Réessayer</button>
+    </div>`;
   }
 }
 

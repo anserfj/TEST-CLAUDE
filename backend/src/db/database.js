@@ -100,6 +100,17 @@ try { db.exec(`ALTER TABLE products ADD COLUMN tiers TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE products ADD COLUMN video_url TEXT`); } catch(e) {}
 // Migrate: add is_broadcast column to messages
 try { db.exec(`ALTER TABLE messages ADD COLUMN is_broadcast INTEGER DEFAULT 0`); } catch(e) {}
+// Migrate: add notes column to users
+try { db.exec(`ALTER TABLE users ADD COLUMN notes TEXT`); } catch(e) {}
+
+// Settings table
+db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
+// Seed default settings if empty
+if (!db.prepare("SELECT value FROM settings WHERE key = 'delivery_fee'").get()) {
+  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('delivery_fee', '3.00');
+  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('free_delivery_threshold', '50.00');
+  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('shop_banner', 'Baltimore 83 · Le meilleur dans le Var 🔥');
+}
 
 // Seed default data if empty
 const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get();
