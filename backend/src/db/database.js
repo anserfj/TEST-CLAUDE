@@ -102,6 +102,22 @@ try { db.exec(`ALTER TABLE products ADD COLUMN video_url TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE messages ADD COLUMN is_broadcast INTEGER DEFAULT 0`); } catch(e) {}
 // Migrate: add notes column to users
 try { db.exec(`ALTER TABLE users ADD COLUMN notes TEXT`); } catch(e) {}
+// Migrate: add promo_code + discount columns to orders
+try { db.exec(`ALTER TABLE orders ADD COLUMN promo_code TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE orders ADD COLUMN discount REAL DEFAULT 0`); } catch(e) {}
+
+// Promos table
+db.exec(`CREATE TABLE IF NOT EXISTS promos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT UNIQUE NOT NULL,
+  discount_type TEXT NOT NULL DEFAULT 'percent',
+  discount_value REAL NOT NULL,
+  min_order REAL DEFAULT 0,
+  max_uses INTEGER DEFAULT 0,
+  uses_count INTEGER DEFAULT 0,
+  active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+)`);
 
 // Settings table
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);

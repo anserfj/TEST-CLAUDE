@@ -219,7 +219,7 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 2px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:18,lineHeight:1}}>{item.icon}</span>
@@ -1219,6 +1219,108 @@ function CategoriesPage(){
   </div>
 }
 
+/* ── PROMOS ── */
+function PromosPage(){
+  const [promos,setPromos]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [toast,setToast]=useState("");
+  const [form,setForm]=useState({code:"",discount_type:"percent",discount_value:"",min_order:"",max_uses:""});
+  const [showNew,setShowNew]=useState(false);
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
+  const load=()=>{setLoading(true);apiGet("/api/promos").then(d=>setPromos(Array.isArray(d)?d:[])).catch(e=>showToast("Erreur: "+e.message)).finally(()=>setLoading(false))};
+  useEffect(()=>{load()},[]);
+
+  const create=async()=>{
+    if(!form.code.trim()||!form.discount_value)return showToast("Code et valeur requis");
+    try{
+      await apiPost("/api/promos",{code:form.code,discount_type:form.discount_type,discount_value:parseFloat(form.discount_value),min_order:parseFloat(form.min_order||0),max_uses:parseInt(form.max_uses||0)});
+      setForm({code:"",discount_type:"percent",discount_value:"",min_order:"",max_uses:""});
+      setShowNew(false);
+      load();
+      showToast("✅ Code créé !");
+    }catch(e){showToast("Erreur: "+e.message)}
+  };
+  const toggle=async(p)=>{
+    await apiPatch("/api/promos/"+p.id,{active:p.active?0:1}).catch(e=>showToast("Erreur: "+e.message));
+    setPromos(prev=>prev.map(x=>x.id===p.id?{...x,active:p.active?0:1}:x));
+  };
+  const del=async(id)=>{
+    if(!confirm("Supprimer ce code ?"))return;
+    await apiDelete("/api/promos/"+id).catch(e=>showToast("Erreur: "+e.message));
+    setPromos(prev=>prev.filter(x=>x.id!==id));
+  };
+
+  const inputStyle={background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 10px",outline:"none",width:"100%",fontFamily:"inherit"};
+  const selStyle={...inputStyle,cursor:"pointer"};
+
+  const newFormJsx=<div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:16,display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+    <div style={{fontWeight:700,fontSize:13,color:C.text1,marginBottom:4}}>Nouveau code promo</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div>
+        <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Code *</div>
+        <input style={{...inputStyle,textTransform:"uppercase"}} placeholder="PROMO10" value={form.code} onChange={e=>setForm(f=>({...f,code:e.target.value.toUpperCase()}))}/>
+      </div>
+      <div>
+        <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Type</div>
+        <select style={selStyle} value={form.discount_type} onChange={e=>setForm(f=>({...f,discount_type:e.target.value}))}>
+          <option value="percent">% Pourcentage</option>
+          <option value="fixed">€ Montant fixe</option>
+        </select>
+      </div>
+      <div>
+        <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Valeur * {form.discount_type==="percent"?"%":"€"}</div>
+        <input style={inputStyle} type="number" min="0" placeholder={form.discount_type==="percent"?"10":"5"} value={form.discount_value} onChange={e=>setForm(f=>({...f,discount_value:e.target.value}))}/>
+      </div>
+      <div>
+        <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Commande min (€)</div>
+        <input style={inputStyle} type="number" min="0" placeholder="0" value={form.min_order} onChange={e=>setForm(f=>({...f,min_order:e.target.value}))}/>
+      </div>
+      <div>
+        <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Utilisations max (0=∞)</div>
+        <input style={inputStyle} type="number" min="0" placeholder="0" value={form.max_uses} onChange={e=>setForm(f=>({...f,max_uses:e.target.value}))}/>
+      </div>
+    </div>
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+      <Btn variant="ghost" onClick={()=>setShowNew(false)} style={{fontSize:12,padding:"6px 14px"}}>Annuler</Btn>
+      <Btn variant="primary" onClick={create} style={{fontSize:12,padding:"6px 14px"}}>✓ Créer</Btn>
+    </div>
+  </div>;
+
+  return <div style={{padding:"0 16px 24px"}}>
+    {toast&&<div style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",background:C.card,border:`1px solid ${C.border}`,borderRadius:20,padding:"8px 20px",fontSize:13,fontWeight:600,zIndex:999}}>{toast}</div>}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 0 14px"}}>
+      <div>
+        <div style={{fontSize:18,fontWeight:800,color:C.text1}}>Codes Promo</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{promos.length} code{promos.length!==1?"s":""} au total</div>
+      </div>
+      {!showNew&&<Btn variant="primary" onClick={()=>setShowNew(true)} style={{fontSize:12,padding:"8px 14px"}}>+ Nouveau</Btn>}
+    </div>
+    {showNew&&newFormJsx}
+    {loading?<div style={{textAlign:"center",padding:40,color:C.text3}}>Chargement...</div>:<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {promos.map(p=>{
+        const discLabel=p.discount_type==="percent"?`-${p.discount_value}%`:`-${parseFloat(p.discount_value).toFixed(2)}€`;
+        const usageLabel=p.max_uses>0?`${p.uses_count}/${p.max_uses} utilisations`:`${p.uses_count} utilisation${p.uses_count!==1?"s":""}`;
+        const minLabel=p.min_order>0?` · Min ${parseFloat(p.min_order).toFixed(0)}€`:"";
+        return <div key={p.id} style={{background:C.card,border:`1px solid ${p.active?C.border:"#ff475730"}`,borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,opacity:p.active?1:.65}}>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontFamily:"monospace",fontWeight:800,fontSize:14,color:C.text1,letterSpacing:"0.05em"}}>{p.code}</span>
+              <span style={{background:"rgba(0,230,118,.12)",color:"#00e676",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700}}>{discLabel}</span>
+              {!p.active&&<span style={{background:"rgba(255,71,87,.1)",color:"#ff4757",borderRadius:20,padding:"2px 8px",fontSize:11}}>Inactif</span>}
+            </div>
+            <div style={{fontSize:11,color:C.text3,marginTop:4}}>{usageLabel}{minLabel}</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <Btn variant="ghost" onClick={()=>toggle(p)} style={{fontSize:11,padding:"4px 10px"}}>{p.active?"Désactiver":"Activer"}</Btn>
+            <Btn variant="danger" onClick={()=>del(p.id)} style={{fontSize:11,padding:"4px 10px"}}>✕</Btn>
+          </div>
+        </div>;
+      })}
+      {promos.length===0&&!loading&&<div style={{padding:40,textAlign:"center",color:C.text3,fontSize:13}}>Aucun code promo — créez-en un !</div>}
+    </div>}
+  </div>;
+}
+
 /* ── MESSAGES ── */
 function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
   // conversations = sidebar list from /api/messages (one entry per user with unread_count)
@@ -1678,6 +1780,7 @@ function App(){
       {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
       {page==="categories"&&<CategoriesPage/>}
+      {page==="promos"&&<PromosPage/>}
       {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread()}} onGoToOrder={id=>{setSelectedOrder(id);setPage("orders");fetchOrders()}} orders={orders} setOrders={setOrders} setProducts={setProducts} getSettings={getSettings}/>}
       {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
     </main>

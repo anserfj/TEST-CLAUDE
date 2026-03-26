@@ -345,9 +345,46 @@ router.get('/stats', (req, res) => {
 
 // ── MINI APP ENDPOINTS ────────────────────────────────────────────────────────
 
+// ── PROMO CODES ──────────────────────────────────────────────────────────────
+
+router.get('/promo/:code', (req, res) => {
+  const promo = db.prepare('SELECT * FROM promos WHERE UPPER(code) = UPPER(?) AND active = 1').get(req.params.code);
+  if (!promo) return res.status(404).json({ error: 'Code promo invalide' });
+  if (promo.max_uses > 0 && promo.uses_count >= promo.max_uses)
+    return res.status(400).json({ error: 'Code promo épuisé' });
+  res.json(promo);
+});
+
+router.get('/promos', (req, res) => {
+  res.json(db.prepare('SELECT * FROM promos ORDER BY created_at DESC').all());
+});
+
+router.post('/promos', (req, res) => {
+  const { code, discount_type, discount_value, min_order, max_uses } = req.body;
+  if (!code || !discount_value) return res.status(400).json({ error: 'Code et valeur requis' });
+  try {
+    const info = db.prepare(
+      'INSERT INTO promos (code, discount_type, discount_value, min_order, max_uses) VALUES (?,?,?,?,?)'
+    ).run(code.toUpperCase().trim(), discount_type || 'percent', parseFloat(discount_value), parseFloat(min_order||0), parseInt(max_uses||0));
+    res.json({ id: info.lastInsertRowid });
+  } catch(e) {
+    res.status(400).json({ error: 'Code déjà existant' });
+  }
+});
+
+router.patch('/promos/:id', (req, res) => {
+  db.prepare('UPDATE promos SET active = ? WHERE id = ?').run(req.body.active ? 1 : 0, req.params.id);
+  res.json({ ok: true });
+});
+
+router.delete('/promos/:id', (req, res) => {
+  db.prepare('DELETE FROM promos WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 // Post an order from the mini app
 router.post('/miniapp/order', (req, res) => {
-  const { telegram_id, items, notes, total, delivery_name, delivery_phone, delivery_address } = req.body;
+  const { telegram_id, items, notes, total, delivery_name, delivery_phone, delivery_address, promo_code, discount } = req.body;
   if (!telegram_id || !items?.length) return res.status(400).json({ error: 'Missing fields' });
   if (!delivery_name || !delivery_phone || !delivery_address)
     return res.status(400).json({ error: 'Nom, téléphone et adresse requis' });
@@ -372,10 +409,16 @@ router.post('/miniapp/order', (req, res) => {
   db.prepare('UPDATE users SET phone = ?, address = ? WHERE telegram_id = ?')
     .run(delivery_phone, delivery_address, telegram_id);
 
+  // Validate and apply promo code
+  let appliedPromo = null;
+  if (promo_code) {
+    appliedPromo = db.prepare('SELECT * FROM promos WHERE UPPER(code) = UPPER(?) AND active = 1').get(promo_code);
+  }
+
   const createOrder = db.transaction(() => {
     const order = db.prepare(
-      'INSERT INTO orders (user_id, total, status, notes, delivery_address, delivery_name, delivery_phone) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(user.id, total, 'pending', notes || null, delivery_address, delivery_name, delivery_phone);
+      'INSERT INTO orders (user_id, total, status, notes, delivery_address, delivery_name, delivery_phone, promo_code, discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(user.id, total, 'pending', notes || null, delivery_address, delivery_name, delivery_phone, promo_code || null, discount || 0);
 
     const orderId = order.lastInsertRowid;
     for (const item of itemsWithDetails) {
@@ -383,6 +426,9 @@ router.post('/miniapp/order', (req, res) => {
         'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)'
       ).run(orderId, item.product_id, item.quantity, item.unit_price, item.quantity * item.unit_price);
       db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(item.quantity, item.product_id);
+    }
+    if (appliedPromo) {
+      db.prepare('UPDATE promos SET uses_count = uses_count + 1 WHERE id = ?').run(appliedPromo.id);
     }
     return orderId;
   });

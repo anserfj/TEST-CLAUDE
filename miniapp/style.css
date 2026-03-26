@@ -563,6 +563,54 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 }
 .map-btn:active { background: rgba(255,255,255,.15); }
 
+/* ── ORDER TRACKER ── */
+.order-tracker { margin: 2px 0 6px; }
+.t-steps { display: flex; align-items: center; }
+.t-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: var(--bg3); border: 2px solid rgba(255,255,255,.15);
+  transition: all .3s;
+}
+.t-dot.done { background: #fff; border-color: #fff; }
+.t-dot.active { box-shadow: 0 0 0 3px rgba(255,255,255,.2); }
+.t-line { flex: 1; height: 2px; background: rgba(255,255,255,.1); transition: background .3s; }
+.t-line.done { background: #fff; }
+.t-labels {
+  display: flex; justify-content: space-between; margin-top: 5px;
+}
+.t-labels span {
+  font-size: .6rem; color: var(--text3); text-align: center; flex: 1;
+}
+.t-labels span.done { color: var(--text2); }
+.t-labels span.active { color: var(--text); font-weight: 700; }
+
+/* ── PROMO CODE ── */
+.promo-row { display: flex; gap: 8px; }
+.promo-apply-btn {
+  flex-shrink: 0; padding: 0 14px; height: 44px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+  border-radius: 10px; color: var(--text); font-size: .82rem; font-weight: 600;
+  white-space: nowrap; transition: background .2s;
+}
+.promo-apply-btn:active { background: rgba(255,255,255,.2); }
+.promo-apply-btn:disabled { opacity: .5; }
+
+/* ── REORDER BUTTON ── */
+.reorder-btn {
+  width: 100%; padding: 11px; border-radius: 10px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+  color: var(--text2); font-size: .85rem; font-weight: 600; letter-spacing: .02em;
+  transition: all .2s;
+}
+.reorder-btn:active { background: rgba(255,255,255,.15); color: var(--text); }
+
+/* ── ORDER DISCOUNT ROW ── */
+.order-card-discount {
+  display: flex; justify-content: space-between;
+  font-size: .8rem; color: #00e676;
+  padding: 0 0 4px; margin-top: -4px;
+}
+
 /* ── LEAFLET OVERRIDES for dark theme ── */
 .leaflet-container { background: #1a1a1a; }
 .leaflet-control-zoom a {

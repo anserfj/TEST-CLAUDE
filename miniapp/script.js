@@ -19,6 +19,10 @@ let currentFilter = "tous";
 let currentSearch = "";
 let selectedQtyIndex = 0; // for modal quantity selection
 let shopSettings = { delivery_fee: "3.00", free_delivery_threshold: "50.00" };
+let promoData = null; // { code, discount_type, discount_value, min_order, ... }
+
+const STATUS_STEPS = ['pending', 'confirmed', 'preparing', 'shipped', 'delivered'];
+const STATUS_STEP_LABELS = { pending:'Attente', confirmed:'Confirmée', preparing:'En prépa', shipped:'Expédiée', delivered:'Livrée' };
 
 // Tiers par défaut si le produit n'a pas de tiers configurés
 const QTY_TIERS = [
@@ -463,6 +467,10 @@ function renderDeliveryForm() {
       <div class="slot-time">${s.time}</div>
     </div>`).join("");
 
+  const savedPromoCode = promoData ? promoData.code : '';
+  const savedDiscount = calcDiscount(subtotal);
+  const totalWithPromo = total - savedDiscount;
+
   el.innerHTML = `
     <div class="delivery-form">
       <div class="delivery-back" onclick="renderCart()">← Retour au panier</div>
@@ -476,7 +484,11 @@ function renderDeliveryForm() {
           <span>🚚 Livraison</span>
           <span>${isFree ? '<span style="color:#4caf50">Offerte ✓</span>' : deliveryFee.toFixed(2).replace(".",",") + " €"}</span>
         </div>
-        <div class="dsummary-total"><span>Total</span><span>${total.toFixed(2).replace(".", ",")} €</span></div>
+        <div class="dsummary-row" id="dDiscountRow" style="${savedDiscount > 0 ? '' : 'display:none'}">
+          <span>🎁 ${savedPromoCode}</span>
+          <span style="color:#00e676">-${savedDiscount.toFixed(2).replace('.',',')} €</span>
+        </div>
+        <div class="dsummary-total"><span>Total</span><span id="dTotalAmount">${totalWithPromo.toFixed(2).replace(".", ",")} €</span></div>
       </div>
 
       <div class="delivery-field">
@@ -500,6 +512,16 @@ function renderDeliveryForm() {
         </div>
       </div>
       <div class="delivery-field">
+        <label class="delivery-label">Code promo (optionnel)</label>
+        <div class="promo-row">
+          <input id="fieldPromo" class="delivery-input" type="text" placeholder="EX: PROMO10" value="${savedPromoCode}" style="text-transform:uppercase" />
+          <button id="promoApplyBtn" class="promo-apply-btn" onclick="applyPromo(document.getElementById('fieldPromo').value)">Appliquer</button>
+        </div>
+        <div id="promoMsg" style="font-size:.78rem;margin-top:4px">
+          ${savedDiscount > 0 ? `<span style="color:#00e676">✓ Code appliqué</span>` : ''}
+        </div>
+      </div>
+      <div class="delivery-field">
         <label class="delivery-label">Notes (optionnel)</label>
         <input id="fieldNotes" class="delivery-input" type="text" placeholder="Digicode, étage, instructions..." />
       </div>
@@ -510,6 +532,102 @@ function renderDeliveryForm() {
     </div>
   `;
   el.scrollIntoView({ behavior: "smooth" });
+}
+
+// ── PROMO CODES ──
+function calcDiscount(subtotal) {
+  if (!promoData) return 0;
+  if (promoData.discount_type === 'percent') return Math.min(subtotal * promoData.discount_value / 100, subtotal);
+  return Math.min(promoData.discount_value, subtotal);
+}
+
+async function applyPromo(code) {
+  const btn = document.getElementById("promoApplyBtn");
+  const msg = document.getElementById("promoMsg");
+  if (!code.trim()) return;
+  if (btn) { btn.disabled = true; btn.textContent = "..."; }
+  try {
+    const promo = await apiGet(`/api/promo/${encodeURIComponent(code.trim().toUpperCase())}`);
+    const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+    if (promo.min_order > 0 && subtotal < promo.min_order) {
+      if (msg) msg.innerHTML = `<span style="color:#ff4757">Minimum de commande : ${promo.min_order.toFixed(0)} €</span>`;
+      promoData = null;
+      return;
+    }
+    promoData = promo;
+    const discount = calcDiscount(subtotal);
+    const display = promo.discount_type === 'percent' ? `-${promo.discount_value}%` : `-${discount.toFixed(2).replace('.', ',')} €`;
+    if (msg) msg.innerHTML = `<span style="color:#00e676">✓ Réduction appliquée : ${display}</span>`;
+    // Update total and discount row inline
+    const deliveryFee = parseFloat(shopSettings.delivery_fee || 3);
+    const freeThreshold = parseFloat(shopSettings.free_delivery_threshold || 50);
+    const isFree = subtotal >= freeThreshold;
+    const newTotal = subtotal + (isFree ? 0 : deliveryFee) - discount;
+    const discountRowEl = document.getElementById("dDiscountRow");
+    if (discountRowEl) {
+      discountRowEl.style.display = '';
+      discountRowEl.innerHTML = `<span>🎁 ${promo.code}</span><span style="color:#00e676">-${discount.toFixed(2).replace('.', ',')} €</span>`;
+    }
+    const totalEl = document.getElementById("dTotalAmount");
+    if (totalEl) totalEl.textContent = newTotal.toFixed(2).replace('.', ',') + ' €';
+  } catch(e) {
+    promoData = null;
+    if (msg) msg.innerHTML = `<span style="color:#ff4757">${e.message || 'Code invalide'}</span>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Appliquer"; }
+  }
+}
+
+// ── ORDER PROGRESS TRACKER ──
+function orderTrackerHtml(status) {
+  if (status === 'cancelled') {
+    return `<div style="text-align:center;font-size:.75rem;color:#ff4757;padding:6px 0">❌ Commande annulée</div>`;
+  }
+  const currentIdx = STATUS_STEPS.indexOf(status);
+  const dots = STATUS_STEPS.map((s, i) => {
+    const done = i <= currentIdx;
+    const active = i === currentIdx;
+    return `<div class="t-dot${done ? ' done' : ''}${active ? ' active' : ''}"></div>${i < STATUS_STEPS.length - 1 ? `<div class="t-line${done ? ' done' : ''}"></div>` : ''}`;
+  }).join('');
+  const labels = STATUS_STEPS.map((s, i) => {
+    const done = i <= currentIdx;
+    const active = i === currentIdx;
+    return `<span class="${done ? 'done' : ''}${active ? ' active' : ''}">${STATUS_STEP_LABELS[s]}</span>`;
+  }).join('');
+  return `<div class="order-tracker"><div class="t-steps">${dots}</div><div class="t-labels">${labels}</div></div>`;
+}
+
+// ── REORDER ──
+function reorder(orderItems) {
+  let added = 0;
+  orderItems.forEach(item => {
+    const p = products.find(x => x.id === item.product_id);
+    if (!p || p.stock <= 0) return;
+    const isGram = (p.unit || 'g').toLowerCase() === 'g';
+    if (isGram) {
+      const tiers = getProductTiers(p);
+      const tier = tiers.reduce((best, t) => Math.abs(t.qty - item.quantity) < Math.abs(best.qty - item.quantity) ? t : best, tiers[0]);
+      const cartItemId = `${p.id}-${tier.qty}g`;
+      if (!cart.find(c => c.cartItemId === cartItemId)) {
+        cart.push({ cartItemId, id: p.id, name: `${p.name} (${tier.qty}g)`, price: tier.price, qty: 1, gram_qty: tier.qty, unit: p.unit, emoji: p.category_emoji || '🛍️', image_url: p.image_url || null });
+        added++;
+      }
+    } else {
+      const cartItemId = String(p.id);
+      if (!cart.find(c => c.cartItemId === cartItemId)) {
+        cart.push({ cartItemId, id: p.id, name: p.name, price: parseFloat(p.price), qty: item.quantity || 1, gram_qty: null, unit: p.unit, emoji: p.category_emoji || '🛍️', image_url: p.image_url || null });
+        added++;
+      }
+    }
+  });
+  if (added > 0) {
+    saveCart(); updateCartBadge();
+    showToast(`✅ ${added} article${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''} au panier`);
+    tg.HapticFeedback.impactOccurred('medium');
+    setTimeout(() => switchTab('panier'), 900);
+  } else {
+    showToast('⚠️ Articles déjà au panier ou indisponibles');
+  }
 }
 
 function selectSlot(id) {
@@ -640,13 +758,16 @@ async function confirmOrder() {
     const subtotalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
     const deliveryFee = parseFloat(shopSettings.delivery_fee || 3);
     const freeThreshold = parseFloat(shopSettings.free_delivery_threshold || 50);
-    const totalPrice = subtotalPrice + (subtotalPrice >= freeThreshold ? 0 : deliveryFee);
+    const discount = calcDiscount(subtotalPrice);
+    const totalPrice = subtotalPrice + (subtotalPrice >= freeThreshold ? 0 : deliveryFee) - discount;
     await apiPost("/api/miniapp/order", {
       telegram_id: telegramId,
       delivery_name: name,
       delivery_phone: phone,
       delivery_address: address,
       notes: [slotNote, notes].filter(Boolean).join(" — ") || null,
+      promo_code: promoData ? promoData.code : null,
+      discount,
       items: cart.map(i => ({
         product_id: i.id,
         quantity: i.gram_qty || i.qty,
@@ -656,6 +777,7 @@ async function confirmOrder() {
     });
 
     cart = [];
+    promoData = null;
     saveCart();
     updateCartBadge();
     showToast("🎉 Commande envoyée !");
@@ -707,7 +829,7 @@ async function loadOrders() {
       cancelled: { label: "Annulée", color: "#ff4757", bg: "rgba(255,71,87,.15)" },
     };
 
-    el.innerHTML = orders.map(o => {
+    el.innerHTML = orders.map((o, idx) => {
       const st = statusLabel[o.status] || statusLabel.pending;
       const date = new Date(o.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
       const itemsHtml = (o.items || []).map(i =>
@@ -716,6 +838,12 @@ async function loadOrders() {
           <span>×${i.quantity}${i.unit || ""} — ${(i.subtotal || i.unit_price * i.quantity).toFixed(0)}€</span>
         </div>`
       ).join("");
+      const trackerHtml = orderTrackerHtml(o.status);
+      const itemsJson = JSON.stringify(o.items || []).replace(/'/g, "&#39;");
+      const canReorder = o.status !== 'cancelled' && (o.items || []).length > 0;
+      const discountHtml = o.discount > 0
+        ? `<div class="order-card-discount"><span>🎁 ${o.promo_code || 'Promo'}</span><span>-${parseFloat(o.discount).toFixed(2).replace('.', ',')} €</span></div>`
+        : '';
 
       return `<div class="order-card">
         <div class="order-card-header">
@@ -725,11 +853,14 @@ async function loadOrders() {
           </div>
           <span class="order-status-badge" style="color:${st.color};background:${st.bg}">${st.label}</span>
         </div>
+        ${trackerHtml}
         <div class="order-items">${itemsHtml}</div>
+        ${discountHtml}
         <div class="order-card-total">
           <span>Total</span>
           <span>${parseFloat(o.total).toFixed(2).replace(".", ",")} €</span>
         </div>
+        ${canReorder ? `<button class="reorder-btn" onclick='reorder(${itemsJson})'>↺ Recommander</button>` : ''}
       </div>`;
     }).join("");
 
