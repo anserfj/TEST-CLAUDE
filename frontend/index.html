@@ -1055,6 +1055,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
   const [broadcast,setBroadcast]=useState("");
   const [broadcastFile,setBroadcastFile]=useState(null);
   const [broadcasting,setBroadcasting]=useState(false);
+  const [broadcastHistory,setBroadcastHistory]=useState([]);
   const [tab,setTab]=useState("inbox");
   const [toast,setToast]=useState("");
   const [showOrders,setShowOrders]=useState(false);
@@ -1088,7 +1089,8 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
   const fetchData=async(silent=false)=>{
     if(!silent)setLoading(true);
     try{
-      const[u,conversations]=await Promise.all([apiGet("/api/users"),apiGet("/api/messages")]);
+      const[u,conversations,bh]=await Promise.all([apiGet("/api/users"),apiGet("/api/messages"),apiGet("/api/broadcasts")]);
+      setBroadcastHistory(Array.isArray(bh)?bh:[]);
       setUsers(u);
       // /api/messages returns array: {id, telegram_id, username, first_name, last_name,
       //   last_message, last_message_time, from_admin, unread_count}
@@ -1168,18 +1170,6 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
     setBroadcasting(false);fetchData();
   };
 
-  const broadcastGroups=()=>{
-    const out=messages.filter(m=>m.direction==="out"&&m.is_broadcast===true);
-    const groups={};
-    out.forEach(m=>{const key=m.text+"|"+m.created_at.slice(0,16);if(!groups[key])groups[key]={text:m.text,created_at:m.created_at,msgs:[]};groups[key].msgs.push(m)});
-    return Object.values(groups).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-  };
-
-  const deleteBroadcastGroup=async group=>{
-    if(!confirm(`Supprimer ce broadcast pour ${group.msgs.length} utilisateurs ?`))return;
-    setMessages(prev=>prev.filter(m=>!group.msgs.find(gm=>gm.id===m.id)));
-    showToast("🗑️ Broadcast supprimé");
-  };
 
   const getOrderId=text=>text?.match(/CMD-\d+/)?.[0]||null;
 
@@ -1269,15 +1259,13 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,setProducts,getSet
               <Btn onClick={sendBroadcast} disabled={broadcasting||!broadcast.trim()}>{broadcasting?"⏳ Envoi...":`📢 Envoyer à ${users.length}`}</Btn>
             </div>
           </Card>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:10,color:C.text2}}>Historique ({broadcastGroups().length})</div>
-          {broadcastGroups().map((g,i)=><div key={i} style={{padding:"13px 15px",background:C.card,border:`1px solid ${C.border}`,borderRadius:9,marginBottom:9}}>
-            <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:7}}>
-              <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap",flex:1}}>{g.text}</div>
-              <button onClick={()=>deleteBroadcastGroup(g)} style={{background:"none",border:`1px solid ${C.red}33`,borderRadius:5,color:C.red,cursor:"pointer",fontSize:10,padding:"3px 8px",flexShrink:0}}>🗑️</button>
-            </div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:10,color:C.text2}}>Historique ({broadcastHistory.length})</div>
+          {broadcastHistory.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:C.text3,fontSize:13}}>Aucun broadcast envoyé</div>}
+          {broadcastHistory.map((g,i)=><div key={i} style={{padding:"13px 15px",background:C.card,border:`1px solid ${C.border}`,borderRadius:9,marginBottom:9}}>
+            <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap",marginBottom:7}}>{g.text}</div>
             <div style={{display:"flex",gap:8}}>
               <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR")}</span>
-              <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 7px"}}>📢 {g.msgs.length} dest.</span>
+              <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 7px"}}>📢 {g.recipients} dest.</span>
             </div>
           </div>)}
         </div>
@@ -1406,7 +1394,7 @@ function SettingsPage({orders,logout}){
     {/* Boutique */}
     <Card style={{marginBottom:14}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:16}}>🛒 Boutique</div>
-      {field("Lien @contact (Telegram)","willyHandle","wilIIly","Pseudo Telegram où les commandes sont envoyées (sans @)")}
+      {field("Lien @contact (Telegram)","willyHandle","baltimore83","Pseudo Telegram où les commandes sont envoyées (sans @)")}
       {field("Livraison offerte dès (€)","livraisonMin","200","Montant minimum pour livraison gratuite")}
       {field("Prix livraison (€)","livraisonPrix","9.90","Frais de port si sous le minimum")}
       {field("Message de bienvenue bot","welcomeMsg","👋 Bienvenue chez Baltimore 83...","Message envoyé aux nouveaux utilisateurs du bot")}
@@ -1507,7 +1495,7 @@ function App(){
       const prevCount=unreadMsgCount;
       setUnreadMsgCount(totalUnread);
       const s=getSettings();
-      if(s.notifMessages&&Notification?.permission==="granted"&&unread.length>prevCount){
+      if(s.notifMessages&&Notification?.permission==="granted"&&totalUnread>prevCount){
         new Notification("Baltimore 83 — Nouveau message",{body:"Nouveau message reçu",icon:""});
       }
     }catch(e){}

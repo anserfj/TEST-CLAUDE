@@ -74,6 +74,7 @@ async function init() {
     buildCatSelect();
   } catch(e) {
     console.warn("API indispo:", e);
+    categories = [];
     products = [];
   }
   renderProducts();
@@ -165,8 +166,8 @@ function renderProducts() {
     const catEmoji = p.category_emoji || "";
     const tiers = getProductTiers(p);
     const priceTag = tiers && tiers.length > 0
-      ? `${tiers[0].price}€ – ${tiers[tiers.length-1].price}€`
-      : `${parseFloat(p.price||0).toFixed(0)} €/${p.unit || "u"}`;
+      ? `${parseFloat(tiers[0].price).toFixed(0)}€ – ${parseFloat(tiers[tiers.length-1].price).toFixed(0)}€`
+      : `${parseFloat(p.price||0).toFixed(0)}€/${p.unit || "unité"}`;
 
     return `<div class="product-card" onclick="openModal(${p.id})">
       <div class="product-img-wrap">${mediaPart}</div>
@@ -226,7 +227,7 @@ function openModal(productId) {
   } else {
     pricingHtml = `
       <div class="modal-price-section">
-        <div class="modal-price-simple">${parseFloat(p.price).toFixed(2).replace(".", ",")} €</div>
+        <div class="modal-price-simple">${parseFloat(p.price||0).toFixed(0)}€</div>
         <div class="modal-unit">par ${p.unit || "unité"}</div>
       </div>`;
   }
@@ -246,7 +247,7 @@ function openModal(productId) {
       <button class="modal-add-btn" id="modalAddBtn" onclick="addToCartFromModal(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>
         ${p.stock <= 0 ? "Rupture de stock" : "Ajouter au panier"}
       </button>
-      <div class="modal-stock">Stock : ${p.stock} ${p.unit || "unité"}${p.stock > 1 ? "s" : ""}</div>
+      <div class="modal-stock">Stock : ${p.stock} ${p.unit || "unité"}</div>
     </div>
   `;
 

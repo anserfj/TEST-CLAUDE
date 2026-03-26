@@ -180,14 +180,29 @@ router.get('/users/:id/orders', (req, res) => {
   res.json(orders.map(o => ({ ...o, items: o.items_json ? JSON.parse(o.items_json) : [] })));
 });
 
+router.get('/broadcasts', (req, res) => {
+  const rows = db.prepare(`
+    SELECT text, created_at, COUNT(*) as recipients
+    FROM messages WHERE is_broadcast = 1 AND from_admin = 1
+    GROUP BY text, strftime('%Y-%m-%d %H:%M', created_at)
+    ORDER BY created_at DESC LIMIT 30
+  `).all();
+  res.json(rows);
+});
+
 router.post('/broadcast', async (req, res) => {
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Message vide' });
   const { sendMessageToUser } = await import('../bot/bot.js');
-  const users = db.prepare('SELECT telegram_id FROM users').all();
+  const users = db.prepare('SELECT id, telegram_id FROM users').all();
   let sent = 0, failed = 0;
+  const insertMsg = db.prepare('INSERT INTO messages (user_id, telegram_id, text, from_admin, is_broadcast, read) VALUES (?, ?, ?, 1, 1, 1)');
   for (const u of users) {
-    try { await sendMessageToUser(u.telegram_id, text); sent++; } catch { failed++; }
+    try {
+      await sendMessageToUser(u.telegram_id, text);
+      insertMsg.run(u.id, u.telegram_id, text);
+      sent++;
+    } catch { failed++; }
   }
   res.json({ sent, failed, total: users.length });
 });
