@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0d0d0d" />
   <title>BALTIMORE 83 · Boutique</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -183,6 +184,23 @@
     </div>
   </div>
 
+  <!-- MAP PICKER MODAL -->
+  <div id="mapOverlay" style="display:none;position:fixed;inset:0;z-index:1000;flex-direction:column;background:#0d0d0d">
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#111;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0">
+      <button onclick="closeMap()" style="background:rgba(255,255,255,.1);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">←</button>
+      <div style="flex:1">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:.05em;color:#fff">📍 Choisir l'adresse</div>
+        <div style="font-size:.72rem;color:#666;margin-top:1px">Déposez l'épingle sur votre adresse</div>
+      </div>
+    </div>
+    <div id="mapContainer" style="flex:1;position:relative;min-height:0"></div>
+    <div style="padding:14px 16px;background:#111;border-top:1px solid rgba(255,255,255,.1);flex-shrink:0">
+      <div id="mapAddressPreview" style="font-size:.85rem;color:#aaa;min-height:20px;margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,.06);border-radius:10px;line-height:1.4">Bougez la carte pour définir votre position...</div>
+      <button onclick="confirmMapAddress()" style="width:100%;padding:14px;background:#fff;color:#000;border:none;border-radius:12px;font-size:.95rem;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer">✓ Confirmer cette adresse</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

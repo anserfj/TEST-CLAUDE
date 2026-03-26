@@ -534,3 +534,42 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   border-top: 1px solid var(--border); padding-top: 10px;
   color: var(--text);
 }
+
+/* ── DELIVERY SLOTS ── */
+.slots-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.slot-option {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 6px; border-radius: 12px; cursor: pointer;
+  border: 1.5px solid rgba(255,255,255,.1);
+  background: var(--surface); transition: all .2s;
+  text-align: center;
+}
+.slot-option.selected {
+  border-color: rgba(255,255,255,.7);
+  background: rgba(255,255,255,.1);
+}
+.slot-label { font-size: .8rem; font-weight: 700; color: var(--text); }
+.slot-time  { font-size: .7rem; color: var(--text2); }
+
+/* ── MAP BUTTON ── */
+.map-btn {
+  flex-shrink: 0; width: 44px; height: 44px;
+  background: var(--surface); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 10px; font-size: 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .2s;
+}
+.map-btn:active { background: rgba(255,255,255,.15); }
+
+/* ── LEAFLET OVERRIDES for dark theme ── */
+.leaflet-container { background: #1a1a1a; }
+.leaflet-control-zoom a {
+  background: #1a1a1a !important; color: #fff !important;
+  border-color: rgba(255,255,255,.2) !important;
+}
+.leaflet-control-attribution {
+  background: rgba(0,0,0,.6) !important; color: #666 !important; font-size: 9px !important;
+}
+.leaflet-control-attribution a { color: #888 !important; }

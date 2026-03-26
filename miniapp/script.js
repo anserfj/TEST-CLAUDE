@@ -432,6 +432,13 @@ function checkout() {
   renderDeliveryForm();
 }
 
+const SLOTS = [
+  { id: "matin", label: "🌅 Matin", time: "10h – 14h" },
+  { id: "aprem", label: "🌇 Après-midi", time: "14h30 – 18h" },
+  { id: "soir",  label: "🌙 Soir",  time: "18h – 23h" },
+];
+let selectedSlot = "matin";
+
 function renderDeliveryForm() {
   const el = document.getElementById("cartContent");
   if (!el) return;
@@ -440,10 +447,21 @@ function renderDeliveryForm() {
   const p = localStorage.getItem("b83_phone") || "";
   const a = localStorage.getItem("b83_address") || "";
 
-  const totalPrice = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const deliveryFee = parseFloat(shopSettings.delivery_fee || 3);
+  const freeThreshold = parseFloat(shopSettings.free_delivery_threshold || 50);
+  const isFree = subtotal >= freeThreshold;
+  const total = subtotal + (isFree ? 0 : deliveryFee);
+
   const lines = cart.map(i =>
     `<div class="dsummary-row"><span>${i.name}</span><span>${(i.price * i.qty).toFixed(2).replace(".", ",")} €</span></div>`
   ).join("");
+
+  const slotsHtml = SLOTS.map(s => `
+    <div class="slot-option ${s.id === selectedSlot ? "selected" : ""}" onclick="selectSlot('${s.id}')">
+      <div class="slot-label">${s.label}</div>
+      <div class="slot-time">${s.time}</div>
+    </div>`).join("");
 
   el.innerHTML = `
     <div class="delivery-form">
@@ -454,7 +472,16 @@ function renderDeliveryForm() {
       <div class="delivery-summary">
         <div class="dsummary-title">🛒 Récap commande</div>
         ${lines}
-        <div class="dsummary-total"><span>Total</span><span>${totalPrice.toFixed(2).replace(".", ",")} €</span></div>
+        <div class="dsummary-row" style="color:#8a8a8a">
+          <span>🚚 Livraison</span>
+          <span>${isFree ? '<span style="color:#4caf50">Offerte ✓</span>' : deliveryFee.toFixed(2).replace(".",",") + " €"}</span>
+        </div>
+        <div class="dsummary-total"><span>Total</span><span>${total.toFixed(2).replace(".", ",")} €</span></div>
+      </div>
+
+      <div class="delivery-field">
+        <label class="delivery-label">⏰ Créneau de livraison</label>
+        <div class="slots-grid" id="slotsGrid">${slotsHtml}</div>
       </div>
 
       <div class="delivery-field">
@@ -467,7 +494,10 @@ function renderDeliveryForm() {
       </div>
       <div class="delivery-field">
         <label class="delivery-label">Adresse de livraison *</label>
-        <textarea id="fieldAddress" class="delivery-input delivery-textarea" placeholder="12 rue des Fleurs, 83000 Toulon" rows="3">${a}</textarea>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <textarea id="fieldAddress" class="delivery-input delivery-textarea" placeholder="12 rue des Fleurs, 83000 Toulon" rows="2" style="flex:1">${a}</textarea>
+          <button onclick="openMap()" class="map-btn" title="Choisir sur la carte">📍</button>
+        </div>
       </div>
       <div class="delivery-field">
         <label class="delivery-label">Notes (optionnel)</label>
@@ -479,8 +509,108 @@ function renderDeliveryForm() {
       </button>
     </div>
   `;
-  // Scroll to top
   el.scrollIntoView({ behavior: "smooth" });
+}
+
+function selectSlot(id) {
+  selectedSlot = id;
+  document.querySelectorAll(".slot-option").forEach(el => {
+    el.classList.toggle("selected", el.onclick?.toString().includes(`'${id}'`));
+  });
+  // Re-render slots to update classes cleanly
+  const grid = document.getElementById("slotsGrid");
+  if (grid) grid.innerHTML = SLOTS.map(s => `
+    <div class="slot-option ${s.id === id ? "selected" : ""}" onclick="selectSlot('${s.id}')">
+      <div class="slot-label">${s.label}</div>
+      <div class="slot-time">${s.time}</div>
+    </div>`).join("");
+}
+
+// ── MAP PICKER ──
+let mapInstance = null;
+let mapMarker = null;
+let geocodeTimer = null;
+let pendingAddress = "";
+
+function openMap() {
+  const overlay = document.getElementById("mapOverlay");
+  overlay.style.display = "flex";
+  overlay.style.flexDirection = "column";
+
+  // Init map once
+  if (!mapInstance) {
+    // Default: Toulon, Var 83
+    const defaultLat = 43.1242, defaultLng = 5.9280;
+    mapInstance = L.map("mapContainer", { zoomControl: true }).setView([defaultLat, defaultLng], 14);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap",
+      maxZoom: 19,
+    }).addTo(mapInstance);
+
+    const icon = L.divIcon({
+      html: `<div style="width:36px;height:36px;background:#fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);border:2px solid #000">
+               <div style="transform:rotate(45deg);font-size:16px">📍</div>
+             </div>`,
+      iconSize: [36, 36], iconAnchor: [18, 36], className: ""
+    });
+    mapMarker = L.marker([defaultLat, defaultLng], { icon, draggable: true }).addTo(mapInstance);
+
+    mapMarker.on("dragend", () => reverseGeocode(mapMarker.getLatLng()));
+    mapInstance.on("click", e => { mapMarker.setLatLng(e.latlng); reverseGeocode(e.latlng); });
+  }
+
+  // Try user geolocation
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      mapInstance.setView(latlng, 16);
+      mapMarker.setLatLng(latlng);
+      reverseGeocode(latlng);
+    }, () => {});
+  } else {
+    reverseGeocode(mapMarker.getLatLng());
+  }
+
+  setTimeout(() => mapInstance.invalidateSize(), 200);
+}
+
+function reverseGeocode(latlng) {
+  const preview = document.getElementById("mapAddressPreview");
+  if (preview) preview.textContent = "Recherche de l'adresse...";
+  clearTimeout(geocodeTimer);
+  geocodeTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat}&lon=${latlng.lng}&format=json&accept-language=fr`,
+        { headers: { "User-Agent": "Baltimore83-MiniApp" } }
+      );
+      const data = await r.json();
+      const addr = data.display_name || "";
+      // Format nicely: "rue, code postal Ville"
+      const a = data.address || {};
+      const parts = [
+        a.house_number, a.road, a.postcode,
+        a.city || a.town || a.village || a.municipality
+      ].filter(Boolean);
+      pendingAddress = parts.join(", ") || addr;
+      if (preview) preview.textContent = pendingAddress || "Adresse introuvable";
+    } catch {
+      pendingAddress = `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+      if (preview) preview.textContent = "Coordonnées : " + pendingAddress;
+    }
+  }, 600);
+}
+
+function confirmMapAddress() {
+  if (pendingAddress) {
+    const field = document.getElementById("fieldAddress");
+    if (field) field.value = pendingAddress;
+  }
+  closeMap();
+}
+
+function closeMap() {
+  document.getElementById("mapOverlay").style.display = "none";
 }
 
 async function confirmOrder() {
@@ -496,6 +626,9 @@ async function confirmOrder() {
   localStorage.setItem("b83_name", name);
   localStorage.setItem("b83_phone", phone);
   localStorage.setItem("b83_address", address);
+
+  const slotInfo = SLOTS.find(s => s.id === selectedSlot);
+  const slotNote = slotInfo ? `Créneau: ${slotInfo.label} ${slotInfo.time}` : "";
 
   const btn = document.getElementById("confirmOrderBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Envoi en cours..."; }
@@ -513,7 +646,7 @@ async function confirmOrder() {
       delivery_name: name,
       delivery_phone: phone,
       delivery_address: address,
-      notes: notes || null,
+      notes: [slotNote, notes].filter(Boolean).join(" — ") || null,
       items: cart.map(i => ({
         product_id: i.id,
         quantity: i.gram_qty || i.qty,

@@ -148,12 +148,28 @@ router.get('/orders/:id', (req, res) => {
   res.json({ ...order, items });
 });
 
-router.patch('/orders/:id/status', (req, res) => {
+router.patch('/orders/:id/status', async (req, res) => {
   const { status } = req.body;
   const validStatuses = ['pending', 'confirmed', 'preparing', 'shipped', 'delivered', 'cancelled'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
   db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.params.id);
+
+  // Notify user via Telegram bot
+  const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(req.params.id);
+  if (order?.telegram_id) {
+    const msgs = {
+      confirmed: `✅ <b>Commande #${order.id} confirmée !</b>\n\nVotre commande est prise en charge 🚀`,
+      preparing: `👨‍🍳 <b>Commande #${order.id} en préparation</b>\n\nNous préparons votre commande avec soin !`,
+      shipped:   `🚚 <b>Commande #${order.id} en route !</b>\n\nVotre livreur arrive bientôt. Soyez disponible 📱`,
+      delivered: `🎉 <b>Commande #${order.id} livrée !</b>\n\nMerci pour votre confiance. Bonne dégustation ! 🌿`,
+      cancelled: `❌ <b>Commande #${order.id} annulée.</b>\n\nContactez-nous pour plus d'informations.`,
+    };
+    if (msgs[status]) {
+      sendMessageToUser(order.telegram_id, msgs[status]).catch(() => {});
+    }
+  }
+
   res.json({ success: true });
 });
 
