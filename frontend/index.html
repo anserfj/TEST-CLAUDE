@@ -1163,7 +1163,7 @@ function CategoriesPage(){
     try{await apiPut("/api/categories/"+id,{name:cat.name,emoji:cat.emoji,active:1,sort_order:cat.sort_order});setCats(prev=>prev.map(c=>c.id===id?{...c,active:1}:c));showToast("✓ Réactivée")}catch(e){showToast("Erreur: "+e.message)}
   };
 
-  const InlineForm=()=><div style={{display:"flex",flexDirection:"column",gap:10,padding:"16px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:10}}>
+  const formJsx=<div style={{display:"flex",flexDirection:"column",gap:10,padding:"16px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:10}}>
     <div style={{display:"grid",gridTemplateColumns:"60px 1fr 80px",gap:8}}>
       <input value={form.emoji} onChange={e=>setForm(f=>({...f,emoji:e.target.value}))} placeholder="🌿" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:22,padding:"7px",outline:"none",textAlign:"center"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
       <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Nom de la catégorie" onKeyDown={e=>e.key==="Enter"&&save()} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"8px 12px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
@@ -1190,14 +1190,14 @@ function CategoriesPage(){
       <Btn onClick={startNew} style={{fontSize:13}}>+ Nouvelle</Btn>
     </div>
 
-    {showNew&&<InlineForm/>}
+    {showNew&&formJsx}
 
     {loading?<div style={{padding:40,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
       {cats.map(c=>{
         const isEditing=editId===c.id;
         return<div key={c.id}>
-          {isEditing&&<InlineForm/>}
+          {isEditing&&formJsx}
           {!isEditing&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:C.card,border:`1px solid ${c.active!==0?C.border:"#ff475730"}`,borderRadius:10,opacity:c.active===0?.6:1}}>
             <span style={{fontSize:22,width:30,textAlign:"center",flexShrink:0}}>{c.emoji||"🌿"}</span>
             <div style={{flex:1}}>
