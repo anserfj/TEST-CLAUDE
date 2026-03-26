@@ -63,6 +63,9 @@
 <script type="text/babel">
 const {useState,useEffect,useRef,useMemo,useCallback}=React;
 
+/* ── GLOBAL TOAST (utilisable partout, sans state React) ── */
+function showToast(msg){const el=document.createElement("div");el.style.cssText="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid rgba(255,255,255,.25);color:#f5f5f5;font-size:13px;font-weight:600;padding:9px 22px;border-radius:99px;white-space:nowrap;z-index:9999;font-family:'DM Sans',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.5);animation:fadeIn .2s ease";el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2500);}
+
 /* ── API LOCALE ── */
 async function apiGet(p){const r=await fetch(p);if(!r.ok)throw new Error(await r.text());return r.json();}
 async function apiPost(p,body){const r=await fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
@@ -143,7 +146,7 @@ function GalerieEditor({medias,onChange}){
       if(!r.ok)throw new Error(await r.text());
       const {url}=await r.json();
       onChange([...medias,{url,type:isVideo(url)?"video":"image"}]);
-    }catch(err){alert("Erreur upload: "+err.message);}
+    }catch(err){showToast("❌ Upload échoué : "+err.message.slice(0,80));}
     finally{setUploading(false);e.target.value="";}
   };
   return<div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -504,7 +507,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       const items=parseItems(order.items);
 
       /* stock auto-adjust removed */
-    }catch(e){alert(e.message)}
+    }catch(e){showToast("❌ "+e.message.slice(0,100))}
 
     /* auto-messages handled by bot */
     setUpdating(false);
@@ -522,8 +525,12 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
 
   const saveNote=async()=>{
     if(!selected)return;setSavingNote(true);
-    try{setOrders(prev=>prev.map(o=>o.id===selected.id?{...o,note}:o));setSelected(prev=>prev?{...prev,note}:prev)}
-    catch(e){alert(e.message)}
+    try{
+      await apiPatch("/api/orders/"+selected.id+"/notes",{notes:note});
+      setOrders(prev=>prev.map(o=>o.id===selected.id?{...o,notes:note}:o));
+      setSelected(prev=>prev?{...prev,notes:note}:prev);
+      showToast("✅ Note sauvegardée");
+    }catch(e){showToast("❌ "+e.message.slice(0,100))}
     setSavingNote(false);
   };
 
@@ -762,7 +769,7 @@ function ClientsPage({orders,setOrders}){
           for(const item of items){/* stock auto-adjust removed */}
         }
       }
-    }catch(e){alert(e.message)}
+    }catch(e){showToast("❌ "+e.message.slice(0,100))}
     setUpdating(false);
   };
 
@@ -773,7 +780,7 @@ function ClientsPage({orders,setOrders}){
       await apiPatch("/api/users/"+selected.id+"/notes",{notes:noteText.trim()||null});
       setClients(prev=>prev.map(c=>c.id===selected.id?{...c,notes:noteText.trim()||null}:c));
       setSelected(prev=>({...prev,notes:noteText.trim()||null}));
-    }catch(e){alert(e.message);}
+    }catch(e){showToast("❌ "+e.message.slice(0,100));}
     setSavingNote(false);
   };
 
@@ -937,15 +944,15 @@ function CatalogPage({products,setProducts,loading,reload}){
       if(modal==="new"){const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !")}
       else{await apiPut("/api/products/"+modal.id,body);setProducts(prev=>prev.map(p=>p.id===modal.id?{...p,...body,id:modal.id}:p));showToast("✅ Modifié !")}
       setModal(null);
-    }catch(e){alert("Erreur: "+e.message)}
+    }catch(e){showToast("❌ "+e.message.slice(0,100))}
     setSaving(false);
   };
 
-  const remove=async id=>{if(!confirm("Supprimer ?"))return;try{await apiDelete("/api/products/"+id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Supprimé")}catch(e){alert(e.message)}};
+  const remove=async id=>{if(!confirm("Supprimer ?"))return;try{await apiDelete("/api/products/"+id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Supprimé")}catch(e){showToast("❌ "+e.message.slice(0,100))}};
 
   const duplicate=async p=>{
     const body={category_id:p.category_id||null,name:`${p.name} (copie)`,description:p.description||null,price:p.price,stock:0,unit:p.unit||"g",thc_percent:p.thc_percent||null,cbd_percent:p.cbd_percent||null,active:1};
-    try{const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué — stock mis à 0")}catch(e){alert(e.message)}
+    try{const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué — stock mis à 0")}catch(e){showToast("❌ "+e.message.slice(0,100))}
   };
 
   const bulkToggleActive=async(active)=>{
@@ -957,7 +964,7 @@ function CatalogPage({products,setProducts,loading,reload}){
   };
 
   const updateStock=async(p,newStock)=>{
-    try{await apiPut("/api/products/"+p.id,{...p,stock:newStock});setProducts(prev=>prev.map(x=>x.id===p.id?{...x,stock:newStock}:x))}catch(e){alert(e.message)}
+    try{await apiPut("/api/products/"+p.id,{...p,stock:newStock});setProducts(prev=>prev.map(x=>x.id===p.id?{...x,stock:newStock}:x))}catch(e){showToast("❌ "+e.message.slice(0,100))}
   };
 
   const filtered=useMemo(()=>{
@@ -1645,11 +1652,11 @@ function SettingsPage({orders,logout}){
   };
 
   const saveApiSettings=async()=>{
-    try{await apiPut("/api/settings",apiSettings);setApiSaved(true);setTimeout(()=>setApiSaved(false),2000);}catch(e){alert("Erreur: "+e.message);}
+    try{await apiPut("/api/settings",apiSettings);setApiSaved(true);setTimeout(()=>setApiSaved(false),2000);}catch(e){showToast("❌ Erreur sauvegarde : "+e.message.slice(0,80));}
   };
 
   const requestNotif=async()=>{
-    if(!("Notification" in window)){alert("Navigateur non supporté");return;}
+    if(!("Notification" in window)){showToast("⚠️ Navigateur non supporté");return;}
     const p=await Notification.requestPermission();
     setNotifStatus(p);
     if(p==="granted")new Notification("Baltimore 83",{body:"🔔 Notifications activées !"});

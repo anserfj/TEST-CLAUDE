@@ -148,6 +148,12 @@ router.get('/orders/:id', (req, res) => {
   res.json({ ...order, items });
 });
 
+router.patch('/orders/:id/notes', (req, res) => {
+  const { notes } = req.body;
+  db.prepare("UPDATE orders SET notes = ? WHERE id = ?").run(notes || null, req.params.id);
+  res.json({ success: true });
+});
+
 router.patch('/orders/:id/status', async (req, res) => {
   const { status } = req.body;
   const validStatuses = ['pending', 'confirmed', 'preparing', 'shipped', 'delivered', 'cancelled'];
