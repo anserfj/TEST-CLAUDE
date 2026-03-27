@@ -1639,7 +1639,7 @@ function SettingsPage({orders,logout}){
   const [apiSettings,setApiSettings]=useState({delivery_fee:"3.00",free_delivery_threshold:"50.00",shop_banner:""});
   const [saved,setSaved]=useState(false);
   const [apiSaved,setApiSaved]=useState(false);
-  const [notifStatus,setNotifStatus]=useState(Notification?.permission||"default");
+  const [notifStatus,setNotifStatus]=useState(()=>{try{return window.Notification?.permission||"default"}catch{return"default"}});
 
   useEffect(()=>{
     apiGet("/api/settings").then(s=>setApiSettings(prev=>({...prev,...s}))).catch(()=>{});
@@ -1749,8 +1749,8 @@ function SettingsPage({orders,logout}){
       {field("Message de bienvenue bot","welcomeMsg","👋 Bienvenue chez Baltimore 83...","Message envoyé aux nouveaux utilisateurs du bot")}
     </Card>
 
-    {/* Notifications */}
-    <Card style={{marginBottom:14}}>
+    {/* Notifications — masqué sur iOS Safari (non supporté) */}
+    {"Notification" in window&&<Card style={{marginBottom:14}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🔔 Notifications</div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",background:C.surface,borderRadius:8,marginBottom:8}}>
         <div>
@@ -1770,7 +1770,7 @@ function SettingsPage({orders,logout}){
           <div style={{position:"absolute",top:2,left:settings.notifMessages?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
         </div>
       </div>
-    </Card>
+    </Card>}
 
     {/* Messages auto */}
     <Card style={{marginBottom:14}}>
