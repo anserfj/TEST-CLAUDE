@@ -127,7 +127,7 @@ const _upsertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) V
   ['delivery_fee', '3.00'],
   ['free_delivery_threshold', '50.00'],
   ['shop_banner', ''],
-  ['telegram_url', ''],
+  ['telegram_url', 'https://t.me/+kzA04I6sErVjYWVk'],
   ['instagram_url', ''],
 ].forEach(([k, v]) => _upsertSetting.run(k, v));
 

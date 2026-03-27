@@ -69,18 +69,14 @@ async function apiPost(path, body) {
 // ── CONTACT LINKS ──
 function applyContactLinks() {
   const tgUrl = shopSettings.telegram_url || "";
-  const tgLink = document.getElementById("contactTelegramLink");
   const tgSocLink = document.getElementById("socialTelegramLink");
-  const tgSocDesc = document.getElementById("socialTelegramDesc");
-  if (tgLink) { tgLink.href = tgUrl || "#"; if (!tgUrl) tgLink.style.display = "none"; }
-  if (tgSocLink) { tgSocLink.href = tgUrl || "#"; if (!tgUrl) tgSocLink.style.display = "none"; }
-  if (tgSocDesc) tgSocDesc.textContent = tgUrl || "—";
+  if (tgSocLink && tgUrl) tgSocLink.href = tgUrl;
 
   const igUrl = shopSettings.instagram_url || "";
   const igLink = document.getElementById("socialInstagramLink");
   const igDesc = document.getElementById("socialInstagramDesc");
-  if (igLink) { igLink.href = igUrl || "#"; if (!igUrl) igLink.style.display = "none"; }
-  if (igDesc) igDesc.textContent = igUrl.replace("https://www.instagram.com/", "@").replace(/\/$/, "") || "—";
+  if (igLink && igUrl) igLink.href = igUrl;
+  if (igDesc && igUrl) igDesc.textContent = igUrl.replace("https://www.instagram.com/", "@").replace(/\/$/, "");
 }
 
 // ── INIT ──
