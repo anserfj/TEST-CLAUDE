@@ -678,7 +678,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
               <div style={{fontSize:11,color:C.text3,marginBottom:5,textTransform:"uppercase",letterSpacing:".06em"}}>Client</div>
               <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>{selected.telegram_user}</div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                {selected.telegram_id&&<a href={`https://t.me/baltimore83_bot?start=user_${selected.telegram_id}`} target="_blank" style={{fontSize:10,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 7px"}}>💬 Contacter</a>}
+                {selected.telegram_id&&(()=>{const h=(()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}})().willyHandle;return h?<a href={`https://t.me/${h}?start=user_${selected.telegram_id}`} target="_blank" style={{fontSize:10,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 7px"}}>💬 Contacter</a>:null;})()}
                 {selected.telegram_user?.startsWith("@")&&<a href={`https://t.me/${selected.telegram_user.slice(1)}`} target="_blank" style={{fontSize:10,color:C.text2,textDecoration:"none",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 7px"}}>🔗 Profil</a>}
               </div>
               <div style={{fontSize:10,color:C.text3,marginTop:5}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div>
@@ -834,7 +834,7 @@ function ClientsPage({orders,setOrders}){
             </div>}
             {c.username&&<div style={{display:"flex",gap:5,marginTop:7}}>
               <a href={`https://t.me/${c.username}`} target="_blank" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 7px"}}>🔗 Profil</a>
-              <a href={`https://t.me/baltimore83_bot?start=user_${c.id}`} target="_blank" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:C.green,textDecoration:"none",background:"#00e67612",border:"1px solid #00e67630",borderRadius:4,padding:"2px 7px"}}>💬 Contacter</a>
+              {(()=>{const h=(()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}})().willyHandle;return h?<a href={`https://t.me/${h}?start=user_${c.id}`} target="_blank" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:C.green,textDecoration:"none",background:"#00e67612",border:"1px solid #00e67630",borderRadius:4,padding:"2px 7px"}}>💬 Contacter</a>:null;})()}
             </div>}
           </div>
         })}
@@ -1678,6 +1678,28 @@ function SettingsPage({orders,logout}){
       <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Paramètres</div>
       {saved&&<span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sauvegardé</span>}
     </div>
+
+    {/* Identité boutique */}
+    <Card style={{marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>🏪 Identité de la boutique</div>
+        {apiSaved&&<span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sauvegardé</span>}
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Nom de la boutique</label>
+        <input value={apiSettings.shop_name||""} onChange={e=>setApiSettings(s=>({...s,shop_name:e.target.value}))} placeholder="Ex : Ma Boutique CBD"
+          style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+        <div style={{fontSize:11,color:C.text3,marginTop:4}}>Affiché dans le bot Telegram et la miniapp</div>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Slogan / description courte</label>
+        <input value={apiSettings.shop_tagline||""} onChange={e=>setApiSettings(s=>({...s,shop_tagline:e.target.value}))} placeholder="Ex : Livraison rapide dans tout le Var 🚀"
+          style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      </div>
+      <Btn onClick={saveApiSettings} style={{fontSize:13}}>Sauvegarder</Btn>
+    </Card>
 
     {/* Livraison — sauvegardé dans la DB */}
     <Card style={{marginBottom:14}}>

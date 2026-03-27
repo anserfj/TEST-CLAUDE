@@ -4,6 +4,11 @@ import { broadcastToAdmins } from '../websocket/wsServer.js';
 
 let bot = null;
 
+function getSetting(key, fallback = '') {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  return row?.value || fallback;
+}
+
 export async function notifyGroup(text, extra = {}) {
   const groupId = process.env.NOTIFY_GROUP_ID;
   if (!bot || !groupId) return;
@@ -69,8 +74,9 @@ export function createBot(token) {
       .text('📦 Mes commandes', 'my_orders')
       .text('💬 Contacter', 'contact');
 
+    const shopName = getSetting('shop_name', 'notre boutique');
     await ctx.reply(
-      `🌿 <b>Bienvenue chez Baltimore 83!</b>\n\n` +
+      `🌿 <b>Bienvenue chez ${shopName}!</b>\n\n` +
       `Bonjour ${name}! 👋\n\n` +
       `Appuyez sur le bouton pour ouvrir la boutique:`,
       { parse_mode: 'HTML', reply_markup: keyboard }
@@ -246,9 +252,11 @@ async function showContact(ctx) {
 }
 
 async function showAbout(ctx) {
+  const shopName = getSetting('shop_name', 'Notre boutique');
+  const tagline = getSetting('shop_tagline', '');
   await ctx.reply(
-    'ℹ️ <b>Baltimore 83</b>\n\n' +
-    'Votre shop dans le Var 83 🔥\n\n' +
+    `ℹ️ <b>${shopName}</b>\n\n` +
+    (tagline ? `${tagline}\n\n` : '') +
     '🚚 Livraison rapide\n' +
     '💰 Meilleurs prix\n' +
     '✅ Qualité garantie',

@@ -6,7 +6,7 @@
 const tg = window.Telegram?.WebApp || {
   ready:()=>{}, expand:()=>{}, enableClosingConfirmation:()=>{},
   HapticFeedback:{impactOccurred:()=>{}},
-  sendData:(d)=>console.log("sendData:", d),
+  sendData:(d)=>{},
   initDataUnsafe:{ user:{ username:"demo_user", id: 0 } }
 };
 tg.ready(); tg.expand(); tg.enableClosingConfirmation();
@@ -66,6 +66,17 @@ async function apiPost(path, body) {
   return r.json();
 }
 
+// ── SHOP IDENTITY ──
+function applyShopIdentity() {
+  const name = shopSettings.shop_name || "";
+  const tagline = shopSettings.shop_tagline || shopSettings.shop_banner || "";
+  const banner = document.getElementById("bannerText");
+  const logo = document.getElementById("shopLogoText");
+  if (banner) banner.textContent = tagline || (name ? `${name}` : "");
+  if (logo && name) logo.textContent = name.substring(0, 3).toUpperCase();
+  if (name) document.title = name + " · Boutique";
+}
+
 // ── CONTACT LINKS ──
 function applyContactLinks() {
   const tgUrl = shopSettings.telegram_url || "";
@@ -92,6 +103,7 @@ async function init() {
     categories = cats.filter(c => c.active !== 0 && c.active !== false);
     products = prods.filter(p => p.active !== 0 && p.active !== false);
     if (settings) shopSettings = { ...shopSettings, ...settings };
+    applyShopIdentity();
     applyContactLinks();
     buildCatSelect();
   } catch(e) {

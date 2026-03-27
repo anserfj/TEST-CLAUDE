@@ -124,6 +124,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`
 // Seed default settings (INSERT OR IGNORE so existing values are preserved)
 const _upsertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
 [
+  ['shop_name', 'Baltimore 83'],
+  ['shop_tagline', 'Votre shop dans le Var 83 🔥'],
   ['delivery_fee', '3.00'],
   ['free_delivery_threshold', '50.00'],
   ['shop_banner', ''],
