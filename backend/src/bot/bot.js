@@ -113,7 +113,7 @@ export function createBot(token) {
 
   bot.callbackQuery('contact', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.reply('💬 Écrivez-nous directement ici, notre équipe vous répond rapidement!\n\n📍 12 Rue des Fleurs, Paris\n🕐 Lun-Sam 10h-19h');
+    await ctx.reply('💬 Écrivez-nous directement ici, notre équipe vous répond rapidement!\n\n🕐 Disponible tous les jours');
   });
 
   // Inline order confirm/cancel from group notifications

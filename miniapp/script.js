@@ -66,6 +66,23 @@ async function apiPost(path, body) {
   return r.json();
 }
 
+// ── CONTACT LINKS ──
+function applyContactLinks() {
+  const tgUrl = shopSettings.telegram_url || "";
+  const tgLink = document.getElementById("contactTelegramLink");
+  const tgSocLink = document.getElementById("socialTelegramLink");
+  const tgSocDesc = document.getElementById("socialTelegramDesc");
+  if (tgLink) { tgLink.href = tgUrl || "#"; if (!tgUrl) tgLink.style.display = "none"; }
+  if (tgSocLink) { tgSocLink.href = tgUrl || "#"; if (!tgUrl) tgSocLink.style.display = "none"; }
+  if (tgSocDesc) tgSocDesc.textContent = tgUrl || "—";
+
+  const igUrl = shopSettings.instagram_url || "";
+  const igLink = document.getElementById("socialInstagramLink");
+  const igDesc = document.getElementById("socialInstagramDesc");
+  if (igLink) { igLink.href = igUrl || "#"; if (!igUrl) igLink.style.display = "none"; }
+  if (igDesc) igDesc.textContent = igUrl.replace("https://www.instagram.com/", "@").replace(/\/$/, "") || "—";
+}
+
 // ── INIT ──
 async function init() {
   loadCart();
@@ -79,6 +96,7 @@ async function init() {
     categories = cats.filter(c => c.active !== 0 && c.active !== false);
     products = prods.filter(p => p.active !== 0 && p.active !== false);
     if (settings) shopSettings = { ...shopSettings, ...settings };
+    applyContactLinks();
     buildCatSelect();
   } catch(e) {
     console.warn("API indispo:", e);

@@ -197,7 +197,7 @@ function LoginPage({onLogin}){
   const [pass,setPass]=useState("");
   const [err,setErr]=useState("");
   const [isLoading,setLoading]=useState(false);
-  const handle=e=>{e.preventDefault();setLoading(true);setErr("");setTimeout(()=>{if(email==="admin@baltimore83.fr"&&pass==="baltimore2025")onLogin();else{setErr("Email ou mot de passe incorrect.");setLoading(false);}},600)};
+  const handle=async e=>{e.preventDefault();setLoading(true);setErr("");try{const r=await fetch(API+"/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,pass})});if(r.ok){onLogin();}else{const d=await r.json();setErr(d.error||"Email ou mot de passe incorrect.");}}catch{setErr("Impossible de contacter le serveur.");}setLoading(false);};
   return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",inset:0,opacity:.03,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
     <div style={{position:"absolute",top:"20%",left:"10%",width:300,height:300,background:`radial-gradient(circle,${C.accent}12 0%,transparent 70%)`,borderRadius:"50%",pointerEvents:"none"}}/>
@@ -210,7 +210,7 @@ function LoginPage({onLogin}){
       <Card style={{padding:28}}>
         <div style={{marginBottom:22}}><div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.text1,letterSpacing:"0.05em"}}>Connexion</div><div style={{fontSize:13,color:C.text2,marginTop:3}}>Accès réservé aux administrateurs</div></div>
         <form onSubmit={handle} style={{display:"flex",flexDirection:"column",gap:14}}>
-          <Inp label="Email" type="email" value={email} onChange={setEmail} placeholder="admin@baltimore83.fr" required/>
+          <Inp label="Email" type="email" value={email} onChange={setEmail} placeholder="Email administrateur" required/>
           <Inp label="Mot de passe" type="password" value={pass} onChange={setPass} placeholder="••••••••" required/>
           {err&&<div style={{background:"#ff475712",border:`1px solid ${C.red}33`,borderRadius:8,padding:"9px 13px",fontSize:13,color:C.red}}>{err}</div>}
           <Btn style={{width:"100%",justifyContent:"center",padding:"11px 20px",fontSize:14,marginTop:4}} disabled={isLoading}>{isLoading?"Connexion...":"Se connecter →"}</Btn>
@@ -254,7 +254,7 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
       <div style={{padding:"14px 10px",borderTop:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",marginBottom:6}}>
           <div style={{width:30,height:30,borderRadius:8,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.accent,fontWeight:700}}>A</div>
-          <div><div style={{fontSize:12,fontWeight:600,color:C.text1}}>Admin</div><div style={{fontSize:10,color:C.text3}}>admin@baltimore83.fr</div></div>
+          <div><div style={{fontSize:12,fontWeight:600,color:C.text1}}>Admin</div><div style={{fontSize:10,color:C.text3}}>Administrateur</div></div>
         </div>
         <button onClick={onLogout} style={{width:"100%",padding:"7px 10px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,color:C.text3,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red+"88";e.currentTarget.style.color=C.red}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text3}}>Déconnexion</button>
       </div>
@@ -308,7 +308,7 @@ function DashboardPage({orders,products,setPage}){
         <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Dashboard</div>
         <div style={{fontSize:12,color:C.text3,marginTop:2}}>
           {new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} ·{" "}
-          <a href="https://anserfj.github.io/BATIMORE-83/index.htm" target="_blank" style={{color:C.accent,textDecoration:"none"}}>Voir la boutique →</a>
+          <a href="#" onClick={async e=>{e.preventDefault();try{const c=await apiGet("/api/config");if(c.miniapp_url)window.open(c.miniapp_url,"_blank");}catch{}}} style={{color:C.accent,textDecoration:"none"}}>Voir la boutique →</a>
         </div>
       </div>
       <div style={{display:"flex",gap:8}}>
@@ -1641,7 +1641,10 @@ function SettingsPage({orders,logout}){
   const [apiSaved,setApiSaved]=useState(false);
   const [notifStatus,setNotifStatus]=useState(Notification?.permission||"default");
 
-  useEffect(()=>{apiGet("/api/settings").then(s=>setApiSettings(prev=>({...prev,...s}))).catch(()=>{});},[]);
+  useEffect(()=>{
+    apiGet("/api/settings").then(s=>setApiSettings(prev=>({...prev,...s}))).catch(()=>{});
+    apiGet("/api/config").then(c=>setApiSettings(prev=>({...prev,miniapp_url:c.miniapp_url||""}))).catch(()=>{});
+  },[]);
 
   const setS=(k,v)=>{
     const next={...settings,[k]:v};
@@ -1698,7 +1701,19 @@ function SettingsPage({orders,logout}){
       </div>
       <div style={{marginBottom:14}}>
         <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Bandeau boutique (miniapp)</label>
-        <input value={apiSettings.shop_banner||""} onChange={e=>setApiSettings(s=>({...s,shop_banner:e.target.value}))} placeholder="Baltimore 83 · Le meilleur dans le Var 🔥"
+        <input value={apiSettings.shop_banner||""} onChange={e=>setApiSettings(s=>({...s,shop_banner:e.target.value}))} placeholder="Ex : Votre boutique CBD dans le Var 🔥"
+          style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Lien Telegram (miniapp)</label>
+        <input value={apiSettings.telegram_url||""} onChange={e=>setApiSettings(s=>({...s,telegram_url:e.target.value}))} placeholder="https://t.me/VotreBot"
+          style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Lien Instagram (miniapp)</label>
+        <input value={apiSettings.instagram_url||""} onChange={e=>setApiSettings(s=>({...s,instagram_url:e.target.value}))} placeholder="https://www.instagram.com/VotreCompte/"
           style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
           onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
       </div>
@@ -1761,17 +1776,17 @@ function SettingsPage({orders,logout}){
     {/* Liens rapides */}
     <Card style={{marginBottom:14}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🔗 Liens rapides</div>
-      {[{label:"🛒 Mini App Telegram",url:"https://baltimore-83.duckdns.org",sub:"baltimore-83.duckdns.org"},{label:"🗄️ Backend API",url:"https://baltimore-83.duckdns.org:5174",sub:"API locale SQLite"},{label:"⚙️ Serveur",url:"https://baltimore-83.duckdns.org",sub:"baltimore-83.duckdns.org"}].map(l=>
-      <div key={l.url} style={{padding:"11px 14px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+      {[{label:"🛒 Mini App Telegram",url:apiSettings.miniapp_url||"",sub:apiSettings.miniapp_url||"—"},{label:"⚙️ Dashboard (ici)",url:window.location.origin,sub:window.location.hostname},{label:"🗄️ Backend API",url:API,sub:API}].map(l=>
+      <div key={l.label} style={{padding:"11px 14px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <div><div style={{fontSize:13,fontWeight:600}}>{l.label}</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:1}}>{l.sub}</div></div>
-        <Btn variant="ghost" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>window.open(l.url,"_blank")}>Ouvrir</Btn>
+        <Btn variant="ghost" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>l.url&&window.open(l.url,"_blank")}>Ouvrir</Btn>
       </div>)}
     </Card>
 
     {/* Compte */}
     <Card>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>👤 Compte</div>
-      <div style={{fontSize:13,color:C.text2,marginBottom:12}}>Connecté en tant que <strong style={{color:C.text1}}>admin@baltimore83.fr</strong></div>
+      <div style={{fontSize:13,color:C.text2,marginBottom:12}}>Connecté en tant qu'<strong style={{color:C.text1}}>Administrateur</strong></div>
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>window.location.reload()} style={{padding:"9px 18px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,color:C.text2,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🔄 Recharger</button>
         <button onClick={logout} style={{padding:"9px 18px",borderRadius:8,background:"transparent",border:`1px solid ${C.red}44`,color:C.red,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button>

@@ -121,50 +121,15 @@ db.exec(`CREATE TABLE IF NOT EXISTS promos (
 
 // Settings table
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
-// Seed default settings if empty
-if (!db.prepare("SELECT value FROM settings WHERE key = 'delivery_fee'").get()) {
-  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('delivery_fee', '3.00');
-  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('free_delivery_threshold', '50.00');
-  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('shop_banner', 'Baltimore 83 · Le meilleur dans le Var 🔥');
-}
+// Seed default settings (INSERT OR IGNORE so existing values are preserved)
+const _upsertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+[
+  ['delivery_fee', '3.00'],
+  ['free_delivery_threshold', '50.00'],
+  ['shop_banner', ''],
+  ['telegram_url', ''],
+  ['instagram_url', ''],
+].forEach(([k, v]) => _upsertSetting.run(k, v));
 
-// Seed default data if empty
-const catCount = db.prepare('SELECT COUNT(*) as c FROM categories').get();
-if (catCount.c === 0) {
-  const insertCat = db.prepare('INSERT INTO categories (name, emoji, sort_order) VALUES (?, ?, ?)');
-  insertCat.run('Fleurs CBD', '🌸', 1);
-  insertCat.run('Huiles CBD', '💧', 2);
-  insertCat.run('Résines CBD', '🟤', 3);
-  insertCat.run('Infusions', '🍵', 4);
-  insertCat.run('Cosmétiques', '✨', 5);
-
-  const insertProd = db.prepare(`
-    INSERT INTO products (category_id, name, description, price, stock, unit, thc_percent, cbd_percent)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  // Fleurs
-  insertProd.run(1, 'OG Kush CBD', 'Fleur premium avec arômes terreux et boisés', 9.90, 50, 'g', 0.2, 18.5);
-  insertProd.run(1, 'Amnesia CBD', 'Fleur énergisante aux notes citronnées', 8.90, 35, 'g', 0.2, 15.0);
-  insertProd.run(1, 'Purple Haze CBD', 'Fleur relaxante aux arômes fruités violets', 10.90, 20, 'g', 0.2, 20.0);
-  insertProd.run(1, 'White Widow CBD', 'Fleur équilibrée aux cristaux blancs', 11.90, 15, 'g', 0.2, 22.0);
-
-  // Huiles
-  insertProd.run(2, 'Huile CBD 5%', 'Huile de chanvre bio 10ml - idéale débutants', 19.90, 30, 'flacon', 0, 5.0);
-  insertProd.run(2, 'Huile CBD 10%', 'Huile de chanvre bio 10ml - usage quotidien', 34.90, 25, 'flacon', 0, 10.0);
-  insertProd.run(2, 'Huile CBD 20%', 'Huile de chanvre bio 10ml - concentration forte', 59.90, 10, 'flacon', 0, 20.0);
-
-  // Résines
-  insertProd.run(3, 'Résine Maroc CBD', 'Résine traditionnelle 1g - arômes épicés', 7.90, 40, 'g', 0.2, 25.0);
-  insertProd.run(3, 'Résine Liban CBD', 'Résine premium 1g - texture souple', 9.90, 20, 'g', 0.2, 30.0);
-
-  // Infusions
-  insertProd.run(4, 'Tisane Relaxante CBD', 'Mélange camomille & chanvre 20g', 8.90, 45, 'sachet', 0, 5.0);
-  insertProd.run(4, 'Tisane Sommeil CBD', 'Mélange valériane & chanvre 20g', 9.90, 30, 'sachet', 0, 7.0);
-
-  // Cosmétiques
-  insertProd.run(5, 'Crème CBD 50mg', 'Crème hydratante visage 30ml', 24.90, 20, 'tube', 0, 0);
-  insertProd.run(5, 'Baume CBD 100mg', 'Baume corps apaisant 50ml', 29.90, 15, 'pot', 0, 0);
-}
 
 export default db;

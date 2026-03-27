@@ -7,6 +7,25 @@ import fs from 'fs';
 
 const router = Router();
 
+// ── AUTH ───────────────────────────────────────────────────────────────────────
+
+router.post('/auth/login', (req, res) => {
+  const { email, pass } = req.body;
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@shop.local';
+  const adminPass = process.env.ADMIN_PASS || 'changeme';
+  if (email === adminEmail && pass === adminPass) {
+    res.json({ success: true });
+  } else {
+    res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
+  }
+});
+
+// ── CONFIG ─────────────────────────────────────────────────────────────────────
+
+router.get('/config', (req, res) => {
+  res.json({ miniapp_url: process.env.MINIAPP_URL || '' });
+});
+
 // ── UPLOAD ────────────────────────────────────────────────────────────────────
 
 const UPLOAD_DIR = '/app/data/uploads';
