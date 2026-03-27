@@ -1776,7 +1776,7 @@ function SettingsPage({orders,logout}){
     {/* Liens rapides */}
     <Card style={{marginBottom:14}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>🔗 Liens rapides</div>
-      {[{label:"🛒 Mini App Telegram",url:apiSettings.miniapp_url||"",sub:apiSettings.miniapp_url||"—"},{label:"⚙️ Dashboard (ici)",url:window.location.origin,sub:window.location.hostname},{label:"🗄️ Backend API",url:API,sub:API}].map(l=>
+      {[{label:"🛒 Mini App Telegram",url:apiSettings.miniapp_url||"",sub:apiSettings.miniapp_url||"—"},{label:"⚙️ Dashboard (ici)",url:window.location.origin,sub:window.location.hostname}].map(l=>
       <div key={l.label} style={{padding:"11px 14px",background:C.surface,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <div><div style={{fontSize:13,fontWeight:600}}>{l.label}</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:1}}>{l.sub}</div></div>
         <Btn variant="ghost" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>l.url&&window.open(l.url,"_blank")}>Ouvrir</Btn>
