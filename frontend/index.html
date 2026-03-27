@@ -197,7 +197,7 @@ function LoginPage({onLogin}){
   const [pass,setPass]=useState("");
   const [err,setErr]=useState("");
   const [isLoading,setLoading]=useState(false);
-  const handle=async e=>{e.preventDefault();setLoading(true);setErr("");try{const r=await fetch(API+"/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,pass})});if(r.ok){onLogin();}else{const d=await r.json();setErr(d.error||"Email ou mot de passe incorrect.");}}catch{setErr("Impossible de contacter le serveur.");}setLoading(false);};
+  const handle=async e=>{e.preventDefault();setLoading(true);setErr("");try{const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,pass})});if(r.ok){onLogin();}else{const d=await r.json();setErr(d.error||"Email ou mot de passe incorrect.");}}catch{setErr("Impossible de contacter le serveur.");}setLoading(false);};
   return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",inset:0,opacity:.03,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
     <div style={{position:"absolute",top:"20%",left:"10%",width:300,height:300,background:`radial-gradient(circle,${C.accent}12 0%,transparent 70%)`,borderRadius:"50%",pointerEvents:"none"}}/>
