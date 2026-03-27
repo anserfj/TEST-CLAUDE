@@ -558,7 +558,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
     </body></html>`);w.document.close();
   };
 
-  const copyId=id=>{navigator.clipboard.writeText(id).catch(()=>{});/* silent */};
+  const copyId=id=>{try{navigator.clipboard?.writeText(id).catch(()=>{})}catch{}};
 
   const [currentPage,setCurrentPage]=useState(1);
   const PAGE_SIZE=20;
@@ -1438,7 +1438,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
   },[selected?.id]);
 
   // Scroll to bottom on new messages
-  useEffect(()=>{messagesEndRef.current?.scrollIntoView({behavior:"smooth"})},[chatMessages]);
+  useEffect(()=>{try{messagesEndRef.current?.scrollIntoView({behavior:"auto"})}catch{}},[chatMessages]);
 
   const sendReply=async()=>{
     if(!selected||!reply.trim()||sending)return;
@@ -1649,7 +1649,7 @@ function SettingsPage({orders,logout}){
   const setS=(k,v)=>{
     const next={...settings,[k]:v};
     setSettings(next);
-    localStorage.setItem("baltimore83_settings",JSON.stringify(next));
+    try{localStorage.setItem("baltimore83_settings",JSON.stringify(next))}catch{}
     setSaved(true);
     setTimeout(()=>setSaved(false),1500);
   };
@@ -1660,7 +1660,7 @@ function SettingsPage({orders,logout}){
 
   const requestNotif=async()=>{
     if(!("Notification" in window)){showToast("⚠️ Navigateur non supporté");return;}
-    const p=await Notification.requestPermission();
+    const p=await window.Notification.requestPermission();
     setNotifStatus(p);
     if(p==="granted")new Notification("Baltimore 83",{body:"🔔 Notifications activées !"});
   };
@@ -1819,7 +1819,7 @@ function SettingsPage({orders,logout}){
 
 /* ── APP ── */
 function App(){
-  const [logged,setLogged]=useState(()=>localStorage.getItem("baltimore83_logged")==="1");
+  const [logged,setLogged]=useState(()=>{try{return localStorage.getItem("baltimore83_logged")==="1"}catch{return false}});
   const [page,setPage]=useState("dashboard");
   const [orders,setOrders]=useState([]);
   const [selectedOrder,setSelectedOrder]=useState(null);
@@ -1828,8 +1828,8 @@ function App(){
   const [loadP,setLoadP]=useState(false);
   const [unreadMsgCount,setUnreadMsgCount]=useState(0);
 
-  const login=()=>{localStorage.setItem("baltimore83_logged","1");setLogged(true)};
-  const logout=()=>{localStorage.removeItem("baltimore83_logged");setLogged(false)};
+  const login=()=>{try{localStorage.setItem("baltimore83_logged","1")}catch{}setLogged(true)};
+  const logout=()=>{try{localStorage.removeItem("baltimore83_logged")}catch{}setLogged(false)};
 
   const getSettings=()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}};
 
@@ -1844,8 +1844,8 @@ function App(){
       const prevCount=unreadMsgCount;
       setUnreadMsgCount(totalUnread);
       const s=getSettings();
-      if(s.notifMessages&&Notification?.permission==="granted"&&totalUnread>prevCount){
-        new Notification("Baltimore 83 — Nouveau message",{body:"Nouveau message reçu",icon:""});
+      if(s.notifMessages&&"Notification" in window&&window.Notification?.permission==="granted"&&totalUnread>prevCount){
+        try{new window.Notification("Baltimore 83 — Nouveau message",{body:"Nouveau message reçu",icon:""});}catch{}
       }
     }catch(e){}
   };
