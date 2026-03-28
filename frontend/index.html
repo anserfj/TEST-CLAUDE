@@ -668,7 +668,8 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       </div>
 
       {/* Panneau détail */}
-      {selected&&<div className="scale-in" style={{width:"100%",maxWidth:340,flexShrink:0}}>
+      {selected&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:12}} onClick={e=>e.target===e.currentTarget&&setSelected(null)}>
+      <div className="scale-in" style={{width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto",borderRadius:12}}>
         <Card style={{padding:18}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -737,6 +738,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
             </div>
           </div>
         </Card>
+      </div>
       </div>}
     </div>}
   </div>
@@ -863,7 +865,8 @@ function ClientsPage({orders,setOrders}){
         {sorted.length===0&&<div style={{padding:40,textAlign:"center",color:C.text3,fontSize:13}}>Aucun client</div>}
       </div>
 
-      {selected&&<div className="scale-in" style={{width:"100%",maxWidth:340,flexShrink:0}}>
+      {selected&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:12}} onClick={e=>e.target===e.currentTarget&&setSelected(null)}>
+      <div className="scale-in" style={{width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto",borderRadius:12}}>
         <Card style={{padding:18}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
             <div style={{fontSize:14,fontWeight:700}}>{dn(selected)}</div>
@@ -921,6 +924,7 @@ function ClientsPage({orders,setOrders}){
             }
           </div>
         </Card>
+      </div>
       </div>}
     </div>}
   </div>
@@ -1307,7 +1311,7 @@ function PromosPage(){
     setPromos(prev=>prev.filter(x=>x.id!==id));
   };
 
-  const inputStyle={background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 10px",outline:"none",width:"100%",fontFamily:"inherit"};
+  const inputStyle={background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 10px",outline:"none",width:"100%",fontFamily:"inherit"};
   const selStyle={...inputStyle,cursor:"pointer"};
 
   const newFormJsx=<div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:16,display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
@@ -1986,8 +1990,8 @@ function App(){
 
   const getSettings=()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}};
 
-  const fetchOrders=async()=>{setLoadO(true);try{const data=(await apiGet("/api/orders")).orders||[];const mapped=data.map(o=>({...o,telegram_user:o.username?`@${o.username}`:[o.first_name,o.last_name].filter(Boolean).join(" ")||`User #${o.telegram_id}`}));setOrders(mapped)}catch(e){console.error(e)}setLoadO(false)};
-  const fetchProducts=async()=>{setLoadP(true);try{setProducts(await apiGet("/api/products"))}catch(e){console.error(e)}setLoadP(false)};
+  const fetchOrders=async()=>{setLoadO(true);try{const resp=await apiGet("/api/orders");const data=resp?.orders;if(Array.isArray(data)){const mapped=data.map(o=>({...o,telegram_user:o.username?`@${o.username}`:[o.first_name,o.last_name].filter(Boolean).join(" ")||`User #${o.telegram_id}`}));setOrders(mapped)}}catch(e){console.error(e)}setLoadO(false)};
+  const fetchProducts=async()=>{setLoadP(true);try{const data=await apiGet("/api/products");if(Array.isArray(data))setProducts(data)}catch(e){console.error(e)}setLoadP(false)};
 
   const pollUnread=async()=>{
     try{
