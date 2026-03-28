@@ -416,6 +416,7 @@ router.post('/miniapp/order', (req, res) => {
 
   const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegram_id);
   if (!user) return res.status(404).json({ error: 'User not found. Start the bot first.' });
+  if (!user.is_validated) return res.status(403).json({ error: 'Compte non validé. Entre un code de parrainage dans le bot.' });
 
   // Fetch product details for recap
   const itemsWithDetails = items.map(item => {
@@ -515,6 +516,29 @@ router.post('/miniapp/order', (req, res) => {
   sendMessageToUser(user.telegram_id, userRecap).catch(e => console.error('recap error:', e.message));
 
   res.json({ success: true, order_id: orderId });
+});
+
+// Vérifier l'accès d'un utilisateur (validation + code parrainage)
+router.get('/miniapp/access/:telegramId', (req, res) => {
+  const user = db.prepare('SELECT is_validated, referral_code FROM users WHERE telegram_id = ?').get(req.params.telegramId);
+  if (!user) return res.json({ validated: false, referral_code: null });
+  res.json({ validated: !!user.is_validated, referral_code: user.referral_code });
+});
+
+// Dashboard: valider/invalider un utilisateur manuellement
+router.patch('/users/:id/validate', (req, res) => {
+  const { validated } = req.body;
+  db.prepare('UPDATE users SET is_validated = ? WHERE id = ?').run(validated ? 1 : 0, req.params.id);
+  res.json({ success: true });
+});
+
+// Dashboard: stats de parrainage
+router.get('/users/:id/referrals', (req, res) => {
+  const referrals = db.prepare(`
+    SELECT u.id, u.first_name, u.last_name, u.username, u.created_at
+    FROM users u WHERE u.referred_by = ?
+  `).all(req.params.id);
+  res.json(referrals);
 });
 
 // Get orders for a telegram user (mini app)

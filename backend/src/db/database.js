@@ -106,6 +106,24 @@ try { db.exec(`ALTER TABLE users ADD COLUMN notes TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE orders ADD COLUMN promo_code TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE orders ADD COLUMN discount REAL DEFAULT 0`); } catch(e) {}
 
+// Migrate: système de parrainage
+try { db.exec(`ALTER TABLE users ADD COLUMN is_validated INTEGER DEFAULT 0`); } catch(e) {}
+try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER`); } catch(e) {}
+// Les utilisateurs existants sont validés automatiquement (ne pas bloquer les clients actuels)
+db.prepare(`UPDATE users SET is_validated = 1 WHERE is_validated = 0 OR is_validated IS NULL`).run();
+// Générer un code de parrainage pour les utilisateurs qui n'en ont pas
+const usersWithoutCode = db.prepare(`SELECT id, telegram_id FROM users WHERE referral_code IS NULL`).all();
+const genCode = (id) => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  let seed = id;
+  for (let i = 0; i < 6; i++) { seed = (seed * 1664525 + 1013904223) & 0xffffffff; code += chars[Math.abs(seed) % chars.length]; }
+  return code;
+};
+const updateCode = db.prepare(`UPDATE users SET referral_code = ? WHERE id = ?`);
+usersWithoutCode.forEach(u => { let code = genCode(u.telegram_id); updateCode.run(code, u.id); });
+
 // Promos table
 db.exec(`CREATE TABLE IF NOT EXISTS promos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

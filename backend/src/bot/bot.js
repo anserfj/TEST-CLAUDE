@@ -64,22 +64,80 @@ export function createBot(token) {
     await next();
   });
 
-  // /start command — opens mini app
+  // Helper: générer un code de parrainage unique
+  function generateReferralCode(telegramId) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '', seed = telegramId;
+    for (let i = 0; i < 6; i++) { seed = (seed * 1664525 + 1013904223) & 0xffffffff; code += chars[Math.abs(seed) % chars.length]; }
+    return code;
+  }
+
+  // Helper: s'assurer que l'utilisateur a un code de parrainage
+  function ensureReferralCode(userId, telegramId) {
+    const user = db.prepare('SELECT referral_code FROM users WHERE id = ?').get(userId);
+    if (!user?.referral_code) {
+      let code = generateReferralCode(telegramId);
+      // Garantir l'unicité
+      while (db.prepare('SELECT id FROM users WHERE referral_code = ?').get(code)) {
+        code = generateReferralCode(telegramId + Math.floor(Math.random() * 9999));
+      }
+      db.prepare('UPDATE users SET referral_code = ? WHERE id = ?').run(code, userId);
+      return code;
+    }
+    return user.referral_code;
+  }
+
+  // /start command
   bot.command('start', async (ctx) => {
     const name = ctx.from.first_name || 'ami';
     const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:5174';
+    const shopName = getSetting('shop_name', 'notre boutique');
+    const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(ctx.from.id);
+
+    if (!user || !user.is_validated) {
+      // Compte non validé — demander le code de parrainage
+      await ctx.reply(
+        `🌿 <b>Bienvenue chez ${shopName}!</b>\n\n` +
+        `Bonjour ${name}! 👋\n\n` +
+        `⚠️ <b>Accès sur invitation uniquement.</b>\n\n` +
+        `Pour accéder à la boutique, entrez le <b>code de parrainage</b> d'un client déjà enregistré :\n\n` +
+        `<i>Exemple : A3B7X9</i>`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    // Compte validé — afficher la boutique
+    const code = ensureReferralCode(user.id, ctx.from.id);
     const keyboard = new InlineKeyboard()
       .webApp('🛍️ Ouvrir la boutique', miniappUrl)
       .row()
       .text('📦 Mes commandes', 'my_orders')
-      .text('💬 Contacter', 'contact');
+      .text('💬 Contacter', 'contact')
+      .row()
+      .text('🎁 Mon code de parrainage', 'my_referral');
 
-    const shopName = getSetting('shop_name', 'notre boutique');
     await ctx.reply(
       `🌿 <b>Bienvenue chez ${shopName}!</b>\n\n` +
       `Bonjour ${name}! 👋\n\n` +
       `Appuyez sur le bouton pour ouvrir la boutique:`,
       { parse_mode: 'HTML', reply_markup: keyboard }
+    );
+  });
+
+  // Callback — afficher son code de parrainage
+  bot.callbackQuery('my_referral', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(ctx.from.id);
+    if (!user) return;
+    const code = ensureReferralCode(user.id, ctx.from.id);
+    const count = db.prepare('SELECT COUNT(*) as c FROM users WHERE referred_by = ?').get(user.id)?.c || 0;
+    await ctx.reply(
+      `🎁 <b>Ton code de parrainage</b>\n\n` +
+      `<code>${code}</code>\n\n` +
+      `Partage ce code à tes amis pour leur donner accès à la boutique.\n\n` +
+      `👥 <b>${count} personne${count>1?'s':''} parrainée${count>1?'s':''}</b>`,
+      { parse_mode: 'HTML' }
     );
   });
 
@@ -170,11 +228,64 @@ export function createBot(token) {
 
   // Handle regular text messages
   bot.on('message:text', async (ctx) => {
-    const text = ctx.message.text;
+    const text = ctx.message.text.trim();
     if (text.startsWith('/') || ['📦 Mes Commandes', '💬 Contact', 'ℹ️ À propos'].includes(text)) return;
 
-    // Save message and notify admin
     const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(ctx.from.id);
+    const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:5174';
+    const shopName = getSetting('shop_name', 'notre boutique');
+
+    // Vérifier si c'est un code de parrainage (6 caractères alphanumériques)
+    if (!user?.is_validated && /^[A-Z0-9]{6}$/i.test(text)) {
+      const codeUpper = text.toUpperCase();
+      const referrer = db.prepare('SELECT * FROM users WHERE referral_code = ? AND is_validated = 1').get(codeUpper);
+      if (!referrer) {
+        await ctx.reply(
+          `❌ <b>Code invalide ou non reconnu.</b>\n\n` +
+          `Vérifie le code avec la personne qui t'a invité et réessaie.`,
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+      // Valider le compte
+      db.prepare('UPDATE users SET is_validated = 1, referred_by = ? WHERE telegram_id = ?').run(referrer.id, ctx.from.id);
+      const name = ctx.from.first_name || 'ami';
+      const myCode = ensureReferralCode(user?.id || referrer.id, ctx.from.id);
+      const keyboard = new InlineKeyboard()
+        .webApp('🛍️ Ouvrir la boutique', miniappUrl)
+        .row()
+        .text('📦 Mes commandes', 'my_orders')
+        .text('💬 Contacter', 'contact')
+        .row()
+        .text('🎁 Mon code de parrainage', 'my_referral');
+      await ctx.reply(
+        `✅ <b>Compte validé ! Bienvenue ${name} !</b>\n\n` +
+        `Tu as accès à la boutique <b>${shopName}</b>.\n\n` +
+        `🎁 Ton code de parrainage pour inviter tes amis :\n<code>${myCode}</code>`,
+        { parse_mode: 'HTML', reply_markup: keyboard }
+      );
+      // Notifier le parrain
+      sendMessageToUser(referrer.telegram_id,
+        `🎉 <b>Bonne nouvelle !</b>\n${name} a rejoint la boutique grâce à ton parrainage !`
+      ).catch(() => {});
+      // Notifier l'admin
+      await notifyGroup(
+        `✅ <b>Nouveau compte validé</b>\n${name} (@${ctx.from.username || ctx.from.id}) parrainé par ${referrer.first_name || referrer.telegram_id}`
+      );
+      return;
+    }
+
+    // Si non validé et pas un code valide
+    if (!user?.is_validated) {
+      await ctx.reply(
+        `⚠️ <b>Compte non activé.</b>\n\n` +
+        `Entre le code de parrainage (6 caractères) d'un client déjà enregistré pour accéder à la boutique.`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    // Save message and notify admin
     if (user) {
       db.prepare('INSERT INTO messages (user_id, telegram_id, text, from_admin) VALUES (?, ?, ?, 0)')
         .run(user.id, ctx.from.id, text);

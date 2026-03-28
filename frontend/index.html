@@ -745,9 +745,21 @@ function ClientsPage({orders,setOrders}){
   const [sortBy,setSortBy]=useState("recent");
   const [noteText,setNoteText]=useState("");
   const [savingNote,setSavingNote]=useState(false);
+  const [validating,setValidating]=useState(false);
 
   useEffect(()=>{setLoading(true);apiGet("/api/users").then(u=>setClients(u)).catch(console.error).finally(()=>setLoading(false));},[]);
   useEffect(()=>{if(selected)setNoteText(selected.notes||"")},[selected?.id]);
+
+  const toggleValidation=async(client,val)=>{
+    setValidating(true);
+    try{
+      await apiPatch("/api/users/"+client.id+"/validate",{validated:val});
+      setClients(prev=>prev.map(c=>c.id===client.id?{...c,is_validated:val?1:0}:c));
+      setSelected(prev=>prev&&prev.id===client.id?{...prev,is_validated:val?1:0}:prev);
+      showToast(val?"✅ Client validé":"⚠️ Accès révoqué");
+    }catch(e){showToast("❌ "+e.message.slice(0,100));}
+    setValidating(false);
+  };
 
   const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
   const clientOrders=uid=>orders.filter(o=>String(o.user_id)===String(uid));
@@ -819,8 +831,11 @@ function ClientsPage({orders,setOrders}){
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <div style={{width:38,height:38,borderRadius:10,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
                 <div>
-                  <div style={{fontSize:13,fontWeight:700,color:isSel?C.accent:C.text1}}>{dn(c)}</div>
-                  <div style={{fontSize:11,color:C.text3}}>Depuis {new Date(c.started_at).toLocaleDateString("fr-FR")} · Vu {new Date(c.last_seen).toLocaleDateString("fr-FR")}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{fontSize:13,fontWeight:700,color:isSel?C.accent:C.text1}}>{dn(c)}</div>
+                    <span style={{fontSize:10,padding:"1px 5px",borderRadius:4,background:c.is_validated?"#00e67615":"#ff6b3515",color:c.is_validated?"#00e676":"#ff6b35",border:`1px solid ${c.is_validated?"#00e67630":"#ff6b3530"}`}}>{c.is_validated?"✅":"⚠️"}</span>
+                  </div>
+                  <div style={{fontSize:11,color:C.text3}}>Depuis {new Date(c.created_at).toLocaleDateString("fr-FR")} · Vu {new Date(c.last_seen).toLocaleDateString("fr-FR")}</div>
                 </div>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
@@ -856,6 +871,23 @@ function ClientsPage({orders,setOrders}){
               <div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.gold}}>{clientOrders(selected.id).length}</div>
               <div style={{fontSize:11,color:C.text3}}>Commandes</div>
             </div>
+          </div>
+          {/* Validation & Parrainage */}
+          <div style={{marginBottom:14,padding:"10px 12px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:12,fontWeight:700,color:selected.is_validated?C.green:C.gold}}>
+                {selected.is_validated?"✅ Compte validé":"⚠️ Compte non validé"}
+              </div>
+              <button onClick={()=>toggleValidation(selected,!selected.is_validated)} disabled={validating}
+                style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:`1px solid ${selected.is_validated?"#ff6b3550":C.accentMid}`,background:selected.is_validated?"#ff6b3512":C.accentDim,color:selected.is_validated?"#ff6b35":C.accent,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                {validating?"...":(selected.is_validated?"Révoquer l'accès":"Valider")}
+              </button>
+            </div>
+            {selected.referral_code&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+              <span style={{fontSize:11,color:C.text3}}>Code parrainage :</span>
+              <span style={{fontFamily:"'JetBrains Mono'",fontSize:12,color:C.accent,background:C.accentDim,padding:"2px 7px",borderRadius:4,border:`1px solid ${C.accentMid}`,letterSpacing:"0.1em"}}>{selected.referral_code}</span>
+            </div>}
+            {selected.referred_by&&<div style={{fontSize:11,color:C.text3,marginTop:4}}>Parrainé par user #{selected.referred_by}</div>}
           </div>
           {/* Notes internes */}
           <div style={{marginBottom:12}}>

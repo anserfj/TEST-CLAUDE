@@ -90,6 +90,28 @@ function applyContactLinks() {
   if (igDesc && igUrl) igDesc.textContent = igUrl.replace("https://www.instagram.com/", "@").replace(/\/$/, "");
 }
 
+// ── ACCÈS NON VALIDÉ ──
+function showAccessBlocked() {
+  document.querySelector("nav.tabs")?.style.setProperty("display", "none");
+  const main = document.querySelector("main.main");
+  if (main) main.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;padding:32px;text-align:center">
+      <div style="font-size:56px;margin-bottom:16px">🔒</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:.05em;margin-bottom:12px">Accès sur invitation</div>
+      <div style="color:#aaa;font-size:.95rem;line-height:1.6;margin-bottom:28px">
+        Cette boutique est réservée aux membres invités.<br>
+        Pour obtenir l'accès, demande un <b>code de parrainage</b><br>à un client existant et entre-le dans le bot.
+      </div>
+      <a href="https://t.me/" id="botAccessLink" style="display:inline-block;background:#fff;color:#000;font-weight:700;padding:14px 28px;border-radius:12px;text-decoration:none;font-size:.95rem">
+        Ouvrir le bot →
+      </a>
+    </div>
+  `;
+  // Mettre à jour le lien vers le bot depuis les settings
+  const tgUrl = shopSettings.telegram_url;
+  if (tgUrl) { const el = document.getElementById("botAccessLink"); if (el) el.href = tgUrl; }
+}
+
 // ── INIT ──
 async function init() {
   loadCart();
@@ -105,6 +127,16 @@ async function init() {
     if (settings) shopSettings = { ...shopSettings, ...settings };
     applyShopIdentity();
     applyContactLinks();
+
+    // Vérifier si l'utilisateur est validé
+    const telegramId = tg.initDataUnsafe?.user?.id;
+    if (telegramId) {
+      try {
+        const access = await apiGet(`/api/miniapp/access/${telegramId}`);
+        if (!access.validated) { showAccessBlocked(); return; }
+      } catch(e) { /* si l'API échoue, laisser accéder (fail-open) */ }
+    }
+
     buildCatSelect();
   } catch(e) {
     console.warn("API indispo:", e);
