@@ -98,7 +98,9 @@ router.patch('/products/:id/stock', (req, res) => {
 });
 
 router.delete('/products/:id', (req, res) => {
-  db.prepare('UPDATE products SET active = 0 WHERE id = ?').run(req.params.id);
+  db.prepare('DELETE FROM order_items WHERE product_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM carts WHERE product_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
@@ -123,8 +125,15 @@ router.put('/categories/:id', (req, res) => {
 });
 
 router.delete('/categories/:id', (req, res) => {
-  // Soft-delete: set active=0, preserve products
-  db.prepare('UPDATE categories SET active = 0 WHERE id = ?').run(req.params.id);
+  const id = req.params.id;
+  // Supprimer d'abord les produits de cette catégorie (+ leurs order_items et carts)
+  const products = db.prepare('SELECT id FROM products WHERE category_id = ?').all(id);
+  products.forEach(p => {
+    db.prepare('DELETE FROM order_items WHERE product_id = ?').run(p.id);
+    db.prepare('DELETE FROM carts WHERE product_id = ?').run(p.id);
+    db.prepare('DELETE FROM products WHERE id = ?').run(p.id);
+  });
+  db.prepare('DELETE FROM categories WHERE id = ?').run(id);
   res.json({ success: true });
 });
 
@@ -417,6 +426,19 @@ router.post('/miniapp/order', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegram_id);
   if (!user) return res.status(404).json({ error: 'User not found. Start the bot first.' });
   if (!user.is_validated) return res.status(403).json({ error: 'Compte non validé. Entre un code de parrainage dans le bot.' });
+
+  // Vérifier zones non livrées
+  const zonesRaw = db.prepare('SELECT value FROM settings WHERE key = ?').get('no_delivery_zones')?.value;
+  if (zonesRaw) {
+    try {
+      const zones = JSON.parse(zonesRaw);
+      const addrLower = delivery_address.toLowerCase();
+      const blocked = zones.find(z => z.name && addrLower.includes(z.name.toLowerCase()));
+      if (blocked) {
+        return res.status(400).json({ error: `❌ Nous ne livrons pas dans cette zone (${blocked.name}). Contactez-nous pour plus d'infos.` });
+      }
+    } catch(e) {}
+  }
 
   // Fetch product details for recap
   const itemsWithDetails = items.map(item => {
