@@ -149,7 +149,14 @@ const _upsertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) V
   ['shop_banner', ''],
   ['telegram_url', 'https://t.me/+kzA04I6sErVjYWVk'],
   ['instagram_url', ''],
+  ['no_delivery_zones', '[]'],
 ].forEach(([k, v]) => _upsertSetting.run(k, v));
+
+// Migration: supprimer les catégories et produits de démonstration CBD
+try {
+  db.prepare(`DELETE FROM products WHERE category_id IN (SELECT id FROM categories WHERE name LIKE '%CBD%')`).run();
+  db.prepare(`DELETE FROM categories WHERE name LIKE '%CBD%'`).run();
+} catch(e) {}
 
 
 export default db;
