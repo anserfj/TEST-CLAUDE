@@ -495,11 +495,11 @@ function checkout() {
 }
 
 const SLOTS = [
-  { id: "matin", label: "🌅 Matin", time: "10h – 14h" },
-  { id: "aprem", label: "🌇 Après-midi", time: "14h30 – 18h" },
-  { id: "soir",  label: "🌙 Soir",  time: "18h – 23h" },
+  { id: "debut", label: "🌇 Début d'après-midi", time: "13h – 16h" },
+  { id: "aprem", label: "🌆 Fin d'après-midi",   time: "16h – 19h" },
+  { id: "soir",  label: "🌙 Soirée",              time: "19h – 23h" },
 ];
-let selectedSlot = "matin";
+let selectedSlot = "debut";
 
 function renderDeliveryForm() {
   const el = document.getElementById("cartContent");
@@ -565,9 +565,10 @@ function renderDeliveryForm() {
       <div class="delivery-field">
         <label class="delivery-label">Adresse de livraison *</label>
         <div style="display:flex;gap:8px;align-items:flex-start">
-          <textarea id="fieldAddress" class="delivery-input delivery-textarea" placeholder="12 rue des Fleurs, 83000 Toulon" rows="2" style="flex:1">${a}</textarea>
-          <button onclick="openMap()" class="map-btn" title="Choisir sur la carte">📍</button>
+          <textarea id="fieldAddress" class="delivery-input delivery-textarea" placeholder="12 rue des Fleurs, 83000 Toulon" rows="2" style="flex:1" oninput="deliveryLatLng=null">${a}</textarea>
+          <button onclick="openMap()" class="map-btn" title="Voir les zones et choisir sur la carte">📍</button>
         </div>
+        ${(()=>{try{const z=JSON.parse(shopSettings.no_delivery_zones||'[]');return z.length?`<div style="font-size:.75rem;color:#ff6b6b;margin-top:6px;display:flex;align-items:center;gap:5px">🚫 Certaines zones ne sont pas livrées — appuyez sur 📍 pour voir la carte</div>`:''}catch{return ''}})()}
       </div>
       <div class="delivery-field">
         <label class="delivery-label">Code promo (optionnel)</label>
@@ -707,6 +708,56 @@ let mapInstance = null;
 let mapMarker = null;
 let geocodeTimer = null;
 let pendingAddress = "";
+let deliveryLatLng = null; // coords GPS de l'adresse choisie (via carte ou geocodage)
+
+/* ── ZONE HELPERS ── */
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toR, dLng = (lng2 - lng1) * toR;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*toR)*Math.cos(lat2*toR)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function pointInPoly(lat, lng, coords) {
+  let inside = false;
+  for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+    const [yi, xi] = coords[i], [yj, xj] = coords[j];
+    if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+function getBlockedZone(lat, lng) {
+  try {
+    const zones = JSON.parse(shopSettings.no_delivery_zones || '[]');
+    return zones.find(z => z.type === 'circle'
+      ? haversineM(lat, lng, z.center[0], z.center[1]) <= z.radius
+      : pointInPoly(lat, lng, z.coords || [])) || null;
+  } catch { return null; }
+}
+async function forwardGeocode(address) {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=fr`,
+      { headers: { 'User-Agent': 'Baltimore83-MiniApp' } }
+    );
+    const d = await r.json();
+    if (!d?.length) return null;
+    return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+  } catch { return null; }
+}
+function drawZonesOnMap(map) {
+  try {
+    const zones = JSON.parse(shopSettings.no_delivery_zones || '[]');
+    if (!zones.length) return;
+    const style = { color: '#ff4757', fillColor: '#ff4757', fillOpacity: 0.22, weight: 2 };
+    zones.forEach(z => {
+      const layer = z.type === 'circle'
+        ? L.circle([z.center[0], z.center[1]], { ...style, radius: z.radius })
+        : L.polygon(z.coords || [], style);
+      layer.bindTooltip(`🚫 ${z.name}`, { direction: 'center', permanent: false });
+      layer.addTo(map);
+    });
+  } catch(e) {}
+}
 
 function openMap() {
   const overlay = document.getElementById("mapOverlay");
@@ -733,6 +784,9 @@ function openMap() {
 
     mapMarker.on("dragend", () => reverseGeocode(mapMarker.getLatLng()));
     mapInstance.on("click", e => { mapMarker.setLatLng(e.latlng); reverseGeocode(e.latlng); });
+
+    // Zones non livrées en rouge
+    drawZonesOnMap(mapInstance);
   }
 
   // Try user geolocation
@@ -781,6 +835,9 @@ function confirmMapAddress() {
   if (pendingAddress) {
     const field = document.getElementById("fieldAddress");
     if (field) field.value = pendingAddress;
+    // Sauvegarder les coords GPS pour éviter de re-geocoder à la commande
+    const ll = mapMarker?.getLatLng();
+    deliveryLatLng = ll ? { lat: ll.lat, lng: ll.lng } : null;
   }
   closeMap();
 }
@@ -798,6 +855,26 @@ async function confirmOrder() {
   if (!name)    { showToast("⚠️ Entrez votre nom complet"); return; }
   if (!phone)   { showToast("⚠️ Entrez votre numéro de téléphone"); return; }
   if (!address) { showToast("⚠️ Entrez votre adresse de livraison"); return; }
+
+  // Vérification zone non livrée
+  try {
+    const zones = JSON.parse(shopSettings.no_delivery_zones || '[]');
+    if (zones.length > 0) {
+      const btn = document.getElementById("confirmOrderBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Vérification zone…"; }
+      let coords = deliveryLatLng;
+      if (!coords) coords = await forwardGeocode(address);
+      if (coords) {
+        const blocked = getBlockedZone(coords.lat, coords.lng);
+        if (blocked) {
+          showToast(`🚫 Zone non livrée : ${blocked.name}. Appuyez sur 📍 pour voir les zones.`);
+          if (btn) { btn.disabled = false; btn.textContent = "✅ Confirmer la commande"; }
+          return;
+        }
+      }
+      if (btn) { btn.disabled = false; }
+    }
+  } catch(e) {} // Ne jamais bloquer si geocodage échoue
 
   localStorage.setItem("b83_name", name);
   localStorage.setItem("b83_phone", phone);
