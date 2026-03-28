@@ -154,6 +154,13 @@ const _upsertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) V
 
 // Migration: supprimer les catégories et produits de démonstration CBD
 try {
+  // Par nom exact (données de démo connues)
+  const demoCats = ['Fleurs CBD', 'Huiles CBD', 'Résines CBD', 'Infusions CBD', 'Cosmétiques CBD'];
+  demoCats.forEach(name => {
+    db.prepare(`DELETE FROM products WHERE category_id IN (SELECT id FROM categories WHERE name = ?)`).run(name);
+    db.prepare(`DELETE FROM categories WHERE name = ?`).run(name);
+  });
+  // Fallback large : toute catégorie contenant "CBD"
   db.prepare(`DELETE FROM products WHERE category_id IN (SELECT id FROM categories WHERE name LIKE '%CBD%')`).run();
   db.prepare(`DELETE FROM categories WHERE name LIKE '%CBD%'`).run();
 } catch(e) {}

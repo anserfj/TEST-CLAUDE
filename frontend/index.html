@@ -11,7 +11,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
   <style>
+  .zone-label{background:#ff4757!important;color:#fff!important;border:none!important;border-radius:4px!important;font-size:11px!important;font-weight:700!important;padding:2px 7px!important;white-space:nowrap!important;box-shadow:0 1px 6px rgba(0,0,0,.4)!important}
+  .zone-label::before{display:none!important}
     *{margin:0;padding:0;box-sizing:border-box}
     body{background:#080a0e;color:#eef2f7;font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
     ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0f1318}::-webkit-scrollbar-thumb{background:#1e2530;border-radius:2px}
@@ -1670,58 +1674,83 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
 function ZonesMapCard({zones,onZonesChange,onSave,saved}){
   const mapDiv=useRef(null);
   const mapInst=useRef(null);
+  const drawnItems=useRef(null);
   const zonesRef=useRef(zones);
-  const markersRef=useRef([]);
-  const pendingMarkerRef=useRef(null);
   const onChangeRef=useRef(onZonesChange);
-  const [pending,setPending]=useState(null);
+  const [pending,setPending]=useState(null); // {layer, layerType}
   const [pendingName,setPendingName]=useState("");
 
   useEffect(()=>{zonesRef.current=zones;},[zones]);
   useEffect(()=>{onChangeRef.current=onZonesChange;},[onZonesChange]);
 
+  /* Reconstruit un layer Leaflet à partir d'une zone sauvegardée */
+  const layerFromZone=z=>{
+    if(!window.L)return null;
+    try{
+      const style={color:"#ff4757",fillColor:"#ff4757",fillOpacity:0.2,weight:2};
+      if(z.type==="circle")return window.L.circle([z.center[0],z.center[1]],{...style,radius:z.radius});
+      return window.L.polygon(z.coords,style);
+    }catch{return null;}
+  };
+
+  /* Sérialise un layer Leaflet dessiné en objet zone */
+  const zoneFromLayer=(layer,layerType,name)=>{
+    if(layerType==="circle"){
+      const ll=layer.getLatLng();
+      return{name,type:"circle",center:[ll.lat,ll.lng],radius:Math.round(layer.getRadius())};
+    }
+    const lls=layer.getLatLngs()[0];
+    return{name,type:"polygon",coords:lls.map(ll=>[ll.lat,ll.lng])};
+  };
+
+  /* Init carte — une seule fois */
   useEffect(()=>{
     if(!mapDiv.current||!window.L||mapInst.current)return;
     const map=window.L.map(mapDiv.current).setView([43.46,6.22],9);
     window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:18}).addTo(map);
-    map.on('click',e=>{
-      if(pendingMarkerRef.current){pendingMarkerRef.current.remove();pendingMarkerRef.current=null;}
-      const m=window.L.marker([e.latlng.lat,e.latlng.lng]).addTo(map);
-      pendingMarkerRef.current=m;
-      setPending({lat:parseFloat(e.latlng.lat.toFixed(5)),lng:parseFloat(e.latlng.lng.toFixed(5))});
-      setPendingName("");
-    });
+    const features=window.L.featureGroup().addTo(map);
+    drawnItems.current=features;
+
+    if(window.L.Control?.Draw){
+      const shapeStyle={color:"#ff4757",fillColor:"#ff4757",fillOpacity:0.2,weight:2};
+      const ctrl=new window.L.Control.Draw({
+        draw:{
+          polygon:{shapeOptions:shapeStyle,showArea:false,showLength:false},
+          circle:{shapeOptions:shapeStyle},
+          rectangle:{shapeOptions:shapeStyle},
+          polyline:false,marker:false,circlemarker:false
+        },
+        edit:false
+      });
+      map.addControl(ctrl);
+      map.on(window.L.Draw.Event.CREATED,e=>{
+        setPending({layer:e.layer,layerType:e.layerType});
+        setPendingName("");
+      });
+    }
+
     mapInst.current=map;
     return()=>{if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
   },[]);
 
+  /* Redessine les zones sur la carte à chaque changement */
   useEffect(()=>{
-    if(!mapInst.current||!window.L)return;
-    markersRef.current.forEach(m=>m.remove());
-    markersRef.current=[];
+    if(!mapInst.current||!drawnItems.current||!window.L)return;
+    drawnItems.current.clearLayers();
     zones.forEach(z=>{
-      const icon=window.L.divIcon({html:`<div style="background:#ff4757;color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.5)">${z.name}</div>`,className:'',iconAnchor:[0,10]});
-      const m=window.L.marker([z.lat,z.lng],{icon}).addTo(mapInst.current);
-      m.on('click',()=>{
-        const updated=zonesRef.current.filter(x=>!(x.lat===z.lat&&x.lng===z.lng));
-        zonesRef.current=updated;
-        onChangeRef.current(updated);
-      });
-      markersRef.current.push(m);
+      const layer=layerFromZone(z);
+      if(!layer)return;
+      layer.addTo(drawnItems.current);
+      layer.bindTooltip(z.name,{permanent:true,direction:"center",className:"zone-label"});
     });
   },[zones]);
 
   const confirmAdd=()=>{
     if(!pending||!pendingName.trim())return;
-    if(pendingMarkerRef.current){pendingMarkerRef.current.remove();pendingMarkerRef.current=null;}
-    const z={...pending,name:pendingName.trim()};
-    const updated=[...zonesRef.current,z];
+    const zone=zoneFromLayer(pending.layer,pending.layerType,pendingName.trim());
+    const updated=[...zonesRef.current,zone];
     zonesRef.current=updated;
     onChangeRef.current(updated);
-    setPending(null);setPendingName("");
-  };
-  const cancelAdd=()=>{
-    if(pendingMarkerRef.current){pendingMarkerRef.current.remove();pendingMarkerRef.current=null;}
     setPending(null);setPendingName("");
   };
 
@@ -1730,23 +1759,27 @@ function ZonesMapCard({zones,onZonesChange,onSave,saved}){
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>🗺️ Zones non livrées</div>
       {saved&&<span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sauvegardé</span>}
     </div>
-    <div style={{fontSize:12,color:C.text3,marginBottom:10}}>Cliquez sur la carte pour poser un marqueur sur une zone où vous ne livrez pas. Cliquez sur un marqueur rouge pour le supprimer.</div>
-    {window.L
-      ?<div ref={mapDiv} style={{height:300,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:8}}/>
-      :<div style={{height:80,display:"flex",alignItems:"center",justifyContent:"center",color:C.text3,fontSize:13,border:`1px solid ${C.border}`,borderRadius:8,marginBottom:8}}>Chargement de la carte…</div>
-    }
+    <div style={{fontSize:12,color:C.text3,marginBottom:10}}>
+      Utilisez les outils en haut à gauche pour dessiner une zone (polygone, rectangle, cercle). Zones rouges = secteurs non livrés.
+    </div>
+    <div ref={mapDiv} style={{height:360,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:8}}/>
     {pending&&<div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center",padding:"8px 10px",background:C.surface,borderRadius:8,border:`1px solid ${C.accentMid}`}}>
-      <span style={{fontSize:12,color:C.text3,whiteSpace:"nowrap"}}>📍 Nom :</span>
-      <input autoFocus value={pendingName} onChange={e=>setPendingName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&confirmAdd()} placeholder="Ex: Draguignan, Zone nord..."
+      <span style={{fontSize:12,color:C.text3,whiteSpace:"nowrap"}}>📍 Nom de la zone :</span>
+      <input autoFocus value={pendingName} onChange={e=>setPendingName(e.target.value)}
+        onKeyDown={e=>e.key==="Enter"&&confirmAdd()}
+        placeholder="Ex: Draguignan, Toulon-est…"
         style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,color:C.text1,fontSize:13,padding:"5px 9px",outline:"none"}}
         onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-      <Btn onClick={confirmAdd} disabled={!pendingName.trim()} style={{fontSize:11,padding:"5px 10px"}}>Ajouter</Btn>
-      <Btn variant="ghost" onClick={cancelAdd} style={{fontSize:11,padding:"5px 10px"}}>✕</Btn>
+      <Btn onClick={confirmAdd} disabled={!pendingName.trim()} style={{fontSize:11,padding:"5px 10px"}}>Valider</Btn>
+      <Btn variant="ghost" onClick={()=>{setPending(null);setPendingName("");}} style={{fontSize:11,padding:"5px 10px"}}>✕</Btn>
     </div>}
     <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12,minHeight:28}}>
       {zones.length===0
-        ?<span style={{fontSize:12,color:C.text3}}>Aucune zone exclue · Cliquez sur la carte pour en ajouter</span>
-        :zones.map((z,i)=><span key={i} onClick={()=>onZonesChange(zones.filter((_,j)=>j!==i))} style={{fontSize:11,padding:"3px 9px",background:"#ff475715",color:"#ff4757",border:"1px solid #ff475730",borderRadius:20,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4}}>✕ {z.name}</span>)
+        ?<span style={{fontSize:12,color:C.text3}}>Aucune zone — dessinez sur la carte pour en ajouter</span>
+        :zones.map((z,i)=><span key={i} onClick={()=>onZonesChange(zones.filter((_,j)=>j!==i))}
+            style={{fontSize:11,padding:"3px 9px",background:"#ff475715",color:"#ff4757",border:"1px solid #ff475730",borderRadius:20,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4}}>
+            {z.type==="circle"?"⭕":"▭"} {z.name} <span style={{opacity:.6}}>✕</span>
+          </span>)
       }
     </div>
     <Btn onClick={onSave} style={{fontSize:13}}>Sauvegarder les zones</Btn>
