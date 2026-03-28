@@ -43,7 +43,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
   fileFilter: (req, file, cb) => {
-    const allowed = /image\/(jpeg|png|gif|webp)|video\/(mp4|webm|ogg)/;
+    const allowed = /image\/(jpeg|png|gif|webp)|video\/(mp4|webm|ogg|quicktime|mov|x-msvideo|x-matroska)/;
     cb(null, allowed.test(file.mimetype));
   }
 });

@@ -1219,13 +1219,8 @@ function CategoriesPage(){
   };
 
   const del=async(id,name)=>{
-    if(!confirm(`Désactiver "${name}" ?`))return;
-    try{await apiDelete("/api/categories/"+id);setCats(prev=>prev.map(c=>c.id===id?{...c,active:0}:c));showToast("✓ Désactivée")}catch(e){showToast("Erreur: "+e.message)}
-  };
-
-  const restore=async(id)=>{
-    const cat=cats.find(c=>c.id===id);if(!cat)return;
-    try{await apiPut("/api/categories/"+id,{name:cat.name,emoji:cat.emoji,active:1,sort_order:cat.sort_order});setCats(prev=>prev.map(c=>c.id===id?{...c,active:1}:c));showToast("✓ Réactivée")}catch(e){showToast("Erreur: "+e.message)}
+    if(!confirm(`Supprimer définitivement "${name}" et tous ses produits ?`))return;
+    try{await apiDelete("/api/categories/"+id);setCats(prev=>prev.filter(c=>c.id!==id));showToast("✓ Supprimée")}catch(e){showToast("Erreur: "+e.message)}
   };
 
   const formJsx=<div style={{display:"flex",flexDirection:"column",gap:10,padding:"16px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:10}}>
@@ -1250,7 +1245,7 @@ function CategoriesPage(){
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
       <div>
         <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Catégories</div>
-        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{cats.filter(c=>c.active!==0).length} actives · {cats.filter(c=>c.active===0).length} inactives</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{cats.length} catégorie{cats.length>1?"s":""}</div>
       </div>
       <Btn onClick={startNew} style={{fontSize:13}}>+ Nouvelle</Btn>
     </div>
@@ -1263,18 +1258,15 @@ function CategoriesPage(){
         const isEditing=editId===c.id;
         return<div key={c.id}>
           {isEditing&&formJsx}
-          {!isEditing&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:C.card,border:`1px solid ${c.active!==0?C.border:"#ff475730"}`,borderRadius:10,opacity:c.active===0?.6:1}}>
+          {!isEditing&&<div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:C.card,border:`1px solid ${C.border}`,borderRadius:10}}>
             <span style={{fontSize:22,width:30,textAlign:"center",flexShrink:0}}>{c.emoji||"🌿"}</span>
             <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:600,color:c.active===0?C.text3:C.text1}}>{c.name}</div>
-              <div style={{fontSize:11,color:C.text3}}>Ordre #{c.sort_order||0} · {c.active===0?"Inactive":"Active"}</div>
+              <div style={{fontSize:14,fontWeight:600,color:C.text1}}>{c.name}</div>
+              <div style={{fontSize:11,color:C.text3}}>Ordre #{c.sort_order||0}</div>
             </div>
             <div style={{display:"flex",gap:6}}>
-              {c.active===0
-                ?<Btn variant="ghost" onClick={()=>restore(c.id)} style={{fontSize:11,padding:"4px 10px"}}>Réactiver</Btn>
-                :<><Btn variant="ghost" onClick={()=>startEdit(c)} style={{fontSize:11,padding:"4px 10px"}}>Modifier</Btn>
-                  <Btn variant="danger" onClick={()=>del(c.id,c.name)} style={{fontSize:11,padding:"4px 10px"}}>Désactiver</Btn></>
-              }
+              <Btn variant="ghost" onClick={()=>startEdit(c)} style={{fontSize:11,padding:"4px 10px"}}>Modifier</Btn>
+              <Btn variant="danger" onClick={()=>del(c.id,c.name)} style={{fontSize:11,padding:"4px 10px"}}>🗑 Supprimer</Btn>
             </div>
           </div>}
         </div>
