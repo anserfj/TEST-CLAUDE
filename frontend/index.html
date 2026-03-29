@@ -280,9 +280,6 @@ function DashboardPage({orders,products,setPage}){
   const newOrders=orders.filter(o=>o.status==="pending").length;
   const shipped=orders.filter(o=>o.status==="shipped").length;
   const avgOrder=active.length?totalCA/active.length:0;
-  const lowStock=products.filter(p=>p.stock<50&&p.stock>0).length;
-  const outStock=products.filter(p=>p.stock===0).length;
-
   // Tendance : cette semaine vs semaine précédente
   const weekCA=(offset=0)=>{
     const start=new Date(now);start.setDate(start.getDate()-offset*7-7);
@@ -333,18 +330,6 @@ function DashboardPage({orders,products,setPage}){
       <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub={`${active.length} actives`} color={C.green} onClick={()=>setPage("orders")}/>
       <StatCard icon="💳" label="Panier moyen" value={fmt(avgOrder)} sub={`${monthOrders.length} cmd ce mois`} color={C.purple}/>
     </div>
-
-    {/* Alertes */}
-    {(lowStock>0||outStock>0)&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-      {outStock>0&&<div style={{flex:1,minWidth:200,padding:"11px 14px",background:"#ff475710",border:`1px solid ${C.red}33`,borderRadius:10,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setPage("catalog")}>
-        <span style={{fontSize:18}}>⚠️</span>
-        <div><div style={{fontSize:13,fontWeight:600,color:C.red}}>{outStock} produit{outStock>1?"s":""} épuisé{outStock>1?"s":""}</div><div style={{fontSize:11,color:C.text3}}>Cliquer pour mettre à jour</div></div>
-      </div>}
-      {lowStock>0&&<div style={{flex:1,minWidth:200,padding:"11px 14px",background:"#ff9f4310",border:`1px solid ${C.orange}33`,borderRadius:10,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>setPage("catalog")}>
-        <span style={{fontSize:18}}>📉</span>
-        <div><div style={{fontSize:13,fontWeight:600,color:C.orange}}>{lowStock} produit{lowStock>1?"s":""} stock faible</div><div style={{fontSize:11,color:C.text3}}>&lt; 50 unités</div></div>
-      </div>}
-    </div>}
 
     <div className="dash-grid-2" style={{gap:16}}>
       {/* CA 14 jours */}
@@ -497,10 +482,6 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
 
   useEffect(()=>{if(selected)setNote(selected.note||"")},[selected]);
 
-  // ── Gestion intelligente du stock ──────────────────────────────
-  // Stock déduit quand : nouveau → payé
-  // Stock remis quand  : annulé (depuis n'importe quel statut sauf nouveau)
-  // Stock re-déduit si : annulé → payé
   const updateStatus=async(id,status)=>{
     setUpdating(true);
     try{
@@ -513,7 +494,6 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
 
       const items=parseItems(order.items);
 
-      /* stock auto-adjust removed */
     }catch(e){showToast("❌ "+e.message.slice(0,100))}
 
     /* auto-messages handled by bot */
@@ -931,7 +911,7 @@ function ClientsPage({orders,setOrders}){
 }
 
 /* ── CATALOG ── */
-const EMPTY={name:"",category_id:"",unit:"g",price:"",stock:"",thc_percent:"",cbd_percent:"",description:"",active:1,medias:[],tiers:[]};
+const EMPTY={name:"",category_id:"",unit:"g",price:"",thc_percent:"",cbd_percent:"",description:"",active:1,medias:[],tiers:[]};
 
 function CatalogPage({products,setProducts,loading,reload}){
   const [filter,setFilter]=useState("tous");
@@ -957,7 +937,7 @@ function CatalogPage({products,setProducts,loading,reload}){
     const gal=Array.isArray(p.gallery)?p.gallery:(p.gallery?JSON.parse(p.gallery||"[]"):[]);
     gal.forEach(url=>{if(url&&!em.find(m=>m.url===url))em.push({url,type:isVideo(url)?"video":"image"})});
     const tiersArr=Array.isArray(p.tiers)?p.tiers:(p.tiers?JSON.parse(p.tiers||"[]"):[]);
-    setForm({name:p.name,category_id:String(p.category_id||""),unit:p.unit||"g",price:String(p.price),stock:String(p.stock),thc_percent:String(p.thc_percent||""),cbd_percent:String(p.cbd_percent||""),description:p.description||"",active:p.active??1,medias:em,tiers:tiersArr});
+    setForm({name:p.name,category_id:String(p.category_id||""),unit:p.unit||"g",price:String(p.price),thc_percent:String(p.thc_percent||""),cbd_percent:String(p.cbd_percent||""),description:p.description||"",active:p.active??1,medias:em,tiers:tiersArr});
     setModal(p);
   };
 
@@ -974,7 +954,6 @@ function CatalogPage({products,setProducts,loading,reload}){
       name:form.name,
       description:form.description||null,
       price:form.price?parseFloat(form.price):0,
-      stock:parseInt(form.stock)||0,
       unit:form.unit||"g",
       thc_percent:form.thc_percent?parseFloat(form.thc_percent):null,
       cbd_percent:form.cbd_percent?parseFloat(form.cbd_percent):null,
@@ -994,8 +973,8 @@ function CatalogPage({products,setProducts,loading,reload}){
   const remove=async id=>{if(!confirm("Supprimer ?"))return;try{await apiDelete("/api/products/"+id);setProducts(prev=>prev.filter(p=>p.id!==id));showToast("🗑️ Supprimé")}catch(e){showToast("❌ "+e.message.slice(0,100))}};
 
   const duplicate=async p=>{
-    const body={category_id:p.category_id||null,name:`${p.name} (copie)`,description:p.description||null,price:p.price,stock:0,unit:p.unit||"g",thc_percent:p.thc_percent||null,cbd_percent:p.cbd_percent||null,active:1};
-    try{const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué — stock mis à 0")}catch(e){showToast("❌ "+e.message.slice(0,100))}
+    const body={category_id:p.category_id||null,name:`${p.name} (copie)`,description:p.description||null,price:p.price,unit:p.unit||"g",thc_percent:p.thc_percent||null,cbd_percent:p.cbd_percent||null,active:1};
+    try{const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Dupliqué")}catch(e){showToast("❌ "+e.message.slice(0,100))}
   };
 
   const bulkToggleActive=async(active)=>{
@@ -1004,10 +983,6 @@ function CatalogPage({products,setProducts,loading,reload}){
       if(p)try{await apiPut("/api/products/"+id,{...p,active});setProducts(prev=>prev.map(x=>x.id===id?{...x,active}:x))}catch(e){}
     }
     setBulkSelected([]);showToast(`✅ ${bulkSelected.length} produits mis à jour`);
-  };
-
-  const updateStock=async(p,newStock)=>{
-    try{await apiPut("/api/products/"+p.id,{...p,stock:newStock});setProducts(prev=>prev.map(x=>x.id===p.id?{...x,stock:newStock}:x))}catch(e){showToast("❌ "+e.message.slice(0,100))}
   };
 
   const filtered=useMemo(()=>{
@@ -1050,7 +1025,7 @@ function CatalogPage({products,setProducts,loading,reload}){
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr style={{borderBottom:`1px solid ${C.border}`,background:C.surface}}>
             <th style={{padding:"10px 14px",width:32}}><input type="checkbox" onChange={e=>setBulkSelected(e.target.checked?filtered.map(p=>p.id):[])}/></th>
-            {["Produit","Catégorie","Prix","Stock","Statut","Actions"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>)}
+            {["Produit","Catégorie","Prix","Statut","Actions"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:10,color:C.text3,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>)}
           </tr></thead>
           <tbody>
             {filtered.map((p,i)=>{
@@ -1073,12 +1048,6 @@ function CatalogPage({products,setProducts,loading,reload}){
                   <div style={{fontSize:13,fontWeight:700,color:C.accent}}>{fmt(p.price)}</div>
                   <div style={{fontSize:11,color:C.text3}}>{p.unit}</div>
                 </td>
-                <td style={{padding:"10px 14px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:14,fontWeight:700,color:p.stock===0?C.red:p.stock<50?C.orange:C.green}}>{p.stock}</span>
-                    <input type="number" defaultValue={p.stock} min="0" onBlur={e=>parseInt(e.target.value)!==p.stock&&updateStock(p,parseInt(e.target.value)||0)} style={{width:60,background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,color:C.text1,fontSize:12,padding:"3px 7px",outline:"none"}}/>
-                  </div>
-                </td>
                 <td style={{padding:"10px 14px"}}><span style={{fontSize:10,padding:"2px 7px",borderRadius:4,background:p.active?"#00e67618":"#ff475718",color:p.active?C.green:C.red,border:"1px solid currentColor",fontWeight:700}}>{p.active?"ACTIF":"INACTIF"}</span></td>
                 <td style={{padding:"10px 14px"}}>
                   <div style={{display:"flex",gap:6}}>
@@ -1096,14 +1065,11 @@ function CatalogPage({products,setProducts,loading,reload}){
       <div className="catalog-grid">
         {filtered.map(p=>{
           const mainImg=p.image_url;const mainVid=p.video_url;
-          const epuise=p.stock===0;const faible=!epuise&&p.stock<50;
           return<Card key={p.id} style={{padding:0,overflow:"hidden",cursor:"pointer"}} onClick={()=>openEdit(p)}>
             <div style={{height:130,background:C.surface,position:"relative",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
               {mainVid?<video src={mainVid} style={{width:"100%",height:"100%",objectFit:"cover"}} autoPlay muted loop playsInline/>
                :mainImg?<img src={mainImg} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>
                :<span style={{fontSize:40}}>{p.category_emoji||"📦"}</span>}
-              {epuise&&<div style={{position:"absolute",inset:0,background:"#00000066",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{background:C.red,color:"#fff",fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:5}}>ÉPUISÉ</span></div>}
-              {!epuise&&faible&&<span style={{position:"absolute",top:6,left:6,background:C.orange,color:"#000",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3}}>STOCK FAIBLE</span>}
               {!p.active&&<span style={{position:"absolute",top:6,right:6,background:"#ff475788",color:"#fff",fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:3}}>INACTIF</span>}
               <input type="checkbox" checked={bulkSelected.includes(p.id)} onChange={e=>{e.stopPropagation();setBulkSelected(prev=>e.target.checked?[...prev,p.id]:prev.filter(x=>x!==p.id))}} onClick={e=>e.stopPropagation()} style={{position:"absolute",bottom:6,right:6,width:16,height:16,cursor:"pointer"}}/>
             </div>
@@ -1114,10 +1080,9 @@ function CatalogPage({products,setProducts,loading,reload}){
                 <span style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.accent}}>{fmt(p.price)}</span>
                 <span style={{fontSize:11,color:C.text3}}>{p.unit}</span>
               </div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span style={{fontSize:11,color:p.stock===0?C.red:p.stock<50?C.orange:C.green,fontWeight:600}}>Stock: {p.stock}</span>
-                {(p.thc_percent||p.cbd_percent)&&<span style={{fontSize:10,color:C.accent}}>{p.thc_percent?`THC ${p.thc_percent}%`:""}{p.thc_percent&&p.cbd_percent?" ":""}{p.cbd_percent?`CBD ${p.cbd_percent}%`:""}</span>}
-              </div>
+              {(p.thc_percent||p.cbd_percent)&&<div style={{display:"flex",alignItems:"center"}}>
+                <span style={{fontSize:10,color:C.accent}}>{p.thc_percent?`THC ${p.thc_percent}%`:""}{p.thc_percent&&p.cbd_percent?" ":""}{p.cbd_percent?`CBD ${p.cbd_percent}%`:""}</span>
+              </div>}
               <div style={{display:"flex",gap:6,marginTop:8}} onClick={e=>e.stopPropagation()}>
                 <Btn variant="ghost" style={{flex:1,justifyContent:"center",padding:"5px",fontSize:11}} onClick={()=>openEdit(p)}>✏️</Btn>
                 <Btn variant="ghost" style={{padding:"5px 8px",fontSize:11}} title="Dupliquer" onClick={()=>duplicate(p)}>⧉</Btn>
@@ -1153,7 +1118,6 @@ function CatalogPage({products,setProducts,loading,reload}){
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <Inp label={hasTiers?"Prix (€) — optionnel si paliers":"Prix (€)"} type="number" value={form.price} onChange={v=>setF({price:v})} required={!hasTiers} min="0" note={hasTiers?"Laissez vide si uniquement des paliers":"Prix de vente"}/>
-            <Inp label="Stock" type="number" value={form.stock} onChange={v=>setF({stock:v})} min="0"/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
             <Inp label="Unité" value={form.unit} onChange={v=>setF({unit:v})} placeholder="g"/>

@@ -319,10 +319,9 @@ function openModal(productId) {
       <div class="modal-name">${p.name}</div>
       ${p.description ? `<div class="modal-desc">${p.description}</div>` : ""}
       ${pricingHtml}
-      <button class="modal-add-btn" id="modalAddBtn" onclick="addToCartFromModal(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>
-        ${p.stock <= 0 ? "Rupture de stock" : "Ajouter au panier"}
+      <button class="modal-add-btn" id="modalAddBtn" onclick="addToCartFromModal(${p.id})">
+        Ajouter au panier
       </button>
-      <div class="modal-stock">Stock : ${p.stock} ${p.unit || "unité"}</div>
     </div>
   `;
 
@@ -338,7 +337,7 @@ function selectQty(idx, productId) {
   if (!p) return;
   const tier = getProductTiers(p)[idx];
   const btn = document.getElementById("modalAddBtn");
-  if (btn && p.stock > 0) {
+  if (btn) {
     btn.textContent = `Ajouter ${tier.qty}g — ${tier.price.toFixed(0)}€`;
   }
 }
@@ -350,7 +349,7 @@ function closeModal() {
 // ── CART ──
 function addToCartFromModal(productId) {
   const p = products.find(x => x.id === productId);
-  if (!p || p.stock <= 0) return;
+  if (!p) return;
 
   const isGram = (p.unit || "g").toLowerCase() === "g";
   let qty = 1;
@@ -661,7 +660,7 @@ function reorder(orderItems) {
   let added = 0;
   orderItems.forEach(item => {
     const p = products.find(x => x.id === item.product_id);
-    if (!p || p.stock <= 0) return;
+    if (!p) return;
     const isGram = (p.unit || 'g').toLowerCase() === 'g';
     if (isGram) {
       const tiers = getProductTiers(p);

@@ -74,26 +74,20 @@ router.get('/products/:id', (req, res) => {
 });
 
 router.post('/products', (req, res) => {
-  const { category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active, image_url, video_url, tiers } = req.body;
+  const { category_id, name, description, price, unit, thc_percent, cbd_percent, active, image_url, video_url, tiers } = req.body;
   const result = db.prepare(`
-    INSERT INTO products (category_id, name, description, price, stock, unit, thc_percent, cbd_percent, active, image_url, video_url, tiers)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(category_id, name, description, price, stock || 0, unit || 'g', thc_percent || 0, cbd_percent || 0, active !== false ? 1 : 0, image_url || null, video_url || null, tiers?.length ? JSON.stringify(tiers) : null);
+    INSERT INTO products (category_id, name, description, price, unit, thc_percent, cbd_percent, active, image_url, video_url, tiers)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(category_id, name, description, price, unit || 'g', thc_percent || 0, cbd_percent || 0, active !== false ? 1 : 0, image_url || null, video_url || null, tiers?.length ? JSON.stringify(tiers) : null);
   res.json({ id: result.lastInsertRowid, ...req.body });
 });
 
 router.put('/products/:id', (req, res) => {
-  const { name, description, price, stock, unit, thc_percent, cbd_percent, active, category_id, image_url, video_url, tiers } = req.body;
+  const { name, description, price, unit, thc_percent, cbd_percent, active, category_id, image_url, video_url, tiers } = req.body;
   db.prepare(`
-    UPDATE products SET name=?, description=?, price=?, stock=?, unit=?, thc_percent=?, cbd_percent=?, active=?, category_id=?, image_url=?, video_url=?, tiers=?
+    UPDATE products SET name=?, description=?, price=?, unit=?, thc_percent=?, cbd_percent=?, active=?, category_id=?, image_url=?, video_url=?, tiers=?
     WHERE id=?
-  `).run(name, description, price, stock, unit, thc_percent, cbd_percent, active ? 1 : 0, category_id, image_url || null, video_url || null, tiers?.length ? JSON.stringify(tiers) : null, req.params.id);
-  res.json({ success: true });
-});
-
-router.patch('/products/:id/stock', (req, res) => {
-  const { stock } = req.body;
-  db.prepare('UPDATE products SET stock = ? WHERE id = ?').run(stock, req.params.id);
+  `).run(name, description, price, unit, thc_percent, cbd_percent, active ? 1 : 0, category_id, image_url || null, video_url || null, tiers?.length ? JSON.stringify(tiers) : null, req.params.id);
   res.json({ success: true });
 });
 
@@ -337,7 +331,6 @@ router.get('/stats', (req, res) => {
   const pendingOrders = db.prepare("SELECT COUNT(*) as c FROM orders WHERE status = 'pending'").get().c;
   const totalRevenue = db.prepare("SELECT COALESCE(SUM(total), 0) as s FROM orders WHERE status != 'cancelled'").get().s;
   const totalUsers = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
-  const lowStock = db.prepare('SELECT COUNT(*) as c FROM products WHERE stock <= 5 AND active = 1').get().c;
   const unreadMessages = db.prepare('SELECT COUNT(*) as c FROM messages WHERE read = 0 AND from_admin = 0').get().c;
 
   const recentOrders = db.prepare(`
@@ -373,7 +366,7 @@ router.get('/stats', (req, res) => {
 
   res.json({
     totalOrders, pendingOrders, totalRevenue, totalUsers,
-    lowStock, unreadMessages, recentOrders, topProducts, revenueByCategory, topClients
+    unreadMessages, recentOrders, topProducts, revenueByCategory, topClients
   });
 });
 
@@ -446,13 +439,6 @@ router.post('/miniapp/order', (req, res) => {
     return { ...item, prod };
   });
 
-  // Check stock
-  for (const item of itemsWithDetails) {
-    if (!item.prod || item.prod.stock < item.quantity) {
-      return res.status(400).json({ error: `Stock insuffisant pour ${item.prod?.name || 'un produit'}` });
-    }
-  }
-
   // Update user phone/address
   db.prepare('UPDATE users SET phone = ?, address = ? WHERE telegram_id = ?')
     .run(delivery_phone, delivery_address, telegram_id);
@@ -473,7 +459,6 @@ router.post('/miniapp/order', (req, res) => {
       db.prepare(
         'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)'
       ).run(orderId, item.product_id, item.quantity, item.unit_price, item.quantity * item.unit_price);
-      db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(item.quantity, item.product_id);
     }
     if (appliedPromo) {
       db.prepare('UPDATE promos SET uses_count = uses_count + 1 WHERE id = ?').run(appliedPromo.id);
