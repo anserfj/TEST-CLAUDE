@@ -1088,9 +1088,14 @@ function CatalogPage({products,setProducts,loading,reload}){
             <div style={{padding:12}}>
               <div style={{fontSize:10,color:C.text3,letterSpacing:".06em",marginBottom:2}}>{p.category_emoji||""} {p.category_name||"Sans catégorie"}</div>
               <div style={{fontSize:13,fontWeight:600,marginBottom:4,lineHeight:1.3}}>{p.name}</div>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                <span style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.accent}}>{fmt(p.price)}</span>
-                <span style={{fontSize:11,color:C.text3}}>{p.unit}</span>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+                {parseFloat(p.price)>0
+                  ?<><span style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.accent}}>{fmt(p.price)}</span><span style={{fontSize:11,color:C.text3}}>{p.unit}</span></>
+                  :(()=>{const t=Array.isArray(p.tiers)?p.tiers:(p.tiers?JSON.parse(p.tiers||"[]"):[]);return t.length>0
+                    ?t.map((tier,i)=><span key={i} style={{fontSize:11,color:C.accent,background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 6px"}}>{tier.qty}g·{tier.price}€</span>)
+                    :<span style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.accent}}>{fmt(p.price)}</span>;
+                  })()
+                }
               </div>
               {(p.thc_percent||p.cbd_percent)&&<div style={{display:"flex",alignItems:"center"}}>
                 <span style={{fontSize:10,color:C.accent}}>{p.thc_percent?`THC ${p.thc_percent}%`:""}{p.thc_percent&&p.cbd_percent?" ":""}{p.cbd_percent?`CBD ${p.cbd_percent}%`:""}</span>
