@@ -449,7 +449,7 @@ router.post('/miniapp/order', (req, res) => {
 
   // Fetch product details for recap
   const itemsWithDetails = items.map(item => {
-    const prod = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id);
+    const prod = db.prepare('SELECT p.*, c.name as category_name, c.emoji as category_emoji FROM products p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = ?').get(item.product_id);
     return { ...item, prod };
   });
 
@@ -504,6 +504,20 @@ router.post('/miniapp/order', (req, res) => {
     return `• <b>${esc(prodName)}</b> × ${i.quantity}${unit} — ${subtotal}€`;
   }).join('\n');
 
+  // Build category summary
+  const catMap = {};
+  itemsWithDetails.forEach(i => {
+    const catName = i.prod?.category_name || 'Autre';
+    const catEmoji = i.prod?.category_emoji || '📦';
+    const key = catName;
+    if (!catMap[key]) catMap[key] = { emoji: catEmoji, name: catName, qty: 0, unit: i.prod?.unit || 'u', total: 0 };
+    catMap[key].qty += i.quantity;
+    catMap[key].total += i.unit_price * i.quantity;
+  });
+  const catLines = Object.values(catMap).map(c =>
+    `• ${c.emoji} <b>${esc(c.name)}</b> × ${c.qty}${c.unit} — ${c.total.toFixed(2)}€`
+  ).join('\n');
+
   // ── GROUP notification (max details, HTML format) ──
   const groupMsg =
     `🛍️ <b>NOUVELLE COMMANDE #${orderId}</b>\n${sep}\n\n` +
@@ -516,6 +530,8 @@ router.post('/miniapp/order', (req, res) => {
     (notes ? `📝 Notes: ${esc(notes)}\n` : '') +
     `\n${sep}\n\n` +
     `🛒 <b>ARTICLES</b>\n${itemsLines}\n\n` +
+    `${sep}\n\n` +
+    `🗂 <b>PAR CATÉGORIE</b>\n${catLines}\n\n` +
     `${sep}\n` +
     `💰 <b>TOTAL: ${parseFloat(total).toFixed(2)}€</b>\n` +
     `📅 ${now}`;
