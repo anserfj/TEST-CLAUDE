@@ -386,8 +386,6 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 }
 .modal-add-btn:active { transform: scale(.96); }
 .modal-add-btn:disabled { opacity: .35; pointer-events: none; }
-.modal-stock { font-size: .72rem; color: var(--text3); text-align: center; margin-top: 8px; }
-
 /* ── TOAST ── */
 .toast {
   position: fixed; bottom: calc(var(--tabs-h) + 10px); left: 50%;
