@@ -98,6 +98,8 @@ db.exec(`
 try { db.exec(`ALTER TABLE products ADD COLUMN tiers TEXT`); } catch(e) {}
 // Migrate: add video_url column to products
 try { db.exec(`ALTER TABLE products ADD COLUMN video_url TEXT`); } catch(e) {}
+// Migrate: add gallery column to products
+try { db.exec(`ALTER TABLE products ADD COLUMN gallery TEXT`); } catch(e) {}
 // Migrate: add is_broadcast column to messages
 try { db.exec(`ALTER TABLE messages ADD COLUMN is_broadcast INTEGER DEFAULT 0`); } catch(e) {}
 // Migrate: add notes column to users

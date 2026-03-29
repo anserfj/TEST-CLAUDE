@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db/database.js';
 import { notifyGroupOrder, notifyGroup, sendMessageToUser } from '../bot/bot.js';
 import multer from 'multer';
+import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
 
@@ -48,8 +49,20 @@ const upload = multer({
   }
 });
 
-router.post('/upload', upload.single('file'), (req, res) => {
+router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file or invalid type' });
+  if (req.file.mimetype.startsWith('image/')) {
+    try {
+      const newFilename = req.file.filename.replace(/\.[^.]+$/, '.jpg');
+      const outPath = path.join(UPLOAD_DIR, newFilename);
+      await sharp(req.file.path)
+        .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toFile(outPath);
+      fs.unlinkSync(req.file.path);
+      return res.json({ url: `/uploads/${newFilename}` });
+    } catch(e) { console.error('sharp error:', e.message); }
+  }
   res.json({ url: `/uploads/${req.file.filename}` });
 });
 
@@ -74,20 +87,20 @@ router.get('/products/:id', (req, res) => {
 });
 
 router.post('/products', (req, res) => {
-  const { category_id, name, description, price, unit, thc_percent, cbd_percent, active, image_url, video_url, tiers } = req.body;
+  const { category_id, name, description, price, unit, thc_percent, cbd_percent, active, image_url, video_url, tiers, gallery } = req.body;
   const result = db.prepare(`
-    INSERT INTO products (category_id, name, description, price, unit, thc_percent, cbd_percent, active, image_url, video_url, tiers)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(category_id, name, description, price, unit || 'g', thc_percent || 0, cbd_percent || 0, active !== false ? 1 : 0, image_url || null, video_url || null, tiers?.length ? JSON.stringify(tiers) : null);
+    INSERT INTO products (category_id, name, description, price, unit, thc_percent, cbd_percent, active, image_url, video_url, tiers, gallery)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(category_id, name, description, price, unit || 'g', thc_percent || 0, cbd_percent || 0, active !== false ? 1 : 0, image_url || null, video_url || null, tiers?.length ? JSON.stringify(tiers) : null, gallery || null);
   res.json({ id: result.lastInsertRowid, ...req.body });
 });
 
 router.put('/products/:id', (req, res) => {
-  const { name, description, price, unit, thc_percent, cbd_percent, active, category_id, image_url, video_url, tiers } = req.body;
+  const { name, description, price, unit, thc_percent, cbd_percent, active, category_id, image_url, video_url, tiers, gallery } = req.body;
   db.prepare(`
-    UPDATE products SET name=?, description=?, price=?, unit=?, thc_percent=?, cbd_percent=?, active=?, category_id=?, image_url=?, video_url=?, tiers=?
+    UPDATE products SET name=?, description=?, price=?, unit=?, thc_percent=?, cbd_percent=?, active=?, category_id=?, image_url=?, video_url=?, tiers=?, gallery=?
     WHERE id=?
-  `).run(name, description, price, unit, thc_percent, cbd_percent, active ? 1 : 0, category_id, image_url || null, video_url || null, tiers?.length ? JSON.stringify(tiers) : null, req.params.id);
+  `).run(name, description, price, unit, thc_percent, cbd_percent, active ? 1 : 0, category_id, image_url || null, video_url || null, tiers?.length ? JSON.stringify(tiers) : null, gallery || null, req.params.id);
   res.json({ success: true });
 });
 

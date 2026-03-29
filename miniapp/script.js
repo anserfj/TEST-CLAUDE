@@ -257,6 +257,32 @@ function renderProducts() {
   }).join("");
 }
 
+// ── GALLERY HELPERS ──
+let _gal = [], _galIdx = 0;
+
+function _galMediaHtml(url, name, emoji) {
+  if (!url) return `<span style="font-size:48px">${emoji}</span>`;
+  if (/\.(mp4|webm|ogg|mov)$/i.test(url))
+    return `<video src="${url}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>`;
+  return `<img src="${url}" style="width:100%;height:100%;object-fit:cover" alt="${name}">`;
+}
+
+function _galRender() {
+  const wrap = document.getElementById("galWrap");
+  if (!wrap) return;
+  const url = _gal[_galIdx];
+  wrap.querySelector(".gal-media").innerHTML = _galMediaHtml(url, "", "🛍️");
+  wrap.querySelectorAll(".gal-dot").forEach((d,i) => d.classList.toggle("active", i === _galIdx));
+  const prev = wrap.querySelector(".gal-prev");
+  const next = wrap.querySelector(".gal-next");
+  if (prev) prev.style.opacity = _galIdx === 0 ? "0.25" : "1";
+  if (next) next.style.opacity = _galIdx === _gal.length - 1 ? "0.25" : "1";
+}
+
+function galPrev() { if (_galIdx > 0) { _galIdx--; _galRender(); } }
+function galNext() { if (_galIdx < _gal.length - 1) { _galIdx++; _galRender(); } }
+function galGoto(i) { _galIdx = i; _galRender(); }
+
 // ── MODAL ──
 function openModal(productId) {
   const p = products.find(x => x.id === productId);
@@ -265,20 +291,31 @@ function openModal(productId) {
   selectedQtyIndex = 0;
 
   const emoji = p.category_emoji || "🛍️";
-  const vidUrl = p.video_url || (p.image_url && /\.(mp4|webm|ogg|mov)$/i.test(p.image_url) ? p.image_url : null);
-  const imgUrl = !vidUrl ? p.image_url : null;
+
+  // Build all medias list from gallery JSON (all urls in order)
+  const galleryUrls = (() => { try { return JSON.parse(p.gallery || '[]'); } catch { return []; } })();
+  _gal = galleryUrls.length > 0 ? galleryUrls : [p.image_url || p.video_url || null];
+  _galIdx = 0;
 
   let mediaPart;
-  if (vidUrl) {
+  if (_gal.length > 1) {
+    const dots = _gal.map((_, i) => `<div class="gal-dot${i===0?' active':''}" onclick="galGoto(${i})"></div>`).join('');
     mediaPart = `
-      <video src="${vidUrl}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video>
-      <div class="modal-play-btn">
-        <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="26" fill="rgba(0,0,0,.45)"/><polygon points="21,16 40,26 21,36" fill="white"/></svg>
+      <div id="galWrap" style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden">
+        <div class="gal-media" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${_galMediaHtml(_gal[0], p.name, emoji)}</div>
+        <button class="gal-btn gal-prev" onclick="galPrev()">‹</button>
+        <button class="gal-btn gal-next" onclick="galNext()">›</button>
+        <div class="gal-dots">${dots}</div>
       </div>`;
-  } else if (imgUrl) {
-    mediaPart = `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}">`;
   } else {
-    mediaPart = `<span>${emoji}</span>`;
+    const url = _gal[0];
+    if (url && /\.(mp4|webm|ogg|mov)$/i.test(url)) {
+      mediaPart = `<video src="${url}" style="width:100%;height:100%;object-fit:cover" autoplay muted loop playsinline></video><div class="modal-play-btn"><svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="26" fill="rgba(0,0,0,.45)"/><polygon points="21,16 40,26 21,36" fill="white"/></svg></div>`;
+    } else if (url) {
+      mediaPart = `<img src="${url}" style="width:100%;height:100%;object-fit:cover" alt="${p.name}">`;
+    } else {
+      mediaPart = `<span>${emoji}</span>`;
+    }
   }
 
   // Check if product uses grams — build qty tiers

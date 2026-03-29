@@ -973,6 +973,7 @@ function CatalogPage({products,setProducts,loading,reload}){
       image_url:firstImg?.url||null,
       video_url:firstVid?.url||null,
       tiers:tiersClean?.length>0?tiersClean:null,
+      gallery:form.medias.length>0?JSON.stringify(form.medias.map(m=>m.url)):null,
     };
     try{
       if(modal==="new"){const r=await apiPost("/api/products",body);setProducts(prev=>[...prev,r]);showToast("✅ Produit ajouté !")}
@@ -1993,13 +1994,16 @@ function App(){
   const [loadO,setLoadO]=useState(false);
   const [loadP,setLoadP]=useState(false);
   const [unreadMsgCount,setUnreadMsgCount]=useState(0);
+  const prevOrderIdsRef=useRef(null);
+
+  const playBeep=()=>{try{const ctx=new(window.AudioContext||window.webkitAudioContext)();[[520,0,0.1],[780,0.13,0.1]].forEach(([freq,delay,dur])=>{const o=ctx.createOscillator();const g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=freq;g.gain.setValueAtTime(0.25,ctx.currentTime+delay);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+dur);o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+dur+0.05);});}catch(e){}};
 
   const login=()=>{try{localStorage.setItem("baltimore83_logged","1")}catch{}setLogged(true)};
   const logout=()=>{try{localStorage.removeItem("baltimore83_logged")}catch{}setLogged(false)};
 
   const getSettings=()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}};
 
-  const fetchOrders=async()=>{setLoadO(true);try{const resp=await apiGet("/api/orders");const data=resp?.orders;if(Array.isArray(data)){const mapped=data.map(o=>({...o,telegram_user:o.username?`@${o.username}`:[o.first_name,o.last_name].filter(Boolean).join(" ")||`User #${o.telegram_id}`}));setOrders(mapped)}}catch(e){console.error(e)}setLoadO(false)};
+  const fetchOrders=async()=>{setLoadO(true);try{const resp=await apiGet("/api/orders");const data=resp?.orders;if(Array.isArray(data)){const mapped=data.map(o=>({...o,telegram_user:o.username?`@${o.username}`:[o.first_name,o.last_name].filter(Boolean).join(" ")||`User #${o.telegram_id}`}));setOrders(mapped);if(prevOrderIdsRef.current!==null){const hasNew=mapped.some(o=>!prevOrderIdsRef.current.includes(o.id));if(hasNew)playBeep();}prevOrderIdsRef.current=mapped.map(o=>o.id);}}catch(e){console.error(e)}setLoadO(false)};
   const fetchProducts=async()=>{setLoadP(true);try{const data=await apiGet("/api/products");if(Array.isArray(data))setProducts(data)}catch(e){console.error(e)}setLoadP(false)};
 
   const pollUnread=async()=>{
