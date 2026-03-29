@@ -1755,6 +1755,19 @@ function SettingsPage({orders,logout}){
   const [saved,setSaved]=useState(false);
   const [apiSaved,setApiSaved]=useState(false);
   const [notifStatus,setNotifStatus]=useState(()=>{try{return window.Notification?.permission||"default"}catch{return"default"}});
+  const [resetting,setResetting]=useState(false);
+
+  const resetAllData=async()=>{
+    if(!confirm("⚠️ Supprimer TOUTES les commandes, messages et clients ?\n\nLes produits, catégories et paramètres seront conservés.\n\nCette action est irréversible."))return;
+    if(!confirm("Dernière confirmation — vraiment tout effacer ?"))return;
+    setResetting(true);
+    try{
+      await apiPost("/api/reset-data",{});
+      alert("✅ Données réinitialisées. La page va se recharger.");
+      window.location.reload();
+    }catch(e){alert("❌ Erreur : "+e.message);}
+    setResetting(false);
+  };
 
   useEffect(()=>{
     apiGet("/api/settings").then(s=>setApiSettings(prev=>({...prev,...s}))).catch(()=>{});
@@ -1924,6 +1937,21 @@ function SettingsPage({orders,logout}){
         <div><div style={{fontSize:13,fontWeight:600}}>{l.label}</div><div style={{fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",marginTop:1}}>{l.sub}</div></div>
         <Btn variant="ghost" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>l.url&&window.open(l.url,"_blank")}>Ouvrir</Btn>
       </div>)}
+    </Card>
+
+    {/* Zone dangereuse */}
+    <Card style={{border:`1px solid ${C.red}33`}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:6,color:C.red}}>⚠️ Zone dangereuse</div>
+      <div style={{fontSize:12,color:C.text3,marginBottom:14}}>Ces actions sont irréversibles. Les produits, catégories, paramètres et codes promo sont conservés.</div>
+      <div style={{padding:"14px 16px",background:"#ff475710",border:`1px solid ${C.red}33`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:C.text1,marginBottom:3}}>Réinitialiser les données</div>
+          <div style={{fontSize:11,color:C.text3}}>Efface toutes les commandes, messages, clients et paniers</div>
+        </div>
+        <button onClick={resetAllData} disabled={resetting} style={{padding:"8px 16px",borderRadius:8,background:C.red,border:"none",color:"#fff",fontSize:12,fontWeight:700,cursor:resetting?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif",opacity:resetting?0.6:1}}>
+          {resetting?"⏳ En cours...":"🗑 Tout effacer"}
+        </button>
+      </div>
     </Card>
 
     {/* Compte */}

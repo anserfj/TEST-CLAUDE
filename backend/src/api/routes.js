@@ -324,6 +324,20 @@ router.put('/settings', (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/reset-data', (req, res) => {
+  try {
+    db.prepare('DELETE FROM carts').run();
+    db.prepare('DELETE FROM messages').run();
+    db.prepare('DELETE FROM order_items').run();
+    db.prepare('DELETE FROM orders').run();
+    db.prepare('DELETE FROM users').run();
+    db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('orders','order_items','messages','users','carts')").run();
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── STATS ─────────────────────────────────────────────────────────────────────
 
 router.get('/stats', (req, res) => {
