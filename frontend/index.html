@@ -877,8 +877,20 @@ function ClientsPage({orders,setOrders}){
               <span style={{fontSize:11,color:C.text3}}>Code parrainage :</span>
               <span style={{fontFamily:"'JetBrains Mono'",fontSize:12,color:C.accent,background:C.accentDim,padding:"2px 7px",borderRadius:4,border:`1px solid ${C.accentMid}`,letterSpacing:"0.1em"}}>{selected.referral_code}</span>
             </div>}
-            {selected.referred_by&&<div style={{fontSize:11,color:C.text3,marginTop:4}}>Parrainé par user #{selected.referred_by}</div>}
+            {selected.referred_by&&(()=>{
+              const parrain=clients.find(c=>c.id===selected.referred_by);
+              const nomParrain=parrain?([parrain.first_name,parrain.last_name].filter(Boolean).join(" ")||parrain.username||`User #${parrain.id}`):`User #${selected.referred_by}`;
+              return<div style={{fontSize:11,color:C.text3,marginTop:4}}>Parrainé par <span style={{color:C.accent,fontWeight:600,cursor:"pointer"}} onClick={()=>setSelected(parrain||selected)}>{nomParrain}</span></div>;
+            })()}
           </div>
+          {/* Filleuls */}
+          {(()=>{const filleuls=clients.filter(c=>c.referred_by===selected.id);return filleuls.length>0&&<div style={{marginBottom:14,padding:"10px 12px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:11,color:C.text3,marginBottom:8,textTransform:"uppercase",letterSpacing:".06em"}}>👥 Filleuls ({filleuls.length})</div>
+            {filleuls.map(f=>{const nom=[f.first_name,f.last_name].filter(Boolean).join(" ")||f.username||`User #${f.id}`;return<div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}} onClick={()=>setSelected(f)}>
+              <span style={{fontSize:12,color:C.text1}}>{nom}</span>
+              <span style={{fontSize:11,color:C.accent}}>{fmt(ca(f.id))}</span>
+            </div>})}
+          </div>})()}
           {/* Notes internes */}
           <div style={{marginBottom:12}}>
             <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>📝 Note interne</div>
