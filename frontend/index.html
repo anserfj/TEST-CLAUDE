@@ -319,7 +319,7 @@ function DashboardPage({orders,products,setPage}){
   // Top 5 produits vendus
   const topProducts=useMemo(()=>{
     const counts={};
-    active.forEach(o=>parseItems(o.items).forEach(i=>{counts[i.name]=(counts[i.name]||0)+i.qty}));
+    active.forEach(o=>parseItems(o.items).forEach(i=>{counts[i.name]=(counts[i.name]||0)+(i.quantity||i.qty||0)}));
     return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
   },[orders]);
 
