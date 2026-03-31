@@ -150,10 +150,12 @@ router.get('/orders', (req, res) => {
   const { status, limit = 50, offset = 0 } = req.query;
   let query = `
     SELECT o.*, u.username, u.first_name, u.last_name, u.telegram_id,
-           COUNT(oi.id) as item_count
+           COUNT(oi.id) as item_count,
+           json_group_array(json_object('name', p.name, 'quantity', oi.quantity, 'unit_price', oi.unit_price)) as items
     FROM orders o
     LEFT JOIN users u ON o.user_id = u.id
     LEFT JOIN order_items oi ON o.id = oi.order_id
+    LEFT JOIN products p ON oi.product_id = p.id
   `;
   const params = [];
   if (status) {
