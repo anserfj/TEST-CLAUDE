@@ -35,6 +35,8 @@
     .drop-zone input[type=file]{display:none}
     .row-hover:hover{background:#ffffff06!important;cursor:pointer}
     @media(max-width:640px){button,select,input[type="date"]{min-height:42px}}
+    @media(max-width:375px){.stats-grid{grid-template-columns:1fr!important}}
+    @media(max-width:640px){.form-grid-cat{grid-template-columns:1fr!important}}
     .tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
     /* Responsive */
     .sidebar-desktop{display:flex}
@@ -244,10 +246,10 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
   const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 2px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
-      <span style={{fontSize:18,lineHeight:1}}>{item.icon}</span>
-      <span style={{fontSize:8,fontWeight:600,letterSpacing:"0.04em"}}>{item.label}</span>
-      {item.id==="orders"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 16px)",background:C.accent,color:C.bg,borderRadius:8,fontSize:8,fontWeight:700,padding:"0 4px"}}>{newCount}</span>}
-      {item.id==="messages"&&unreadMsg>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 16px)",background:C.red,color:"#fff",borderRadius:8,fontSize:8,fontWeight:700,padding:"0 4px"}}>{unreadMsg}</span>}
+      <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
+      <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.03em"}}>{item.label}</span>
+      {item.id==="orders"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:C.accent,color:C.bg,borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{newCount}</span>}
+      {item.id==="messages"&&unreadMsg>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:C.red,color:"#fff",borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{unreadMsg}</span>}
       {page===item.id&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
     </button>)}
   </div>;
@@ -1224,7 +1226,7 @@ function CategoriesPage(){
   };
 
   const formJsx=<div style={{display:"flex",flexDirection:"column",gap:10,padding:"16px",background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:10}}>
-    <div style={{display:"grid",gridTemplateColumns:"60px 1fr 80px",gap:8}}>
+    <div className="form-grid-cat" style={{display:"grid",gridTemplateColumns:"60px 1fr 80px",gap:8}}>
       <input value={form.emoji} onChange={e=>setForm(f=>({...f,emoji:e.target.value}))} placeholder="🌿" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:22,padding:"7px",outline:"none",textAlign:"center"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
       <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Nom de la catégorie" onKeyDown={e=>e.key==="Enter"&&save()} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"8px 12px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
       <input type="number" value={form.sort_order} onChange={e=>setForm(f=>({...f,sort_order:e.target.value}))} placeholder="Ordre" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"8px 10px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
@@ -1650,7 +1652,7 @@ function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
             <div style={{padding:"9px 13px",borderTop:`1px solid ${C.border}`,background:C.surface,flexShrink:0}}>
               <div style={{display:"flex",gap:7,alignItems:"flex-end"}}>
                 <textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Message... (Entrée pour envoyer)" onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendReply())} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none",resize:"none",maxHeight:100,minHeight:36,fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border} rows={1}/>
-                <button onClick={sendReply} disabled={sending||!reply.trim()} style={{background:sending||!reply.trim()?C.border:C.accent,border:"none",borderRadius:9,color:C.bg,cursor:"pointer",width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>
+                <button onClick={sendReply} disabled={sending||!reply.trim()} style={{background:sending||!reply.trim()?C.border:C.accent,border:"none",borderRadius:9,color:C.bg,cursor:"pointer",width:44,height:44,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
                   {sending?"⏳":"➤"}
                 </button>
               </div>
@@ -1870,7 +1872,7 @@ function SettingsPage({orders,logout}){
         <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>🚚 Livraison</div>
         {apiSaved&&<span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sauvegardé</span>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+      <div className="form-grid-2" style={{gap:12,marginBottom:14}}>
         <div>
           <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Frais de livraison (€)</label>
           <input type="number" step="0.01" value={apiSettings.delivery_fee||""} onChange={e=>setApiSettings(s=>({...s,delivery_fee:e.target.value}))} placeholder="3.00"
