@@ -70,7 +70,8 @@
     }
     @media(max-width:640px){
       .sidebar-desktop{display:none!important}
-      .sidebar-mobile{display:flex!important;position:fixed;bottom:0;left:0;right:0;height:60px;background:#0c0f14;border-top:1px solid #1e2530;z-index:200;align-items:stretch;padding-bottom:env(safe-area-inset-bottom)}
+      .sidebar-mobile{display:flex!important;position:fixed;bottom:0;left:0;right:0;height:60px;background:#0c0f14;border-top:1px solid #1e2530;z-index:200;align-items:stretch;padding-bottom:env(safe-area-inset-bottom);overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+      .sidebar-mobile::-webkit-scrollbar{display:none}
       .main-content{margin-left:0!important;max-width:100vw!important;padding:14px 10px calc(68px + env(safe-area-inset-bottom)) 10px!important;overflow-x:hidden}
       .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
       .hide-mobile{display:none!important}
@@ -257,7 +258,7 @@ function LoginPage({onLogin}){
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
   const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
-    {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 2px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
+    {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:"0 0 72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
       <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.03em"}}>{item.label}</span>
       {item.id==="orders"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:C.accent,color:C.bg,borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{newCount}</span>}
