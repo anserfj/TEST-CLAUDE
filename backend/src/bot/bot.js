@@ -9,23 +9,32 @@ function getSetting(key, fallback = '') {
   return row?.value || fallback;
 }
 
-export async function notifyGroup(text, extra = {}) {
-  const groupId = process.env.NOTIFY_GROUP_ID;
-  if (!bot) { console.error('notifyGroup: bot not initialized'); return; }
-  if (!groupId) { console.error('notifyGroup: NOTIFY_GROUP_ID not set'); return; }
-  console.log('notifyGroup: sending to', groupId);
+async function sendToGroup(groupId, text, extra = {}) {
   try {
     await bot.api.sendMessage(groupId, text, { parse_mode: 'HTML', ...extra });
-    console.log('notifyGroup: sent OK');
   } catch (e) {
-    console.error('notifyGroup HTML error:', e.message);
+    console.error(`sendToGroup(${groupId}) HTML error:`, e.message);
     try {
       await bot.api.sendMessage(groupId, text.replace(/<[^>]+>/g, ''));
-      console.log('notifyGroup: sent plain OK');
     } catch (e2) {
-      console.error('notifyGroup plain error:', e2.message);
+      console.error(`sendToGroup(${groupId}) plain error:`, e2.message);
     }
   }
+}
+
+export async function notifyGroup(text, extra = {}) {
+  const groupId = process.env.NOTIFY_GROUP_ID;
+  if (!bot || !groupId) return;
+  await sendToGroup(groupId, text, extra);
+}
+
+export async function notifyLogin(text) {
+  const groupId = process.env.NOTIFY_LOGIN_GROUP_ID;
+  if (!bot) { console.error('notifyLogin: bot not initialized'); return; }
+  if (!groupId) { console.error('notifyLogin: NOTIFY_LOGIN_GROUP_ID not set'); return; }
+  console.log('notifyLogin: sending to', groupId);
+  await sendToGroup(groupId, text);
+  console.log('notifyLogin: done');
 }
 
 export async function notifyGroupOrder(text, orderId) {

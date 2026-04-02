@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from '../db/database.js';
-import { notifyGroupOrder, notifyGroup, sendMessageToUser } from '../bot/bot.js';
+import { notifyGroupOrder, notifyGroup, notifyLogin, sendMessageToUser } from '../bot/bot.js';
 import multer from 'multer';
 import sharp from 'sharp';
 import path from 'path';
@@ -18,7 +18,7 @@ router.post('/auth/login', (req, res) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
     const ua = req.headers['user-agent'] || '?';
     const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
-    notifyGroup(
+    notifyLogin(
       `🔐 <b>Connexion au dashboard</b>\n\n` +
       `🕐 ${time}\n` +
       `🌐 IP : <code>${ip}</code>\n` +
