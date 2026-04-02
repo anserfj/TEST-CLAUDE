@@ -177,7 +177,9 @@ export function createBot(token) {
 
   bot.callbackQuery('contact', async (ctx) => {
     await ctx.answerCallbackQuery();
-    await ctx.reply('💬 Écrivez-nous directement ici, notre équipe vous répond rapidement!\n\n🕐 Disponible tous les jours');
+    await ctx.reply('💬 Contactez-nous directement sur Telegram :', {
+      reply_markup: new InlineKeyboard().url('💬 Écrire à @baltimore_83', 'https://t.me/baltimore_83')
+    });
   });
 
   // Inline order confirm/cancel from group notifications
