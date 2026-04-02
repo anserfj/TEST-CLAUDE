@@ -1392,282 +1392,51 @@ function PromosPage(){
 let _convCache=[];
 let _bcastCache=[];
 
-function MessagesPage({onRead,onGoToOrder,orders=[],setOrders,getSettings}){
-  // conversations = sidebar list from /api/messages (one entry per user with unread_count)
-  // chatMessages  = individual messages for selected user from /api/messages/:id
-  const [conversations,setConversations]=useState(_convCache);
-  const [chatMessages,setChatMessages]=useState([]);
-  const [selected,setSelected]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [reply,setReply]=useState("");
-  const [sending,setSending]=useState(false);
+function MessagesPage(){
   const [broadcast,setBroadcast]=useState("");
   const [broadcasting,setBroadcasting]=useState(false);
-  const [broadcastHistory,setBroadcastHistory]=useState(_bcastCache);
-  const [tab,setTab]=useState("inbox");
-  const [toast,setToast]=useState("");
-  const [showOrders,setShowOrders]=useState(false);
-  const [updatingO,setUpdatingO]=useState(false);
-  const [searchConv,setSearchConv]=useState("");
-  const messagesEndRef=useRef(null);
-  const selectedRef=useRef(null);
-  selectedRef.current=selected;
+  const [history,setHistory]=useState([]);
+  const [clientCount,setClientCount]=useState(0);
 
-  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
-  const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
-
-  // Fetch sidebar conversations (does NOT touch chatMessages)
-  // Conversations and broadcasts are fetched INDEPENDENTLY — one failure doesn't block the other
-  const fetchConversations=async(silent=false)=>{
-    if(!silent)setLoading(true);
-    try{
-      const convs=await apiGet("/api/messages");
-      if(Array.isArray(convs)){_convCache=convs;setConversations(convs);}
-    }catch(e){if(!silent)console.error("conversations:",e)}
-    try{
-      const bh=await apiGet("/api/broadcasts");
-      if(Array.isArray(bh)){_bcastCache=bh;setBroadcastHistory(bh);}
-    }catch(e){if(!silent)console.error("broadcasts:",e)}
-    if(!silent)setLoading(false);
-  };
-
-  // Fetch individual messages for selected user
-  const fetchChatMessages=async(userId)=>{
-    try{
-      const msgs=await apiGet("/api/messages/"+userId);
-      setChatMessages(msgs.map(m=>({...m,direction:m.from_admin?"out":"in"})));
-    }catch(e){console.error(e)}
-  };
-
-  // Mark read in DB and update local unread_count to 0
-  const markRead=async(userId)=>{
-    try{
-      await apiPost("/api/messages/read/"+userId,{});
-      setConversations(prev=>prev.map(c=>c.id===userId?{...c,unread_count:0}:c));
-      if(onRead)onRead();
-    }catch(e){}
-  };
-
-  const filteredConvs=useMemo(()=>{
-    const sorted=[...conversations].sort((a,b)=>new Date(b.last_message_time)-new Date(a.last_message_time));
-    if(!searchConv)return sorted;
-    const q=searchConv.toLowerCase();
-    return sorted.filter(c=>{
-      const name=c.username?`@${c.username}`:`${c.first_name||""} ${c.last_name||""}`.trim();
-      return name.toLowerCase().includes(q)||String(c.telegram_id).includes(q);
-    });
-  },[conversations,searchConv]);
-
-  // Initial load
-  useEffect(()=>{fetchConversations()},[]);
-
-  // Poll every 3s: refresh conversations + current chat independently
   useEffect(()=>{
-    const t=setInterval(async()=>{
-      fetchConversations(true); // fire and forget — don't block chat refresh
-      if(selectedRef.current)fetchChatMessages(selectedRef.current.id);
-    },3000);
-    return()=>clearInterval(t);
+    apiGet("/api/broadcasts").then(bh=>{if(Array.isArray(bh))setHistory(bh);}).catch(()=>{});
+    apiGet("/api/messages").then(convs=>{if(Array.isArray(convs))setClientCount(convs.length);}).catch(()=>{});
   },[]);
 
-  // When selecting a user: load messages + mark read
-  useEffect(()=>{
-    if(!selected){setChatMessages([]);return;}
-    fetchChatMessages(selected.id);
-    markRead(selected.id);
-  },[selected?.id]);
-
-  // Scroll to bottom on new messages
-  useEffect(()=>{try{messagesEndRef.current?.scrollIntoView({behavior:"auto"})}catch{}},[chatMessages]);
-
-  const sendReply=async()=>{
-    if(!selected||!reply.trim()||sending)return;
-    const text=reply.trim();
-    setReply("");
-    setSending(true);
-    // Optimistic message (temp id)
-    const tmpMsg={id:"tmp_"+Date.now(),user_id:selected.id,text,from_admin:1,direction:"out",created_at:new Date().toISOString()};
-    setChatMessages(prev=>[...prev,tmpMsg]);
-    try{
-      const sent=await apiPost("/api/messages/"+selected.id+"/send",{text});
-      // Replace temp message with real one from server
-      setChatMessages(prev=>prev.map(m=>m.id===tmpMsg.id?{...sent,direction:"out"}:m));
-      setConversations(prev=>prev.map(c=>c.id===selected.id?{...c,last_message:text,last_message_time:new Date().toISOString(),from_admin:1}:c));
-    }catch(e){
-      // Remove failed optimistic message, restore input
-      setChatMessages(prev=>prev.filter(m=>m.id!==tmpMsg.id));
-      setReply(text);
-      const msg=e.message&&e.message.length<120?e.message:"Service temporairement indisponible";
-      showToast("❌ Envoi échoué : "+msg);
-    }
-    setSending(false);
-  };
-
-  const sendBroadcast=async()=>{
+  const send=async()=>{
     if(!broadcast.trim())return;
-    if(!confirm(`Envoyer à tous les utilisateurs (${conversations.length} contacts) ?`))return;
+    if(!confirm(`Envoyer à tous les clients (${clientCount} contacts) ?`))return;
     setBroadcasting(true);
-    const text=broadcast.trim();
     try{
-      const r=await apiPost("/api/broadcast",{text});
+      const r=await apiPost("/api/broadcast",{text:broadcast.trim()});
       showToast(`✅ Envoyé à ${r.sent}/${r.total} clients`);
       setBroadcast("");
-      // Refresh broadcast history only (don't risk wiping conversations)
-      apiGet("/api/broadcasts").then(bh=>{if(Array.isArray(bh)){_bcastCache=bh;setBroadcastHistory(bh);}}).catch(()=>{});
+      apiGet("/api/broadcasts").then(bh=>{if(Array.isArray(bh))setHistory(bh);}).catch(()=>{});
     }catch(e){
-      const msg=e.message&&e.message.length<120?e.message:"Service indisponible";
-      showToast("❌ Broadcast échoué : "+msg);
+      showToast("❌ Erreur : "+(e.message||"").slice(0,80));
     }
     setBroadcasting(false);
   };
 
-
-  const renderMessage=m=>{
-    const mt=m.media_type,url=m.media_url;
-    const isImg=url&&(mt==="image"||(!mt&&/\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(url)));
-    const isVid=url&&(mt==="video"||(!mt&&/\.(mp4|webm|mov)(\?|$)/i.test(url)));
-    const isAud=url&&(mt==="audio"||(!mt&&/\.(ogg|mp3|m4a|wav)(\?|$)/i.test(url)));
-    return<div style={{padding:url?"6px":"9px 13px",borderRadius:m.direction==="out"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.direction==="out"?C.accent:C.surface,color:m.direction==="out"?C.bg:C.text1,fontSize:13,lineHeight:1.5,wordBreak:"break-word",overflow:"hidden"}}>
-      {isImg&&<img src={url} alt="" style={{width:"100%",maxWidth:240,borderRadius:8,display:"block",cursor:"pointer"}} onClick={()=>window.open(url,"_blank")}/>}
-      {isVid&&<video src={url} controls style={{width:"100%",maxWidth:240,borderRadius:8,display:"block"}}/>}
-      {isAud&&<audio controls src={url} style={{width:"100%",height:32,borderRadius:8}}/>}
-      {m.text&&m.text!=="📷 Photo"&&m.text!=="🎬 Vidéo"&&<span style={{padding:url?"0 4px 4px":0,display:"block"}}>{m.text}</span>}
-    </div>;
-  };
-
-  const clientOrders=selected?orders.filter(o=>String(o.user_id)===String(selected.id)):[];
-  const updateOrderStatus=async(id,status)=>{
-    setUpdatingO(true);
-    try{await apiPatch("/api/orders/"+id+"/status",{status});if(setOrders)setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));}catch(e){}
-    setUpdatingO(false);
-  };
-
-  const totalUnread=conversations.reduce((s,c)=>s+(c.unread_count||0),0);
-
-  return<div className="fade-in" style={{display:"flex",flexDirection:"column",height:"calc(100vh - 64px)"}}>
-    <Toast msg={toast}/>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexShrink:0,flexWrap:"wrap",gap:8}}>
-      <div>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Messages</div>
-        <div style={{fontSize:12,color:C.text3}}>
-          {conversations.length} conversations
-          {totalUnread>0&&<span style={{color:C.red,fontWeight:700,marginLeft:8}}>· {totalUnread} non lu{totalUnread>1?"s":""}</span>}
-        </div>
+  return<div className="fade-in" style={{maxWidth:620,width:"100%",boxSizing:"border-box"}}>
+    <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em",marginBottom:20}}>Messages</div>
+    <Card style={{marginBottom:16}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:4}}>📢 Envoyer à tous les clients</div>
+      <div style={{fontSize:12,color:C.text3,marginBottom:14}}>{clientCount} utilisateurs enregistrés</div>
+      <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Votre message pour tous les clients..." style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:14,padding:"11px 13px",outline:"none",resize:"vertical",minHeight:100,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
+        <Btn onClick={send} disabled={broadcasting||!broadcast.trim()}>{broadcasting?"⏳ Envoi en cours...":"📢 Envoyer à tous"}</Btn>
       </div>
-      <div style={{display:"flex",gap:8}}>
-        <Btn variant="ghost" onClick={()=>fetchConversations()} style={{fontSize:12}}>🔄</Btn>
-        <div style={{display:"flex",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-          {["inbox","broadcast"].map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"7px 14px",background:tab===t?C.accent:"transparent",color:tab===t?C.bg:C.text2,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
-            {t==="inbox"?"💬 Inbox":"📢 Broadcast"}
-          </button>)}
-        </div>
+    </Card>
+    <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:10,color:C.text2}}>Historique ({history.length})</div>
+    {history.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:C.text3,fontSize:13}}>Aucun message envoyé</div>}
+    {history.map((g,i)=><div key={i} style={{padding:"13px 15px",background:C.card,border:`1px solid ${C.border}`,borderRadius:9,marginBottom:9}}>
+      <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap",marginBottom:7}}>{g.text}</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR")}</span>
+        <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 7px"}}>📢 {g.recipients} destinataires</span>
       </div>
-    </div>
-
-    {loading?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spinner"/></div>:
-    tab==="broadcast"?(
-      <div style={{flex:1,overflowY:"auto"}}>
-        <div style={{maxWidth:580}}>
-          <Card style={{marginBottom:16}}>
-            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:4}}>Envoyer à tous</div>
-            <div style={{fontSize:12,color:C.text3,marginBottom:14}}>{conversations.length} utilisateurs</div>
-            <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Message..." style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:14,padding:"11px 13px",outline:"none",resize:"vertical",minHeight:90,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-            <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
-              <Btn onClick={sendBroadcast} disabled={broadcasting||!broadcast.trim()}>{broadcasting?"⏳ Envoi...":"📢 Envoyer à tous"}</Btn>
-            </div>
-          </Card>
-          <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:10,color:C.text2}}>Historique ({broadcastHistory.length})</div>
-          {broadcastHistory.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:C.text3,fontSize:13}}>Aucun broadcast envoyé</div>}
-          {broadcastHistory.map((g,i)=><div key={i} style={{padding:"13px 15px",background:C.card,border:`1px solid ${C.border}`,borderRadius:9,marginBottom:9}}>
-            <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap",marginBottom:7}}>{g.text}</div>
-            <div style={{display:"flex",gap:8}}>
-              <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR")}</span>
-              <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 7px"}}>📢 {g.recipients} dest.</span>
-            </div>
-          </div>)}
-        </div>
-      </div>
-    ):(
-      <div className="inbox-wrap" style={{border:`1px solid ${C.border}`}}>
-        {/* Sidebar conversations */}
-        <div className="inbox-users" style={{background:C.surface,borderRight:`1px solid ${C.border}`}}>
-          <div style={{padding:"8px 10px",borderBottom:`1px solid ${C.border}`}}>
-            <input value={searchConv} onChange={e=>setSearchConv(e.target.value)} placeholder="🔍 Rechercher..." style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:12,padding:"6px 10px",outline:"none",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-          </div>
-          {filteredConvs.length===0&&<div style={{padding:24,textAlign:"center",color:C.text3,fontSize:13}}>Aucun message reçu</div>}
-          {filteredConvs.map(c=>{
-            const isSel=selected?.id===c.id,hasUnread=c.unread_count>0;
-            const name=c.username?`@${c.username}`:`${c.first_name||""}${c.last_name?` ${c.last_name}`:""}`.trim()||`User ${c.id}`;
-            return<div key={c.id} onClick={()=>{setSelected(c);setShowOrders(false);}} style={{padding:"11px 14px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:isSel?C.accentDim:"transparent",borderLeft:isSel?`3px solid ${C.accent}`:hasUnread?`3px solid ${C.red}`:"3px solid transparent",transition:"background .1s"}} onMouseEnter={e=>!isSel&&(e.currentTarget.style.background="#ffffff06")} onMouseLeave={e=>!isSel&&(e.currentTarget.style.background="transparent")}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
-                <span style={{fontSize:13,fontWeight:hasUnread?700:600,color:isSel?C.accent:C.text1}}>{name}</span>
-                {hasUnread&&<span style={{background:C.red,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{c.unread_count}</span>}
-              </div>
-              <div style={{fontSize:11,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.from_admin?"✓ ":""}{c.last_message||"—"}</div>
-              <div style={{fontSize:10,color:C.text3,marginTop:2}}>{c.last_message_time?new Date(c.last_message_time).toLocaleString("fr-FR",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}):""}</div>
-            </div>;
-          })}
-        </div>
-
-        {/* Chat view */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",background:C.card,minHeight:0}}>
-          {!selected?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.text3,fontSize:14}}>← Sélectionne une conversation</div>:<>
-            <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,flexWrap:"wrap",gap:8}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:14}}>{dn(selected)}</div>
-                {selected.telegram_id&&<div style={{fontSize:10,color:C.text3}}>TG: {selected.telegram_id}</div>}
-              </div>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                {selected.username&&<a href={`https://t.me/${selected.username}`} target="_blank" style={{fontSize:11,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:6,padding:"3px 9px"}}>🔗 Profil TG</a>}
-                <button onClick={()=>setShowOrders(v=>!v)} style={{padding:"4px 10px",background:showOrders?C.accentDim:"transparent",border:`1px solid ${showOrders?C.accentMid:C.border}`,borderRadius:7,color:showOrders?C.accent:C.text2,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
-                  🧾 {clientOrders.length} cmd{clientOrders.length!==1?"s":""}
-                </button>
-                <button onClick={()=>{setSelected(null);setShowOrders(false)}} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
-              </div>
-            </div>
-
-            {showOrders&&<div style={{borderBottom:`1px solid ${C.border}`,background:C.surface,padding:"10px 14px",maxHeight:220,overflowY:"auto",flexShrink:0}}>
-              {clientOrders.length===0?<div style={{textAlign:"center",color:C.text3,fontSize:12}}>Aucune commande</div>
-              :clientOrders.map(o=><div key={o.id} style={{marginBottom:9,padding:"9px 11px",background:C.card,borderRadius:7,border:`1px solid ${C.border}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                  <span style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent}}>#{o.id}</span>
-                  <span style={{fontSize:11,fontWeight:700}}>{fmt(parseFloat(o.total))}</span>
-                </div>
-                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                  {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>updateOrderStatus(o.id,key)} disabled={updatingO||o.status===key} style={{padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600,cursor:o.status===key?"default":"pointer",border:`1px solid ${o.status===key?cfg.color:C.border}`,background:o.status===key?cfg.bg:"transparent",color:o.status===key?cfg.color:C.text3,fontFamily:"'DM Sans',sans-serif"}}>{cfg.label}</button>)}
-                </div>
-              </div>)}
-            </div>}
-
-            <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:7,minHeight:0}}>
-              {chatMessages.length===0&&<div style={{textAlign:"center",color:C.text3,fontSize:13,padding:20}}>Aucun message</div>}
-              {chatMessages.map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:m.direction==="out"?"flex-end":"flex-start",gap:5,alignItems:"flex-end"}}>
-                  {m.direction==="in"&&<div style={{width:26,height:26,borderRadius:"50%",background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>👤</div>}
-                  <div style={{maxWidth:"74%"}}>
-                    {renderMessage(m)}
-                    <div style={{fontSize:10,color:C.text3,marginTop:2,textAlign:m.direction==="out"?"right":"left"}}>
-                      {new Date(m.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
-                      {m.direction==="out"&&" ✓"}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef}/>
-            </div>
-
-            <div style={{padding:"9px 13px",borderTop:`1px solid ${C.border}`,background:C.surface,flexShrink:0}}>
-              <div style={{display:"flex",gap:7,alignItems:"flex-end"}}>
-                <textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Message... (Entrée pour envoyer)" onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),sendReply())} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none",resize:"none",maxHeight:100,minHeight:36,fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border} rows={1}/>
-                <button onClick={sendReply} disabled={sending||!reply.trim()} style={{background:sending||!reply.trim()?C.border:C.accent,border:"none",borderRadius:9,color:C.bg,cursor:"pointer",width:44,height:44,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
-                  {sending?"⏳":"➤"}
-                </button>
-              </div>
-            </div>
-          </>}
-        </div>
-      </div>
-    )}
+    </div>)}
   </div>
 }
 
@@ -2059,7 +1828,7 @@ function App(){
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
       {page==="categories"&&<CategoriesPage/>}
       {page==="promos"&&<PromosPage/>}
-      {page==="messages"&&<MessagesPage onRead={()=>{setUnreadMsgCount(0);pollUnread()}} onGoToOrder={id=>{setSelectedOrder(id);setPage("orders");fetchOrders()}} orders={orders} setOrders={setOrders} setProducts={setProducts} getSettings={getSettings}/>}
+      {page==="messages"&&<MessagesPage/>}
       {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
     </main>
   </div>
