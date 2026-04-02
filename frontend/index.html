@@ -262,7 +262,7 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
       <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
       <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.03em"}}>{item.label}</span>
       {item.id==="orders"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:C.accent,color:C.bg,borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{newCount}</span>}
-      {item.id==="messages"&&unreadMsg>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:C.red,color:"#fff",borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{unreadMsg}</span>}
+      
       {page===item.id&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
     </button>)}
   </div>;
@@ -280,7 +280,7 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
         {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 11px",borderRadius:8,marginBottom:2,background:page===item.id?C.accentDim:"transparent",border:page===item.id?`1px solid ${C.accentMid}`:"1px solid transparent",color:page===item.id?C.accent:C.text2,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}} onMouseEnter={e=>page!==item.id&&(e.currentTarget.style.background="#ffffff08")} onMouseLeave={e=>page!==item.id&&(e.currentTarget.style.background="transparent")}>
           <span style={{fontSize:16,lineHeight:1}}>{item.icon}</span><span>{item.label}</span>
           {item.id==="orders"&&newCount>0&&<span style={{marginLeft:"auto",background:C.accent,color:C.bg,borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{newCount}</span>}
-          {item.id==="messages"&&unreadMsg>0&&<span style={{marginLeft:"auto",background:C.red,color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{unreadMsg}</span>}
+          
         </button>)}
       </nav>
       <div style={{padding:"14px 10px",borderTop:`1px solid ${C.border}`}}>
@@ -1820,7 +1820,7 @@ function App(){
   if(!logged)return<LoginPage onLogin={login}/>;
 
   return<div style={{display:"flex",minHeight:"100vh"}}>
-    <Sidebar page={page} setPage={setPage} onLogout={logout} newCount={newCount} unreadMsg={unreadMsgCount}/>
+    <Sidebar page={page} setPage={setPage} onLogout={logout} newCount={newCount}/>
     <main className="main-content" style={{flex:1}}>
       {page==="dashboard"&&<DashboardPage orders={orders} products={products} setPage={setPage}/>}
       {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder} getSettings={getSettings}/>}

@@ -287,25 +287,9 @@ export function createBot(token) {
       return;
     }
 
-    // Save message and notify admin
-    if (user) {
-      db.prepare('INSERT INTO messages (user_id, telegram_id, text, from_admin) VALUES (?, ?, ?, 0)')
-        .run(user.id, ctx.from.id, text);
-      broadcastToAdmins({
-        type: 'new_message',
-        message: {
-          user_id: user.id,
-          telegram_id: ctx.from.id,
-          username: user.username,
-          first_name: user.first_name,
-          text,
-          from_admin: false,
-          created_at: new Date().toISOString()
-        }
-      });
-    }
-
-    await ctx.reply('💬 Votre message a été transmis à notre équipe. Nous vous répondrons rapidement!');
+    await ctx.reply('💬 Pour nous contacter directement, écrivez-nous sur Telegram :', {
+      reply_markup: new InlineKeyboard().url('💬 Écrire à @baltimore_83', 'https://t.me/baltimore_83')
+    });
   });
 
   return bot;
