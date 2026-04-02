@@ -15,6 +15,15 @@ router.post('/auth/login', (req, res) => {
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@shop.local';
   const adminPass = process.env.ADMIN_PASS || 'changeme';
   if (email === adminEmail && pass === adminPass) {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
+    const ua = req.headers['user-agent'] || '?';
+    const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+    notifyGroup(
+      `🔐 <b>Connexion au dashboard</b>\n\n` +
+      `🕐 ${time}\n` +
+      `🌐 IP : <code>${ip}</code>\n` +
+      `📱 ${ua.slice(0, 80)}`
+    ).catch(() => {});
     res.json({ success: true });
   } else {
     res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
