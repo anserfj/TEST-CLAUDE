@@ -11,12 +11,20 @@ function getSetting(key, fallback = '') {
 
 export async function notifyGroup(text, extra = {}) {
   const groupId = process.env.NOTIFY_GROUP_ID;
-  if (!bot || !groupId) return;
+  if (!bot) { console.error('notifyGroup: bot not initialized'); return; }
+  if (!groupId) { console.error('notifyGroup: NOTIFY_GROUP_ID not set'); return; }
+  console.log('notifyGroup: sending to', groupId);
   try {
     await bot.api.sendMessage(groupId, text, { parse_mode: 'HTML', ...extra });
+    console.log('notifyGroup: sent OK');
   } catch (e) {
-    console.error('notifyGroup error:', e.message);
-    try { await bot.api.sendMessage(groupId, text.replace(/<[^>]+>/g, '')); } catch {}
+    console.error('notifyGroup HTML error:', e.message);
+    try {
+      await bot.api.sendMessage(groupId, text.replace(/<[^>]+>/g, ''));
+      console.log('notifyGroup: sent plain OK');
+    } catch (e2) {
+      console.error('notifyGroup plain error:', e2.message);
+    }
   }
 }
 
@@ -30,7 +38,11 @@ export async function notifyGroupOrder(text, orderId) {
     await bot.api.sendMessage(groupId, text, { parse_mode: 'HTML', reply_markup: keyboard });
   } catch (e) {
     console.error('notifyGroupOrder error:', e.message);
-    try { await bot.api.sendMessage(groupId, text.replace(/<[^>]+>/g, '')); } catch {}
+    try {
+      await bot.api.sendMessage(groupId, text.replace(/<[^>]+>/g, ''));
+    } catch (e2) {
+      console.error('notifyGroupOrder plain error:', e2.message);
+    }
   }
 }
 
