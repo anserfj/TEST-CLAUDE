@@ -85,6 +85,31 @@ export function createBot(token) {
     await next();
   });
 
+  // Middleware: vérification abonnement canal obligatoire
+  bot.use(async (ctx, next) => {
+    const channelId = process.env.REQUIRED_CHANNEL_ID;
+    if (!channelId || !ctx.from) return next();
+    // Ne pas bloquer les callbacks admin (confirmation commandes)
+    if (ctx.callbackQuery?.data?.startsWith('order_')) return next();
+    try {
+      const member = await ctx.api.getChatMember(channelId, ctx.from.id);
+      if (['member', 'administrator', 'creator'].includes(member.status)) {
+        return next();
+      }
+    } catch (e) {
+      console.error('checkSubscription error:', e.message);
+      return next(); // fail open si erreur API
+    }
+    await ctx.reply(
+      '🔒 <b>Accès restreint</b>\n\nTu dois être abonné à notre canal pour utiliser ce bot.',
+      {
+        parse_mode: 'HTML',
+        reply_markup: new InlineKeyboard()
+          .url('📢 Rejoindre le canal', process.env.REQUIRED_CHANNEL_LINK || 'https://t.me/+kzA04I6sErVjYWVk')
+      }
+    );
+  });
+
   // Helper: générer un code de parrainage unique
   function generateReferralCode(telegramId) {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
