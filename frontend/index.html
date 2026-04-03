@@ -304,39 +304,49 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
 
 /* ── DASHBOARD ── */
 function DashboardPage({orders,products,setPage}){
-  const now=new Date(),thisMonth=now.getMonth(),thisYear=now.getFullYear();
-  const active=orders.filter(o=>o.status!=="cancelled");
-  const totalCA=active.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
-  const monthOrders=active.filter(o=>{const d=new Date(o.created_at);return d.getMonth()===thisMonth&&d.getFullYear()===thisYear});
-  const monthCA=monthOrders.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
-  const newOrders=orders.filter(o=>o.status==="pending").length;
-  const shipped=orders.filter(o=>o.status==="shipped").length;
-  const avgOrder=active.length?totalCA/active.length:0;
-  // Tendance : cette semaine vs semaine précédente
-  const weekCA=(offset=0)=>{
-    const start=new Date(now);start.setDate(start.getDate()-offset*7-7);
-    const end=new Date(now);end.setDate(end.getDate()-offset*7);
-    return active.filter(o=>{const d=new Date(o.created_at);return d>=start&&d<=end}).reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
-  };
-  const thisWeek=weekCA(0),lastWeek=weekCA(1);
-  const weekTrend=lastWeek>0?Math.round(((thisWeek-lastWeek)/lastWeek)*100):0;
+  const [period,setPeriod]=useState('tout');
+  const now=new Date();
+  const PERIODS=[{key:'24h',label:'24H'},{key:'48h',label:'48H'},{key:'7j',label:'7 jours'},{key:'30j',label:'30 jours'},{key:'tout',label:'Tout'}];
+  const periodMs={tout:null,'30j':30*24*3600000,'7j':7*24*3600000,'48h':48*3600000,'24h':24*3600000};
 
-  // Top 5 produits vendus
+  const filterP=(arr)=>{const ms=periodMs[period];if(!ms)return arr;const cut=new Date(now-ms);return arr.filter(o=>new Date(o.created_at)>=cut);};
+
+  const active=orders.filter(o=>o.status!=="cancelled");
+  const pActive=filterP(active);
+  const pOrders=filterP(orders);
+
+  const totalCA=pActive.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+  const newOrders=pOrders.filter(o=>o.status==="pending").length;
+  const shipped=pOrders.filter(o=>o.status==="shipped").length;
+  const avgOrder=pActive.length?totalCA/pActive.length:0;
+
+  // Tendance : période courante vs période précédente
+  const trendCA=(offsetMs)=>{const ms=periodMs[period]||30*24*3600000;const start=new Date(now-offsetMs-ms);const end=new Date(now-offsetMs);return active.filter(o=>{const d=new Date(o.created_at);return d>=start&&d<=end}).reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);};
+  const prevCA=trendCA(periodMs[period]||30*24*3600000);
+  const pTrend=prevCA>0?Math.round(((totalCA-prevCA)/prevCA)*100):0;
+
+  // Top 5 produits
   const topProducts=useMemo(()=>{
     const counts={};
-    active.forEach(o=>parseItems(o.items).forEach(i=>{if(i.name)counts[i.name]=(counts[i.name]||0)+(i.quantity||i.qty||0)}));
+    pActive.forEach(o=>parseItems(o.items).forEach(i=>{if(i.name)counts[i.name]=(counts[i.name]||0)+(i.quantity||i.qty||0)}));
     return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  },[orders]);
+  },[orders,period]);
 
-  // Sparkline CA 14 jours
+  // Sparkline adaptative
   const sparkData=useMemo(()=>{
-    const days=14;const data=Array(days).fill(0);
-    active.forEach(o=>{const d=new Date(o.created_at);const diff=Math.floor((now-d)/(1000*60*60*24));if(diff<days)data[days-1-diff]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
+    const useH=['24h','48h'].includes(period);
+    const slots={tout:30,'30j':30,'7j':7,'48h':48,'24h':24}[period];
+    const slotMs=useH?3600000:86400000;
+    const data=Array(slots).fill(0);
+    pActive.forEach(o=>{const d=new Date(o.created_at);const diff=Math.floor((now-d)/slotMs);if(diff<slots)data[slots-1-diff]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
     return data;
-  },[orders]);
+  },[orders,period]);
 
-  // Commandes en attente de traitement
-  const pending=orders.filter(o=>["pending","confirmed"].includes(o.status)).length;
+  const chartTitle={tout:'CA — 30 derniers jours','30j':'CA — 30 derniers jours','7j':'CA — 7 derniers jours','48h':'CA — 48 dernières heures','24h':'CA — 24 dernières heures'}[period];
+  const chartLeft={tout:'J-30','30j':'J-30','7j':'J-7','48h':'H-48','24h':'H-24'}[period];
+  const periodSub={tout:'au total','30j':'sur 30j','7j':'sur 7j','48h':'sur 48h','24h':'sur 24h'}[period];
+
+  const pending=pOrders.filter(o=>["pending","confirmed"].includes(o.status)).length;
 
   return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
@@ -355,12 +365,17 @@ function DashboardPage({orders,products,setPage}){
       </div>
     </div>
 
+    {/* Sélecteur de période */}
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {PERIODS.map(p=><button key={p.key} onClick={()=>setPeriod(p.key)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${period===p.key?C.accent:C.border}`,background:period===p.key?C.accent+"22":"transparent",color:period===p.key?C.accent:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s"}}>{p.label}</button>)}
+    </div>
+
     {/* Stats */}
     <div className="stats-grid">
-      <StatCard icon="💰" label="CA total" value={fmt(totalCA)} sub={`${fmt(monthCA)} ce mois`} color={C.accent} trend={weekTrend} onClick={()=>setPage("orders")}/>
-      <StatCard icon="📦" label="Commandes" value={String(orders.length)} sub={`${newOrders} nouvelles`} color={C.gold} trend={8} onClick={()=>setPage("orders")}/>
-      <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub={`${active.length} actives`} color={C.green} onClick={()=>setPage("orders")}/>
-      <StatCard icon="💳" label="Panier moyen" value={fmt(avgOrder)} sub={`${monthOrders.length} cmd ce mois`} color={C.purple}/>
+      <StatCard icon="💰" label="CA" value={fmt(totalCA)} sub={periodSub} color={C.accent} trend={pTrend} onClick={()=>setPage("orders")}/>
+      <StatCard icon="📦" label="Commandes" value={String(pOrders.length)} sub={`${newOrders} en attente`} color={C.gold} onClick={()=>setPage("orders")}/>
+      <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub={`${pActive.length} actives`} color={C.green} onClick={()=>setPage("orders")}/>
+      <StatCard icon="💳" label="Panier moyen" value={fmt(avgOrder)} sub={`${pActive.length} commandes`} color={C.purple}/>
     </div>
 
     <div className="dash-grid-2" style={{gap:16}}>
@@ -368,14 +383,14 @@ function DashboardPage({orders,products,setPage}){
       <Card>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
           <div>
-            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>CA — 14 derniers jours</div>
-            <div style={{fontSize:11,color:weekTrend>=0?C.green:C.red,marginTop:2,fontWeight:600}}>{weekTrend>=0?"↑":"↓"} {Math.abs(weekTrend)}% vs semaine précédente</div>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>{chartTitle}</div>
+            <div style={{fontSize:11,color:pTrend>=0?C.green:C.red,marginTop:2,fontWeight:600}}>{pTrend>=0?"↑":"↓"} {Math.abs(pTrend)}% vs période précédente</div>
           </div>
           <span style={{fontSize:14,fontWeight:700,color:C.accent}}>{fmt(sparkData.reduce((a,b)=>a+b,0))}</span>
         </div>
         <Sparkline data={sparkData} color={C.accent} height={56}/>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
-          <span style={{fontSize:10,color:C.text3}}>J-14</span>
+          <span style={{fontSize:10,color:C.text3}}>{chartLeft}</span>
           <span style={{fontSize:10,color:C.text3}}>Aujourd'hui</span>
         </div>
       </Card>
