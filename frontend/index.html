@@ -543,6 +543,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
   const [savingNote,setSavingNote]=useState(false);
   const [bulkSelected,setBulkSelected]=useState([]);
   const [bulkUpdating,setBulkUpdating]=useState(false);
+  const [showStats,setShowStats]=useState(false);
 
   // Fetch full order detail (with items) when selecting an order
   const selectOrder=async(o)=>{
@@ -721,7 +722,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Commandes</div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <Btn variant="ghost" onClick={exportToday} style={{fontSize:12}}>📅 Export journée</Btn>
+        <Btn variant={showStats?"primary":"ghost"} onClick={()=>setShowStats(s=>!s)} style={{fontSize:12}}>📊 Ventes</Btn>
         <Btn variant="ghost" onClick={exportCSV} style={{fontSize:12}}>📥 CSV</Btn>
         <Btn variant="ghost" onClick={reload} style={{fontSize:12}}>🔄</Btn>
       </div>
@@ -747,37 +748,15 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
     </div>
 
     {/* Ventes par produit */}
-    {productStats.length>0&&<Card style={{padding:14}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em"}}>🏆 Ventes par produit</div>
-        <span style={{fontSize:11,color:C.text3}}>{filtered.filter(o=>o.status!=="cancelled").length} commandes · {fmt(totalFiltered)}</span>
-      </div>
-      <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-          <thead><tr style={{color:C.text3,borderBottom:`1px solid ${C.border}`}}>
-            <th style={{textAlign:"left",padding:"4px 8px",fontWeight:600}}>Produit</th>
-            <th style={{textAlign:"right",padding:"4px 8px",fontWeight:600}}>Qté</th>
-            <th style={{textAlign:"right",padding:"4px 8px",fontWeight:600}}>CA</th>
-            <th style={{textAlign:"right",padding:"4px 8px",fontWeight:600,width:80}}>Part</th>
-          </tr></thead>
-          <tbody>
-            {productStats.map(([name,d],i)=>{
-              const pct=totalFiltered>0?Math.round(d.revenue/totalFiltered*100):0;
-              return<tr key={name} style={{borderBottom:`1px solid ${C.border}22`}}>
-                <td style={{padding:"6px 8px",color:C.text1}}><span style={{color:C.text3,marginRight:6}}>#{i+1}</span>{name}</td>
-                <td style={{padding:"6px 8px",textAlign:"right",color:C.text2}}>{d.qty}</td>
-                <td style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.accent}}>{fmt(d.revenue)}</td>
-                <td style={{padding:"6px 8px",textAlign:"right"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"flex-end"}}>
-                    <div style={{flex:1,height:4,background:C.border,borderRadius:2,minWidth:40}}><div style={{height:"100%",width:`${pct}%`,background:C.accent,borderRadius:2}}/></div>
-                    <span style={{color:C.text3,minWidth:28,textAlign:"right"}}>{pct}%</span>
-                  </div>
-                </td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
-      </div>
+    {showStats&&<Card style={{padding:14}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:12}}>📊 Ventes par produit</div>
+      {productStats.length===0
+        ?<div style={{color:C.text3,fontSize:13}}>Aucune vente sur cette période</div>
+        :productStats.map(([name,d],i)=><div key={name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}22`}}>
+            <span style={{fontSize:13,color:C.text1}}><span style={{color:C.text3,marginRight:6,fontSize:11}}>#{i+1}</span>{name}</span>
+            <span style={{fontSize:13,fontWeight:700,color:C.accent,marginLeft:12,whiteSpace:"nowrap"}}>{d.qty} g</span>
+          </div>)
+      }
     </Card>}
 
     {/* Barre actions multi-sélection */}
