@@ -604,9 +604,40 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
   };
 
   const exportCSV=()=>{
-    const rows=[["ID","Client","Date","Total","Livraison","Statut","Articles"],...filtered.map(o=>[o.id,o.telegram_user,new Date(o.created_at).toLocaleDateString("fr-FR"),(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2),o.status,parseItems(o.items).map(i=>`${i.name}×${i.qty}`).join("|")])];
-    const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const rows=[["ID","Client","Date","Heure","Statut","Articles","Sous-total","Livraison","Total"],...filtered.map(o=>{
+      const items=parseItems(o.items);
+      return[o.id,o.telegram_user,new Date(o.created_at).toLocaleDateString("fr-FR"),new Date(o.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),o.status,items.map(i=>`${i.name}×${i.quantity||i.qty||0}`).join(" | "),parseFloat(o.total).toFixed(2),parseFloat(o.livraison||0).toFixed(2),(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)];
+    })];
+    const csv="\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
     const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`commandes_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+  };
+
+  const exportToday=()=>{
+    const today=new Date().toISOString().slice(0,10);
+    const todayOrders=orders.filter(o=>o.created_at?.slice(0,10)===today&&o.status!=="cancelled");
+    const prodMap={};
+    todayOrders.forEach(o=>parseItems(o.items).forEach(i=>{
+      if(!i.name)return;
+      if(!prodMap[i.name])prodMap[i.name]={qty:0,revenue:0};
+      const q=i.quantity||i.qty||0;const p=parseFloat(i.unit_price||i.price||0);
+      prodMap[i.name].qty+=q;prodMap[i.name].revenue+=q*p;
+    }));
+    const totalCA=todayOrders.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
+    const rows=[
+      [`RAPPORT JOURNÉE — ${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}`],
+      [],
+      ["RÉSUMÉ PAR PRODUIT"],
+      ["Produit","Qté vendue","CA (€)"],
+      ...Object.entries(prodMap).sort((a,b)=>b[1].revenue-a[1].revenue).map(([n,d])=>[n,d.qty,d.revenue.toFixed(2)]),
+      [],
+      ["TOTAL JOURNÉE","",totalCA.toFixed(2)],
+      [],
+      ["DÉTAIL DES COMMANDES"],
+      ["ID","Client","Heure","Statut","Articles","Total (€)"],
+      ...todayOrders.map(o=>[o.id,o.telegram_user||"?",new Date(o.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),o.status,parseItems(o.items).map(i=>`${i.name}×${i.quantity||i.qty||0}`).join(" | "),(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)])
+    ];
+    const csv="\uFEFF"+rows.map(r=>r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`ventes_${today}.csv`;a.click();
   };
 
   const printOrder=o=>{
@@ -651,10 +682,25 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
   const paginated=filtered.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE);
   const totalFiltered=filtered.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
 
+  const productStats=useMemo(()=>{
+    const map={};
+    filtered.forEach(o=>{
+      if(o.status==="cancelled")return;
+      parseItems(o.items).forEach(i=>{
+        if(!i.name)return;
+        if(!map[i.name])map[i.name]={qty:0,revenue:0};
+        const q=i.quantity||i.qty||0;const p=parseFloat(i.unit_price||i.price||0);
+        map[i.name].qty+=q;map[i.name].revenue+=q*p;
+      });
+    });
+    return Object.entries(map).sort((a,b)=>b[1].revenue-a[1].revenue);
+  },[filtered]);
+
   return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Commandes</div>
-      <div style={{display:"flex",gap:8}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Btn variant="ghost" onClick={exportToday} style={{fontSize:12}}>📅 Export journée</Btn>
         <Btn variant="ghost" onClick={exportCSV} style={{fontSize:12}}>📥 CSV</Btn>
         <Btn variant="ghost" onClick={reload} style={{fontSize:12}}>🔄</Btn>
       </div>
@@ -678,6 +724,40 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       {[{v:"tous",l:"tous"},{v:"pending",l:"En attente"},{v:"confirmed",l:"Confirmé"},{v:"preparing",l:"En prépa"},{v:"shipped",l:"Expédié"},{v:"delivered",l:"Livré"},{v:"cancelled",l:"Annulé"}].map(s=><button key={s.v} onClick={()=>{setFilter(s.v);setCurrentPage(1)}} style={{padding:"5px 12px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",textTransform:"capitalize",background:filter===s.v?C.accent:"transparent",color:filter===s.v?C.bg:C.text2,border:`1px solid ${filter===s.v?C.accent:C.border}`,fontFamily:"'DM Sans',sans-serif"}}>{s.l}</button>)}
       <span style={{fontSize:12,color:C.text3,marginLeft:"auto"}}>{filtered.length} · {fmt(totalFiltered)}</span>
     </div>
+
+    {/* Ventes par produit */}
+    {productStats.length>0&&<Card style={{padding:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em"}}>🏆 Ventes par produit</div>
+        <span style={{fontSize:11,color:C.text3}}>{filtered.filter(o=>o.status!=="cancelled").length} commandes · {fmt(totalFiltered)}</span>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr style={{color:C.text3,borderBottom:`1px solid ${C.border}`}}>
+            <th style={{textAlign:"left",padding:"4px 8px",fontWeight:600}}>Produit</th>
+            <th style={{textAlign:"right",padding:"4px 8px",fontWeight:600}}>Qté</th>
+            <th style={{textAlign:"right",padding:"4px 8px",fontWeight:600}}>CA</th>
+            <th style={{textAlign:"right",padding:"4px 8px",fontWeight:600,width:80}}>Part</th>
+          </tr></thead>
+          <tbody>
+            {productStats.map(([name,d],i)=>{
+              const pct=totalFiltered>0?Math.round(d.revenue/totalFiltered*100):0;
+              return<tr key={name} style={{borderBottom:`1px solid ${C.border}22`}}>
+                <td style={{padding:"6px 8px",color:C.text1}}><span style={{color:C.text3,marginRight:6}}>#{i+1}</span>{name}</td>
+                <td style={{padding:"6px 8px",textAlign:"right",color:C.text2}}>{d.qty}</td>
+                <td style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.accent}}>{fmt(d.revenue)}</td>
+                <td style={{padding:"6px 8px",textAlign:"right"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"flex-end"}}>
+                    <div style={{flex:1,height:4,background:C.border,borderRadius:2,minWidth:40}}><div style={{height:"100%",width:`${pct}%`,background:C.accent,borderRadius:2}}/></div>
+                    <span style={{color:C.text3,minWidth:28,textAlign:"right"}}>{pct}%</span>
+                  </div>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>}
 
     {/* Barre actions multi-sélection */}
     {bulkSelected.length>0&&<div style={{padding:"8px 12px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:9,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
