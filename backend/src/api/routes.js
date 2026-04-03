@@ -10,19 +10,29 @@ const router = Router();
 
 // ── AUTH ───────────────────────────────────────────────────────────────────────
 
-router.post('/auth/login', (req, res) => {
+router.post('/auth/login', async (req, res) => {
   const { email, pass } = req.body;
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@shop.local';
   const adminPass = process.env.ADMIN_PASS || 'changeme';
   if (email === adminEmail && pass === adminPass) {
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
     const ua = req.headers['user-agent'] || '?';
     const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+
+    let geoLine = '';
+    try {
+      const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,isp&lang=fr`);
+      const geo = await geoRes.json();
+      if (geo.status === 'success') {
+        geoLine = `\n📍 ${geo.city}, ${geo.regionName}, ${geo.country}\n🏢 ${geo.isp}`;
+      }
+    } catch {}
+
     notifyLogin(
       `🔐 <b>Connexion au dashboard</b>\n\n` +
       `🕐 ${time}\n` +
-      `🌐 IP : <code>${ip}</code>\n` +
-      `📱 ${ua.slice(0, 80)}`
+      `🌐 IP : <code>${ip}</code>${geoLine}\n` +
+      `📱 ${ua.slice(0, 100)}`
     ).catch(() => {});
     res.json({ success: true });
   } else {
