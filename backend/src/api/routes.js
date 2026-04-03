@@ -29,7 +29,7 @@ router.post('/auth/login', async (req, res) => {
     } catch {}
 
     notifyLogin(
-      `🔐 <b>Connexion au dashboard</b>\n\n` +
+      `🔐 <b>Connexion au dashboard Baltimore 83</b>\n\n` +
       `🕐 ${time}\n` +
       `🌐 IP : <code>${ip}</code>${geoLine}\n` +
       `📱 ${ua.slice(0, 100)}`
@@ -50,7 +50,7 @@ router.post('/auth/login', async (req, res) => {
     } catch {}
 
     notifyLogin(
-      `⚠️ <b>Tentative de connexion échouée</b>\n\n` +
+      `⚠️ <b>Tentative de connexion échouée — Baltimore 83</b>\n\n` +
       `🕐 ${time}\n` +
       `🌐 IP : <code>${ip}</code>${geoLine}\n` +
       `👤 Email : <code>${(email || '').slice(0, 80)}</code>\n` +
