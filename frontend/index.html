@@ -1795,6 +1795,27 @@ function SettingsPage({orders,logout}){
           style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
           onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
       </div>
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Logo de la boutique (URL)</label>
+        <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+          <div style={{flex:1}}>
+            <input value={apiSettings.shop_logo_url||""} onChange={e=>setApiSettings(s=>({...s,shop_logo_url:e.target.value}))} placeholder="https://... ou laisser vide"
+              style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",boxSizing:"border-box"}}
+              onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+            <div style={{fontSize:11,color:C.text3,marginTop:4}}>Affiché dans le rond en haut du shop. Utilisez le bouton "📁 Fichier" pour uploader.</div>
+          </div>
+          {apiSettings.shop_logo_url&&<img src={apiSettings.shop_logo_url} style={{width:48,height:48,borderRadius:"50%",objectFit:"cover",border:`2px solid ${C.border}`,flexShrink:0}} alt="logo"/>}
+        </div>
+        <label style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:8,padding:"6px 12px",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:8,color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+          📁 Fichier
+          <input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{
+            const file=e.target.files?.[0];if(!file)return;
+            const fd=new FormData();fd.append("file",file);
+            try{const r=await fetch("/api/upload",{method:"POST",body:fd});const {url}=await r.json();setApiSettings(s=>({...s,shop_logo_url:url}));}
+            catch{}
+          }}/>
+        </label>
+      </div>
       <Btn onClick={saveApiSettings} style={{fontSize:13}}>Sauvegarder</Btn>
     </Card>
 

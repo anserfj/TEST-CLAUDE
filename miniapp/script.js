@@ -70,10 +70,18 @@ async function apiPost(path, body) {
 function applyShopIdentity() {
   const name = shopSettings.shop_name || "";
   const tagline = shopSettings.shop_tagline || shopSettings.shop_banner || "";
+  const logoUrl = shopSettings.shop_logo_url || "";
   const banner = document.getElementById("bannerText");
   const logo = document.getElementById("shopLogoText");
   if (banner) banner.textContent = tagline || (name ? `${name}` : "");
-  if (logo && name) logo.textContent = name.substring(0, 3).toUpperCase();
+  if (logo) {
+    if (logoUrl) {
+      logo.innerHTML = `<img src="${logoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="${name}">`;
+      logo.style.fontSize = "0";
+    } else if (name) {
+      logo.textContent = name.substring(0, 3).toUpperCase();
+    }
+  }
   if (name) document.title = name + " · Boutique";
 }
 
