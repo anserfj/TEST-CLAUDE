@@ -305,11 +305,21 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
 /* ── DASHBOARD ── */
 function DashboardPage({orders,products,setPage}){
   const [period,setPeriod]=useState('tout');
+  const todayStr=new Date().toISOString().slice(0,10);
+  const [customFrom,setCustomFrom]=useState(todayStr);
+  const [customTo,setCustomTo]=useState(todayStr);
   const now=new Date();
-  const PERIODS=[{key:'24h',label:'24H'},{key:'48h',label:'48H'},{key:'7j',label:'7 jours'},{key:'30j',label:'30 jours'},{key:'tout',label:'Tout'}];
+  const PERIODS=[{key:'24h',label:'24H'},{key:'48h',label:'48H'},{key:'7j',label:'7 jours'},{key:'30j',label:'30 jours'},{key:'tout',label:'Tout'},{key:'custom',label:'Personnalisé'}];
   const periodMs={tout:null,'30j':30*24*3600000,'7j':7*24*3600000,'48h':48*3600000,'24h':24*3600000};
 
-  const filterP=(arr)=>{const ms=periodMs[period];if(!ms)return arr;const cut=new Date(now-ms);return arr.filter(o=>new Date(o.created_at)>=cut);};
+  const filterP=(arr)=>{
+    if(period==='custom'){
+      const from=new Date(customFrom+'T00:00:00');
+      const to=new Date(customTo+'T23:59:59');
+      return arr.filter(o=>{const d=new Date(o.created_at);return d>=from&&d<=to;});
+    }
+    const ms=periodMs[period];if(!ms)return arr;const cut=new Date(now-ms);return arr.filter(o=>new Date(o.created_at)>=cut);
+  };
 
   const active=orders.filter(o=>o.status!=="cancelled");
   const pActive=filterP(active);
@@ -334,17 +344,25 @@ function DashboardPage({orders,products,setPage}){
 
   // Sparkline adaptative
   const sparkData=useMemo(()=>{
+    if(period==='custom'){
+      const from=new Date(customFrom+'T00:00:00');
+      const to=new Date(customTo+'T23:59:59');
+      const days=Math.max(1,Math.round((to-from)/86400000)+1);
+      const data=Array(days).fill(0);
+      pActive.forEach(o=>{const d=new Date(o.created_at);const idx=Math.floor((d-from)/86400000);if(idx>=0&&idx<days)data[idx]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
+      return data;
+    }
     const useH=['24h','48h'].includes(period);
     const slots={tout:30,'30j':30,'7j':7,'48h':48,'24h':24}[period];
     const slotMs=useH?3600000:86400000;
     const data=Array(slots).fill(0);
     pActive.forEach(o=>{const d=new Date(o.created_at);const diff=Math.floor((now-d)/slotMs);if(diff<slots)data[slots-1-diff]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
     return data;
-  },[orders,period]);
+  },[orders,period,customFrom,customTo]);
 
-  const chartTitle={tout:'CA — 30 derniers jours','30j':'CA — 30 derniers jours','7j':'CA — 7 derniers jours','48h':'CA — 48 dernières heures','24h':'CA — 24 dernières heures'}[period];
-  const chartLeft={tout:'J-30','30j':'J-30','7j':'J-7','48h':'H-48','24h':'H-24'}[period];
-  const periodSub={tout:'au total','30j':'sur 30j','7j':'sur 7j','48h':'sur 48h','24h':'sur 24h'}[period];
+  const chartTitle=period==='custom'?`CA — ${customFrom} → ${customTo}`:{tout:'CA — 30 derniers jours','30j':'CA — 30 derniers jours','7j':'CA — 7 derniers jours','48h':'CA — 48 dernières heures','24h':'CA — 24 dernières heures'}[period];
+  const chartLeft=period==='custom'?customFrom:{tout:'J-30','30j':'J-30','7j':'J-7','48h':'H-48','24h':'H-24'}[period];
+  const periodSub=period==='custom'?`${customFrom} → ${customTo}`:{tout:'au total','30j':'sur 30j','7j':'sur 7j','48h':'sur 48h','24h':'sur 24h'}[period];
 
   const pending=pOrders.filter(o=>["pending","confirmed"].includes(o.status)).length;
 
@@ -366,8 +384,15 @@ function DashboardPage({orders,products,setPage}){
     </div>
 
     {/* Sélecteur de période */}
-    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-      {PERIODS.map(p=><button key={p.key} onClick={()=>setPeriod(p.key)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${period===p.key?C.accent:C.border}`,background:period===p.key?C.accent+"22":"transparent",color:period===p.key?C.accent:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s"}}>{p.label}</button>)}
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {PERIODS.map(p=><button key={p.key} onClick={()=>setPeriod(p.key)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${period===p.key?C.accent:C.border}`,background:period===p.key?C.accent+"22":"transparent",color:period===p.key?C.accent:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s"}}>{p.label}</button>)}
+      </div>
+      {period==='custom'&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <input type="date" value={customFrom} max={customTo} onChange={e=>setCustomFrom(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 10px",color:C.text1,fontSize:12,colorScheme:"dark"}}/>
+        <span style={{color:C.text3,fontSize:12}}>→</span>
+        <input type="date" value={customTo} min={customFrom} max={todayStr} onChange={e=>setCustomTo(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 10px",color:C.text1,fontSize:12,colorScheme:"dark"}}/>
+      </div>}
     </div>
 
     {/* Stats */}
