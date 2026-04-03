@@ -623,21 +623,42 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       prodMap[i.name].qty+=q;prodMap[i.name].revenue+=q*p;
     }));
     const totalCA=todayOrders.reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);
-    const rows=[
-      [`RAPPORT JOURNÉE — ${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}`],
-      [],
-      ["RÉSUMÉ PAR PRODUIT"],
-      ["Produit","Qté vendue","CA (€)"],
-      ...Object.entries(prodMap).sort((a,b)=>b[1].revenue-a[1].revenue).map(([n,d])=>[n,d.qty,d.revenue.toFixed(2)]),
-      [],
-      ["TOTAL JOURNÉE","",totalCA.toFixed(2)],
-      [],
-      ["DÉTAIL DES COMMANDES"],
-      ["ID","Client","Heure","Statut","Articles","Total (€)"],
-      ...todayOrders.map(o=>[o.id,o.telegram_user||"?",new Date(o.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),o.status,parseItems(o.items).map(i=>`${i.name}×${i.quantity||i.qty||0}`).join(" | "),(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)])
-    ];
-    const csv="\uFEFF"+rows.map(r=>r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
-    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`ventes_${today}.csv`;a.click();
+    const dateLabel=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+    const prodRows=Object.entries(prodMap).sort((a,b)=>b[1].revenue-a[1].revenue);
+    const w=window.open("","_blank");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rapport ${today}</title><style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;color:#111;padding:32px;max-width:800px;margin:0 auto;font-size:13px}
+      h1{font-size:22px;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+      h2{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:24px 0 10px;padding-bottom:6px;border-bottom:2px solid #111}
+      .subtitle{color:#666;font-size:13px;margin-bottom:24px}
+      table{width:100%;border-collapse:collapse;margin-bottom:8px}
+      th{background:#f0f0f0;text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700}
+      td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top}
+      .right{text-align:right}
+      .total-row td{font-weight:700;background:#f8f8f8;font-size:14px}
+      .bar{height:6px;background:#e0e0e0;border-radius:3px;margin-top:4px}
+      .bar-fill{height:6px;background:#111;border-radius:3px}
+      .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+      .no-print{margin-bottom:20px}
+      @media print{.no-print{display:none}.page-break{page-break-before:always}}
+    </style></head><body>
+    <div class="no-print"><button onclick="window.print()" style="padding:10px 20px;background:#111;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:700">🖨️ Enregistrer en PDF</button></div>
+    <h1>Baltimore 83</h1>
+    <div class="subtitle">Rapport journée — ${dateLabel} · ${todayOrders.length} commande${todayOrders.length>1?"s":""}</div>
+
+    <h2>Résumé par produit</h2>
+    <table><thead><tr><th>Produit</th><th class="right">Qté</th><th class="right">Chiffre d'affaires</th><th class="right">Part</th></tr></thead><tbody>
+    ${prodRows.map(([name,d],i)=>{const pct=totalCA>0?Math.round(d.revenue/totalCA*100):0;return`<tr><td>#${i+1} ${name}</td><td class="right">${d.qty}</td><td class="right"><strong>${d.revenue.toFixed(2)} €</strong></td><td class="right" style="min-width:80px"><div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div><span style="font-size:11px;color:#666">${pct}%</span></td></tr>`}).join("")}
+    <tr class="total-row"><td colspan="2">Total journée</td><td class="right">${totalCA.toFixed(2)} €</td><td></td></tr>
+    </tbody></table>
+
+    <h2>Détail des commandes</h2>
+    <table><thead><tr><th>#</th><th>Client</th><th>Heure</th><th>Articles</th><th class="right">Total</th></tr></thead><tbody>
+    ${todayOrders.map(o=>`<tr><td>${o.id}</td><td>${o.telegram_user||"?"}</td><td>${new Date(o.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</td><td>${parseItems(o.items).map(i=>`${i.name} ×${i.quantity||i.qty||0}`).join("<br>")}</td><td class="right"><strong>${(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)} €</strong></td></tr>`).join("")}
+    </tbody></table>
+    </body></html>`);
+    w.document.close();
   };
 
   const printOrder=o=>{
