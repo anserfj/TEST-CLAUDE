@@ -150,7 +150,7 @@ function StatCard({icon,label,value,sub,color=C.accent,trend,onClick}){
     <div style={{position:"absolute",top:0,right:0,width:70,height:70,background:`radial-gradient(circle at 100% 0%,${color}18 0%,transparent 70%)`}}/>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
       <span style={{fontSize:22}}>{icon}</span>
-      {trend!==undefined&&<span style={{fontSize:10,fontWeight:700,color:trend>=0?C.green:C.red,background:trend>=0?"#00e67618":"#ff475718",padding:"2px 6px",borderRadius:4}}>{trend>=0?"↑":"↓"}{Math.abs(trend)}%</span>}
+      {trend!==undefined&&<span style={{fontSize:10,fontWeight:700,color:trend>=0?C.green:C.red,background:trend>=0?"#00e67618":"#ff475718",padding:"2px 6px",borderRadius:4}}>{trend>=0?"↑":"↓"}{Math.abs(trend)}</span>}
     </div>
     <div style={{fontFamily:"'Bebas Neue'",fontSize:28,color,letterSpacing:"0.03em",lineHeight:1}}>{value}</div>
     <div style={{fontSize:12,color:C.text2,marginTop:4,fontWeight:500}}>{label}</div>
