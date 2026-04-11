@@ -17,7 +17,8 @@
   .zone-label{background:#ff4757!important;color:#fff!important;border:none!important;border-radius:4px!important;font-size:11px!important;font-weight:700!important;padding:2px 7px!important;white-space:nowrap!important;box-shadow:0 1px 6px rgba(0,0,0,.4)!important}
   .zone-label::before{display:none!important}
     *{margin:0;padding:0;box-sizing:border-box}
-    body{background:#080a0e;color:#eef2f7;font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+    html{overflow-x:hidden}
+    body{background:#080a0e;color:#eef2f7;font-family:'DM Sans',sans-serif;min-height:100vh}
     ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0f1318}::-webkit-scrollbar-thumb{background:#1e2530;border-radius:2px}
     input,select,textarea,button{font-family:'DM Sans',sans-serif}
     @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -105,6 +106,7 @@ const {useState,useEffect,useRef,useMemo,useCallback}=React;
 
 /* ── GLOBAL TOAST (utilisable partout, sans state React) ── */
 function showToast(msg){const el=document.createElement("div");el.style.cssText="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid rgba(255,255,255,.25);color:#f5f5f5;font-size:13px;font-weight:600;padding:9px 22px;border-radius:99px;white-space:nowrap;z-index:9999;font-family:'DM Sans',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.5);animation:fadeIn .2s ease";el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2500);}
+const Portal=({children})=>ReactDOM.createPortal(children,document.body);
 
 /* ── API LOCALE ── */
 async function apiGet(p){const r=await fetch(p);if(!r.ok)throw new Error(await r.text());return r.json();}
@@ -825,7 +827,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       </div>
 
       {/* Panneau détail */}
-      {selected&&<div className="detail-overlay" onClick={e=>e.target===e.currentTarget&&setSelected(null)}>
+      {selected&&<Portal><div className="detail-overlay" onClick={e=>e.target===e.currentTarget&&setSelected(null)}>
       <div className="scale-in detail-sheet" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:18}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -894,7 +896,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
             </div>
           </div>
       </div>
-      </div>}
+      </div></Portal>}
     </div>}
   </div>
 }
@@ -1020,7 +1022,7 @@ function ClientsPage({orders,setOrders}){
         {sorted.length===0&&<div style={{padding:40,textAlign:"center",color:C.text3,fontSize:13}}>Aucun client</div>}
       </div>
 
-      {selected&&<div className="detail-overlay" onClick={e=>e.target===e.currentTarget&&setSelected(null)}>
+      {selected&&<Portal><div className="detail-overlay" onClick={e=>e.target===e.currentTarget&&setSelected(null)}>
       <div className="scale-in detail-sheet" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:18}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
             <div style={{fontSize:14,fontWeight:700}}>{dn(selected)}</div>
@@ -1090,7 +1092,7 @@ function ClientsPage({orders,setOrders}){
             }
           </div>
       </div>
-      </div>}
+      </div></Portal>}
     </div>}
   </div>
 }
@@ -1290,7 +1292,7 @@ function CatalogPage({products,setProducts,loading,reload}){
     )}
 
     {/* MODAL PRODUIT */}
-    {modal&&<div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"flex-start",justifyContent:"center",zIndex:500,overflowY:"auto",padding:"20px 12px 40px"}} onClick={()=>setModal(null)}>
+    {modal&&<Portal><div style={{position:"fixed",inset:0,background:"#000000cc",display:"flex",alignItems:"flex-start",justifyContent:"center",zIndex:500,overflowY:"auto",padding:"20px 12px 40px"}} onClick={()=>setModal(null)}>
       <div className="scale-in modal-inner" style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px",width:"100%",maxWidth:600,overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
           <div style={{fontFamily:"'Bebas Neue'",fontSize:22,letterSpacing:"0.05em"}}>{modal==="new"?"Nouveau produit":"Modifier : "+form.name}</div>
@@ -1342,7 +1344,7 @@ function CatalogPage({products,setProducts,loading,reload}){
           <Btn onClick={save} disabled={saving||!form.name||(!hasTiers&&!form.price)}>{saving?"Sauvegarde...":modal==="new"?"✅ Créer":"✅ Enregistrer"}</Btn>
         </div>
       </div>
-    </div>}
+    </div></Portal>}
   </div>
 }
 
