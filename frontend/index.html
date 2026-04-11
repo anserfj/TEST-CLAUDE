@@ -730,7 +730,6 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Commandes</div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <Btn variant={showStats?"primary":"ghost"} onClick={()=>setShowStats(s=>!s)} style={{fontSize:12}}>📊 Ventes</Btn>
-        <Btn variant="ghost" onClick={exportCSV} style={{fontSize:12}}>📥 CSV</Btn>
         <Btn variant="ghost" onClick={reload} style={{fontSize:12}}>🔄</Btn>
       </div>
     </div>
@@ -833,7 +832,6 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
               <div style={{fontFamily:"'JetBrains Mono'",fontSize:13,color:C.accent,fontWeight:700,cursor:"pointer"}} onClick={()=>copyId(selected.id)} title="Copier l'ID">{selected.id} 📋</div>
             </div>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>printOrder(selected)} title="Imprimer" style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,color:C.text2,cursor:"pointer",padding:"4px 9px",fontSize:12}}>🖨️</button>
               <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
             </div>
           </div>
