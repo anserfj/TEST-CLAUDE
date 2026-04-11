@@ -42,7 +42,8 @@ export async function notifyGroupOrder(text, orderId) {
   if (!bot || !groupId) return;
   const keyboard = new InlineKeyboard()
     .text('✅ Confirmer', `order_confirm_${orderId}`)
-    .text('❌ Annuler', `order_cancel_${orderId}`);
+    .text('🚚 Expédier', `order_ship_${orderId}`)
+    .text('📬 Livré', `order_deliver_${orderId}`);
   try {
     await bot.api.sendMessage(groupId, text, { parse_mode: 'HTML', reply_markup: keyboard });
   } catch (e) {
@@ -213,7 +214,7 @@ export function createBot(token) {
       WHERE o.user_id = ? GROUP BY o.id ORDER BY o.created_at DESC LIMIT 5
     `).all(user.id);
     if (!orders.length) { await ctx.reply('📦 Vous n\'avez pas encore de commandes.'); return; }
-    const statusLabel = { pending:'⏳ En attente', confirmed:'✅ Confirmée', preparing:'👨‍🍳 Préparation', shipped:'🚚 Expédiée', delivered:'📬 Livrée', cancelled:'❌ Annulée' };
+    const statusLabel = { pending:'🆕 Nouvelle', confirmed:'✅ Confirmée', shipped:'🚚 Expédiée', delivered:'📬 Livrée', cancelled:'❌ Annulée' };
     let text = '📦 <b>Vos dernières commandes</b>\n\n';
     orders.forEach(o => {
       text += `${statusLabel[o.status]||'❓'} <b>#${o.id}</b> — ${o.total?.toFixed(2)}€\n`;
@@ -228,40 +229,45 @@ export function createBot(token) {
     });
   });
 
-  // Inline order confirm/cancel from group notifications
-  bot.callbackQuery(/^order_confirm_(\d+)$/, async (ctx) => {
-    const orderId = ctx.match[1];
+  // Mise à jour statut commande depuis le groupe
+  async function handleOrderStatus(ctx, orderId, status, label, clientMsg) {
     try {
-      db.prepare("UPDATE orders SET status = 'confirmed', updated_at = datetime('now') WHERE id = ?").run(orderId);
+      db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, orderId);
       const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(orderId);
-      await ctx.answerCallbackQuery('✅ Commande confirmée !');
-      await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(`✅ Confirmée par ${ctx.from.first_name || 'admin'}`, 'noop') });
-      if (order) {
-        sendMessageToUser(order.telegram_id,
-          `✅ <b>Bonne nouvelle ! Votre commande #${orderId} est confirmée.</b>\n\nNotre équipe la prépare et vous contactera très bientôt 🚀`
-        ).catch(() => {});
-      }
+      await ctx.answerCallbackQuery(`${label} par ${ctx.from.first_name || 'admin'}`);
+      await ctx.editMessageReplyMarkup({
+        reply_markup: new InlineKeyboard()
+          .text(`${label} ✓`, 'noop')
+          .text('✅ Confirmer', `order_confirm_${orderId}`)
+          .row()
+          .text('🚚 Expédier', `order_ship_${orderId}`)
+          .text('📬 Livré', `order_deliver_${orderId}`)
+      });
+      if (order && clientMsg) sendMessageToUser(order.telegram_id, clientMsg).catch(() => {});
     } catch (e) {
       await ctx.answerCallbackQuery('Erreur: ' + e.message);
     }
+  }
+
+  bot.callbackQuery(/^order_confirm_(\d+)$/, async (ctx) => {
+    await handleOrderStatus(ctx, ctx.match[1], 'confirmed', '✅ Confirmée',
+      `✅ <b>Votre commande #${ctx.match[1]} est confirmée !</b>\n\nNous la préparons et vous contacterons très bientôt 🚀`
+    );
   });
 
-  bot.callbackQuery(/^order_cancel_(\d+)$/, async (ctx) => {
-    const orderId = ctx.match[1];
-    try {
-      db.prepare("UPDATE orders SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(orderId);
-      const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(orderId);
-      await ctx.answerCallbackQuery('❌ Commande annulée');
-      await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard().text(`❌ Annulée par ${ctx.from.first_name || 'admin'}`, 'noop') });
-      if (order) {
-        sendMessageToUser(order.telegram_id,
-          `❌ <b>Commande #${orderId} annulée.</b>\n\nN'hésitez pas à nous contacter pour plus d'informations.`
-        ).catch(() => {});
-      }
-    } catch (e) {
-      await ctx.answerCallbackQuery('Erreur: ' + e.message);
-    }
+  bot.callbackQuery(/^order_ship_(\d+)$/, async (ctx) => {
+    await handleOrderStatus(ctx, ctx.match[1], 'shipped', '🚚 Expédiée',
+      `🚚 <b>Votre commande #${ctx.match[1]} est en route !</b>\n\nVous serez livré très prochainement 📦`
+    );
   });
+
+  bot.callbackQuery(/^order_deliver_(\d+)$/, async (ctx) => {
+    await handleOrderStatus(ctx, ctx.match[1], 'delivered', '📬 Livrée',
+      `📬 <b>Votre commande #${ctx.match[1]} a été livrée !</b>\n\nMerci pour votre confiance 🙏`
+    );
+  });
+
+  bot.callbackQuery('noop', async (ctx) => { await ctx.answerCallbackQuery(); });
 
   bot.callbackQuery('noop', async (ctx) => { await ctx.answerCallbackQuery(); });
 
