@@ -409,7 +409,7 @@ function DashboardPage({orders,products,setPage}){
 
     {/* Stats */}
     <div className="stats-grid">
-      <StatCard icon="💰" label="CA" value={fmt(totalCA)} sub={periodSub} color={C.accent} trend={pTrend} onClick={()=>setPage("orders")}/>
+      <StatCard icon="💰" label="CA" value={fmt(totalCA)} sub={periodSub} color={C.accent} onClick={()=>setPage("orders")}/>
       <StatCard icon="📦" label="Commandes" value={String(pOrders.length)} sub={`${newOrders} en attente`} color={C.gold} onClick={()=>setPage("orders")}/>
       <StatCard icon="🚚" label="Expédiées" value={String(shipped)} sub={`${pActive.length} actives`} color={C.green} onClick={()=>setPage("orders")}/>
       <StatCard icon="💳" label="Panier moyen" value={fmt(avgOrder)} sub={`${pActive.length} commandes`} color={C.purple}/>
