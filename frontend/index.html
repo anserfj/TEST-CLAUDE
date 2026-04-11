@@ -421,7 +421,6 @@ function DashboardPage({orders,products,setPage}){
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
           <div>
             <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>{chartTitle}</div>
-            <div style={{fontSize:11,color:pTrend>=0?C.green:C.red,marginTop:2,fontWeight:600}}>{pTrend>=0?"↑":"↓"} vs période précédente</div>
           </div>
           <span style={{fontSize:14,fontWeight:700,color:C.accent}}>{fmt(sparkData.reduce((a,b)=>a+b,0))}</span>
         </div>
