@@ -1,11 +1,25 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import db from '../db/database.js';
 import { notifyGroupOrder, notifyGroup, notifyLogin, sendMessageToUser } from '../bot/bot.js';
-import { generateToken, authMiddleware, checkLoginAllowed, recordFailedAttempt, recordSuccessLogin } from '../auth.js';
+import { generateToken, authMiddleware, checkLoginAllowed, recordFailedAttempt, recordSuccessLogin, createPending2fa, validatePending2fa, auditLog } from '../auth.js';
+import { verifyTotp, generateTotpSecret, totpUri } from '../totp.js';
+import { telegramAuthMiddleware } from '../telegramAuth.js';
 import multer from 'multer';
 import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
+
+// ── Input sanitizer — strip HTML tags from strings ───────────────────────────
+function sanitize(v) {
+  if (typeof v !== 'string') return v;
+  return v.replace(/<[^>]*>/g, '').trim();
+}
+function sanitizeObj(obj, keys) {
+  const out = { ...obj };
+  for (const k of keys) if (typeof out[k] === 'string') out[k] = sanitize(out[k]);
+  return out;
+}
 
 const router = Router();
 
@@ -25,9 +39,6 @@ router.post('/auth/login', async (req, res) => {
   const adminPass  = process.env.ADMIN_PASS  || 'changeme';
 
   if (email === adminEmail && pass === adminPass) {
-    recordSuccessLogin(ip);
-    const token = generateToken();
-
     const ua   = req.headers['user-agent'] || '?';
     const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
     let geoLine = '';
@@ -36,6 +47,21 @@ router.post('/auth/login', async (req, res) => {
       const geo = await geoRes.json();
       if (geo.status === 'success') geoLine = `\n📍 ${geo.city}, ${geo.regionName}, ${geo.country}\n🏢 ${geo.isp}`;
     } catch {}
+
+    // Check if 2FA is enabled
+    const totpEnabled = db.prepare("SELECT value FROM settings WHERE key='totp_enabled'").get()?.value === '1';
+    const totpSecret  = db.prepare("SELECT value FROM settings WHERE key='totp_secret'").get()?.value || '';
+
+    if (totpEnabled && totpSecret) {
+      // Issue a temporary token — client must complete 2FA within 5 min
+      const tempToken = createPending2fa(ip);
+      auditLog('login_2fa_pending', { email, ip }, ip);
+      return res.json({ success: false, require2fa: true, tempToken });
+    }
+
+    recordSuccessLogin(ip);
+    const token = generateToken();
+    auditLog('login_success', { email, ip }, ip);
     notifyLogin(
       `🔐 <b>Connexion au dashboard Baltimore 83</b>\n\n🕐 ${time}\n🌐 IP : <code>${ip}</code>${geoLine}\n📱 ${ua.slice(0, 100)}`
     ).catch(() => {});
@@ -43,6 +69,7 @@ router.post('/auth/login', async (req, res) => {
     res.json({ success: true, token });
   } else {
     recordFailedAttempt(ip);
+    auditLog('login_failed', { email: (email || '').slice(0, 80), ip }, ip);
     const ua   = req.headers['user-agent'] || '?';
     const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
     let geoLine = '';
@@ -51,12 +78,34 @@ router.post('/auth/login', async (req, res) => {
       const geo = await geoRes.json();
       if (geo.status === 'success') geoLine = `\n📍 ${geo.city}, ${geo.regionName}, ${geo.country}\n🏢 ${geo.isp}`;
     } catch {}
-    // NOTE: password intentionally NOT logged
     notifyLogin(
       `⚠️ <b>Tentative de connexion échouée — Baltimore 83</b>\n\n🕐 ${time}\n🌐 IP : <code>${ip}</code>${geoLine}\n👤 Email : <code>${(email || '').slice(0, 80)}</code>\n📱 ${ua.slice(0, 100)}`
     ).catch(() => {});
     res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
   }
+});
+
+// 2FA verification
+router.post('/auth/2fa', (req, res) => {
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const { tempToken, code } = req.body;
+  if (!tempToken || !code) return res.status(400).json({ error: 'Paramètres manquants' });
+
+  if (!validatePending2fa(tempToken, ip)) {
+    auditLog('2fa_invalid_session', { ip }, ip);
+    return res.status(401).json({ error: 'Session 2FA invalide ou expirée' });
+  }
+
+  const secret = db.prepare("SELECT value FROM settings WHERE key='totp_secret'").get()?.value || '';
+  if (!verifyTotp(secret, code)) {
+    auditLog('2fa_wrong_code', { ip }, ip);
+    return res.status(401).json({ error: 'Code incorrect' });
+  }
+
+  recordSuccessLogin(ip);
+  const token = generateToken();
+  auditLog('login_success_2fa', { ip }, ip);
+  res.json({ success: true, token });
 });
 
 // ── PUBLIC ROUTES (no auth needed — miniapp + shop catalog) ───────────────────
@@ -104,6 +153,8 @@ router.get('/promo/:code', (req, res) => {
 
 // ── MINIAPP ENDPOINTS (public — called by Telegram users) ─────────────────────
 
+// ── MINIAPP ENDPOINTS (public — called by Telegram users) ─────────────────────
+
 router.get('/miniapp/access/:telegramId', (req, res) => {
   const user = db.prepare('SELECT is_validated, referral_code, blacklisted FROM users WHERE telegram_id = ?').get(req.params.telegramId);
   if (!user) return res.json({ validated: false, referral_code: null });
@@ -122,15 +173,45 @@ router.get('/miniapp/orders/:telegramId', (req, res) => {
   res.json(withItems);
 });
 
-router.post('/miniapp/order', (req, res) => {
-  const { telegram_id, items, notes, delivery_name, delivery_phone, delivery_address, promo_code } = req.body;
+router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
+  const raw = req.body;
+  const telegram_id = raw.telegram_id;
+  const items = raw.items;
+  const promo_code = raw.promo_code;
+  // Sanitize text inputs
+  const notes           = sanitize(raw.notes || '');
+  const delivery_name   = sanitize(raw.delivery_name || '');
+  const delivery_phone  = sanitize(raw.delivery_phone || '');
+  const delivery_address = sanitize(raw.delivery_address || '');
+
   if (!telegram_id || !items?.length) return res.status(400).json({ error: 'Champs manquants' });
   if (!delivery_name || !delivery_phone || !delivery_address)
     return res.status(400).json({ error: 'Nom, téléphone et adresse requis' });
 
+  // Validate that initData telegram_id matches body telegram_id (if initData was provided)
+  if (req.telegramUser && String(req.telegramUser.id) !== String(telegram_id)) {
+    return res.status(403).json({ error: 'Identité Telegram invalide' });
+  }
+
   const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegram_id);
   if (!user) return res.status(404).json({ error: 'Utilisateur introuvable. Démarrez le bot d\'abord.' });
   if (!user.is_validated) return res.status(403).json({ error: 'Compte non validé. Entre un code de parrainage dans le bot.' });
+
+  // ── Order rate limiting ───────────────────────────────────────────────────
+  const maxOrders = parseInt(db.prepare("SELECT value FROM settings WHERE key='order_rate_limit'").get()?.value || '5');
+  const windowHours = parseInt(db.prepare("SELECT value FROM settings WHERE key='order_rate_window_hours'").get()?.value || '1');
+  const rateRow = db.prepare('SELECT * FROM order_rate WHERE telegram_id = ?').get(telegram_id);
+  if (rateRow) {
+    const windowStart = new Date(rateRow.window_start + 'Z');
+    const windowAge = (Date.now() - windowStart.getTime()) / 3600000;
+    if (windowAge < windowHours) {
+      if (rateRow.count >= maxOrders)
+        return res.status(429).json({ error: `Trop de commandes. Maximum ${maxOrders} commandes par ${windowHours}h.` });
+    } else {
+      // Reset window
+      db.prepare('UPDATE order_rate SET count = 0, window_start = datetime("now") WHERE telegram_id = ?').run(telegram_id);
+    }
+  }
 
   // Check no-delivery zones
   const zonesRaw = db.prepare('SELECT value FROM settings WHERE key = ?').get('no_delivery_zones')?.value;
@@ -196,6 +277,8 @@ router.post('/miniapp/order', (req, res) => {
 
   // Update user contact info
   db.prepare('UPDATE users SET phone = ?, address = ? WHERE telegram_id = ?').run(delivery_phone, delivery_address, telegram_id);
+  // Increment order rate counter
+  db.prepare('INSERT INTO order_rate (telegram_id, count, window_start) VALUES (?, 1, datetime("now")) ON CONFLICT(telegram_id) DO UPDATE SET count = count + 1').run(telegram_id);
 
   const createOrder = db.transaction(() => {
     const order = db.prepare(
@@ -277,8 +360,40 @@ const upload = multer({
   }
 });
 
+// Magic bytes signatures
+const MAGIC = {
+  image: [
+    [0xFF, 0xD8, 0xFF],                          // JPEG
+    [0x89, 0x50, 0x4E, 0x47],                    // PNG
+    [0x47, 0x49, 0x46],                          // GIF
+    [0x52, 0x49, 0x46, 0x46],                    // WEBP (RIFF)
+  ],
+  video: [
+    [0x00, 0x00, 0x00],                          // MP4/MOV (ftyp box, partial)
+    [0x1A, 0x45, 0xDF, 0xA3],                    // MKV/WEBM
+  ],
+};
+function checkMagicBytes(buf, type) {
+  if (type === 'image') return MAGIC.image.some(sig => sig.every((b, i) => buf[i] === b));
+  if (type === 'video') return true; // Video containers are complex; rely on sharp/reject on image check
+  return true;
+}
+
 router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Fichier manquant ou type invalide' });
+
+  // Magic bytes check for images
+  if (req.file.mimetype.startsWith('image/')) {
+    const fd = fs.openSync(req.file.path, 'r');
+    const buf = Buffer.alloc(8);
+    fs.readSync(fd, buf, 0, 8, 0);
+    fs.closeSync(fd);
+    if (!checkMagicBytes(buf, 'image')) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Fichier image invalide' });
+    }
+  }
+
   if (req.file.mimetype.startsWith('image/')) {
     try {
       const newFilename = req.file.filename.replace(/\.[^.]+$/, '.jpg');
@@ -399,6 +514,8 @@ router.patch('/orders/:id/status', async (req, res) => {
   const { status } = req.body;
   const validStatuses = ['pending', 'confirmed', 'preparing', 'shipped', 'delivered', 'cancelled'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Statut invalide' });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  auditLog('order_status_change', { order_id: req.params.id, status }, ip);
   db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.params.id);
   const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(req.params.id);
   if (order?.telegram_id) {
@@ -662,6 +779,64 @@ router.patch('/promos/:id', (req, res) => {
 router.delete('/promos/:id', (req, res) => {
   db.prepare('DELETE FROM promos WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// ── LOGOUT ────────────────────────────────────────────────────────────────────
+
+router.post('/auth/logout', (req, res) => {
+  const header = req.headers['authorization'] || '';
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  import('../auth.js').then(({ invalidateToken }) => { invalidateToken(token); });
+  auditLog('logout', { ip }, ip);
+  res.json({ success: true });
+});
+
+// ── TOTP SETUP ────────────────────────────────────────────────────────────────
+
+router.get('/auth/totp/status', authMiddleware, (req, res) => {
+  const enabled = db.prepare("SELECT value FROM settings WHERE key='totp_enabled'").get()?.value === '1';
+  const secret  = db.prepare("SELECT value FROM settings WHERE key='totp_secret'").get()?.value || '';
+  res.json({ enabled, has_secret: !!secret });
+});
+
+router.get('/auth/totp/setup', authMiddleware, (req, res) => {
+  const secret = generateTotpSecret();
+  const uri = totpUri(secret, 'Baltimore83 Dashboard', 'Baltimore83');
+  const qr = `https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=${encodeURIComponent(uri)}`;
+  res.json({ secret, uri, qr });
+});
+
+router.post('/auth/totp/verify-setup', authMiddleware, (req, res) => {
+  const { secret, code } = req.body;
+  if (!secret || !code) return res.status(400).json({ error: 'Secret et code requis' });
+  if (!verifyTotp(secret, code)) return res.status(400).json({ error: 'Code incorrect' });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('totp_secret', ?)").run(secret);
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('totp_enabled', '1')").run();
+  auditLog('totp_enabled', { ip }, ip);
+  res.json({ success: true });
+});
+
+router.post('/auth/totp/disable', authMiddleware, (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Code TOTP requis' });
+  const secret = db.prepare("SELECT value FROM settings WHERE key='totp_secret'").get()?.value || '';
+  if (!secret || !verifyTotp(secret, code)) return res.status(400).json({ error: 'Code incorrect' });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('totp_enabled', '0')").run();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('totp_secret', '')").run();
+  auditLog('totp_disabled', { ip }, ip);
+  res.json({ success: true });
+});
+
+// ── AUDIT LOG ─────────────────────────────────────────────────────────────────
+
+router.get('/audit-log', (req, res) => {
+  const { limit = 100, offset = 0 } = req.query;
+  const rows = db.prepare('SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ? OFFSET ?').all(parseInt(limit), parseInt(offset));
+  const total = db.prepare('SELECT COUNT(*) as c FROM audit_log').get().c;
+  res.json({ rows, total });
 });
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────

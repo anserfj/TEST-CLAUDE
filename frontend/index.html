@@ -263,8 +263,33 @@ function LoginPage({onLogin}){
   const [pass,setPass]=useState("");
   const [err,setErr]=useState("");
   const [isLoading,setLoading]=useState(false);
-  const handle=async e=>{e.preventDefault();setLoading(true);setErr("");try{const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,pass})});if(r.ok){const d=await r.json();onLogin(d.token);}else{const d=await r.json();setErr(d.error||"Email ou mot de passe incorrect.");}}catch{setErr("Impossible de contacter le serveur.");}setLoading(false);};
-  return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
+  const [step,setStep]=useState("creds"); // creds | totp
+  const [tempToken,setTempToken]=useState("");
+  const [totpCode,setTotpCode]=useState("");
+
+  const handle=async e=>{
+    e.preventDefault();setLoading(true);setErr("");
+    try{
+      const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,pass})});
+      const d=await r.json();
+      if(!r.ok){setErr(d.error||"Email ou mot de passe incorrect.");}
+      else if(d.require2fa){setTempToken(d.tempToken);setStep("totp");}
+      else{onLogin(d.token);}
+    }catch{setErr("Impossible de contacter le serveur.");}
+    setLoading(false);
+  };
+
+  const handleTotp=async e=>{
+    e.preventDefault();setLoading(true);setErr("");
+    try{
+      const r=await fetch("/api/auth/2fa",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({tempToken,code:totpCode})});
+      const d=await r.json();
+      if(!r.ok){setErr(d.error||"Code incorrect.");}
+      else{onLogin(d.token);}
+    }catch{setErr("Erreur serveur.");}
+    setLoading(false);
+  };
+  const credsScreen=<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",inset:0,opacity:.03,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
     <div style={{position:"absolute",top:"20%",left:"10%",width:300,height:300,background:`radial-gradient(circle,${C.accent}12 0%,transparent 70%)`,borderRadius:"50%",pointerEvents:"none"}}/>
     <div className="scale-in" style={{width:"100%",maxWidth:400,padding:20,position:"relative",zIndex:1}}>
@@ -283,12 +308,38 @@ function LoginPage({onLogin}){
         </form>
       </Card>
     </div>
-  </div>
+  </div>;
+
+  const totpScreen=<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
+    <div style={{position:"absolute",inset:0,opacity:.03,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
+    <div className="scale-in" style={{width:"100%",maxWidth:360,padding:20,position:"relative",zIndex:1}}>
+      <Card style={{padding:28}}>
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <div style={{fontSize:36,marginBottom:8}}>🔐</div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.text1,letterSpacing:"0.05em"}}>Vérification 2FA</div>
+          <div style={{fontSize:13,color:C.text2,marginTop:4}}>Entrez le code à 6 chiffres de votre application d'authentification</div>
+        </div>
+        <form onSubmit={handleTotp} style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div>
+            <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text2,letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:5}}>Code TOTP</label>
+            <input type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={totpCode} onChange={e=>setTotpCode(e.target.value.replace(/\D/g,""))} placeholder="000000" autoFocus
+              style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:24,padding:"12px 16px",outline:"none",boxSizing:"border-box",letterSpacing:"0.3em",textAlign:"center",fontFamily:"'JetBrains Mono',monospace"}}
+              onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+          </div>
+          {err&&<div style={{background:"#ff475712",border:`1px solid ${C.red}33`,borderRadius:8,padding:"9px 13px",fontSize:13,color:C.red}}>{err}</div>}
+          <Btn style={{width:"100%",justifyContent:"center",padding:"11px 20px",fontSize:14}} disabled={isLoading||totpCode.length!==6}>{isLoading?"Vérification...":"Valider le code →"}</Btn>
+          <button type="button" onClick={()=>{setStep("creds");setErr("");setTotpCode("");}} style={{background:"transparent",border:"none",color:C.text3,fontSize:13,cursor:"pointer",textDecoration:"underline",fontFamily:"'DM Sans',sans-serif"}}>← Retour à la connexion</button>
+        </form>
+      </Card>
+    </div>
+  </div>;
+
+  return step==="totp"?totpScreen:credsScreen;
 }
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"analytics",icon:"📊",label:"Analytics"},{id:"automations",icon:"⚡",label:"Automations"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"analytics",icon:"📊",label:"Analytics"},{id:"automations",icon:"⚡",label:"Automations"},{id:"audit-log",icon:"🔒",label:"Audit"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:"0 0 72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
@@ -1831,6 +1882,105 @@ function ZonesMapCard({zones,onZonesChange,onSave,saved}){
 }
 
 /* ── SETTINGS PAGE ── */
+/* ── TOTP SETUP CARD ── */
+function TotpSetupCard(){
+  const [status,setStatus]=useState(null); // null=loading, {enabled,has_secret}
+  const [phase,setPhase]=useState("idle"); // idle | setup | verify | disable
+  const [qrUrl,setQrUrl]=useState("");
+  const [secret,setSecret]=useState("");
+  const [code,setCode]=useState("");
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  const load=()=>apiGet("/api/auth/totp/status").then(d=>setStatus(d)).catch(()=>setStatus({enabled:false,has_secret:false}));
+  useEffect(()=>{load();},[]);
+
+  const startSetup=async()=>{
+    setBusy(true);setErr("");
+    try{
+      const d=await apiGet("/api/auth/totp/setup");
+      setSecret(d.secret);
+      setQrUrl("https://api.qrserver.com/v1/create-qr-code/?size=180x180&data="+encodeURIComponent(d.uri));
+      setPhase("setup");
+    }catch(e){setErr(e.message);}
+    setBusy(false);
+  };
+
+  const verifySetup=async e=>{
+    e.preventDefault();setBusy(true);setErr("");
+    try{
+      await apiPost("/api/auth/totp/verify-setup",{code});
+      setPhase("idle");setCode("");load();
+      showToast("✅ 2FA activé !");
+    }catch(e){setErr(e.message||"Code incorrect");}
+    setBusy(false);
+  };
+
+  const disable=async e=>{
+    e.preventDefault();setBusy(true);setErr("");
+    try{
+      await apiPost("/api/auth/totp/disable",{code});
+      setPhase("idle");setCode("");load();
+      showToast("🔓 2FA désactivé");
+    }catch(e){setErr(e.message||"Code incorrect");}
+    setBusy(false);
+  };
+
+  if(!status)return null;
+
+  return<Card style={{marginBottom:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:phase!=="idle"?16:0}}>
+      <div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:".05em"}}>🔐 Authentification 2 facteurs (TOTP)</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>
+          {status.enabled?<span style={{color:C.green,fontWeight:600}}>✓ Activé — connexion protégée par code TOTP</span>:"Protégez votre compte avec une application d'authentification (Google Authenticator, Authy…)"}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,flexShrink:0,marginLeft:12}}>
+        {!status.enabled&&phase==="idle"&&<Btn onClick={startSetup} disabled={busy} style={{fontSize:12,padding:"6px 14px"}}>{busy?"...":"Activer"}</Btn>}
+        {status.enabled&&phase==="idle"&&<Btn variant="ghost" onClick={()=>{setPhase("disable");setErr("");setCode("");}} style={{fontSize:12,padding:"6px 14px",borderColor:C.red+"44",color:C.red}}>Désactiver</Btn>}
+      </div>
+    </div>
+
+    {phase==="setup"&&<div>
+      <div style={{display:"flex",gap:20,flexWrap:"wrap",alignItems:"flex-start",marginBottom:16}}>
+        <div style={{textAlign:"center"}}>
+          <img src={qrUrl} alt="QR Code" style={{width:160,height:160,borderRadius:8,border:`2px solid ${C.border}`,background:"#fff"}}/>
+          <div style={{fontSize:10,color:C.text3,marginTop:6}}>Scanner avec votre app</div>
+        </div>
+        <div style={{flex:1,minWidth:200}}>
+          <div style={{fontSize:12,color:C.text2,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Clé manuelle</div>
+          <div style={{fontFamily:"'JetBrains Mono'",fontSize:13,background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 12px",letterSpacing:"0.15em",wordBreak:"break-all",color:C.accent,marginBottom:12}}>{secret}</div>
+          <div style={{fontSize:12,color:C.text3,lineHeight:1.5}}>1. Scannez le QR code ou entrez la clé dans votre application.<br/>2. Entrez le code à 6 chiffres pour confirmer l'activation.</div>
+        </div>
+      </div>
+      <form onSubmit={verifySetup} style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:140}}>
+          <label style={{display:"block",fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Code de confirmation</label>
+          <input type="text" inputMode="numeric" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))} placeholder="000000" autoFocus
+            style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:18,padding:"9px 13px",outline:"none",fontFamily:"'JetBrains Mono'",letterSpacing:"0.2em",textAlign:"center"}}
+            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+        </div>
+        <Btn type="submit" disabled={busy||code.length!==6} style={{padding:"9px 18px"}}>{busy?"...":"Confirmer"}</Btn>
+        <Btn variant="ghost" type="button" onClick={()=>{setPhase("idle");setErr("");setCode("");}} style={{padding:"9px 14px"}}>Annuler</Btn>
+      </form>
+      {err&&<div style={{marginTop:8,fontSize:13,color:C.red}}>{err}</div>}
+    </div>}
+
+    {phase==="disable"&&<form onSubmit={disable} style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:140}}>
+        <label style={{display:"block",fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Code TOTP actuel</label>
+        <input type="text" inputMode="numeric" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,""))} placeholder="000000" autoFocus
+          style={{width:"100%",background:C.surface,border:`1px solid ${C.red}44`,borderRadius:8,color:C.text1,fontSize:18,padding:"9px 13px",outline:"none",fontFamily:"'JetBrains Mono'",letterSpacing:"0.2em",textAlign:"center"}}
+          onFocus={e=>e.target.style.borderColor=C.red} onBlur={e=>e.target.style.borderColor=C.red+"44"}/>
+      </div>
+      <button type="submit" disabled={busy||code.length!==6} style={{padding:"9px 18px",borderRadius:8,background:C.red,border:"none",color:"#fff",fontSize:13,fontWeight:600,cursor:busy||code.length!==6?"not-allowed":"pointer",opacity:busy||code.length!==6?0.5:1,fontFamily:"'DM Sans',sans-serif"}}>{busy?"...":"Désactiver"}</button>
+      <Btn variant="ghost" type="button" onClick={()=>{setPhase("idle");setErr("");setCode("");}} style={{padding:"9px 14px"}}>Annuler</Btn>
+      {err&&<div style={{width:"100%",marginTop:4,fontSize:13,color:C.red}}>{err}</div>}
+    </form>}
+  </Card>;
+}
+
 function SettingsPage({orders,logout}){
   const [settings,setSettings]=useState(()=>{
     try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}
@@ -2059,6 +2209,9 @@ function SettingsPage({orders,logout}){
       </div>
     </Card>
 
+    {/* Sécurité 2FA */}
+    <TotpSetupCard/>
+
     {/* Compte */}
     <Card>
       <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>👤 Compte</div>
@@ -2068,6 +2221,77 @@ function SettingsPage({orders,logout}){
         <button onClick={logout} style={{padding:"9px 18px",borderRadius:8,background:"transparent",border:`1px solid ${C.red}44`,color:C.red,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button>
       </div>
     </Card>
+  </div>;
+}
+
+/* ── AUDIT LOG ── */
+function AuditLogPage(){
+  const [rows,setRows]=useState([]);
+  const [total,setTotal]=useState(0);
+  const [page,setPage]=useState(0);
+  const [loading,setLoading]=useState(false);
+  const limit=50;
+
+  const load=p=>{
+    setLoading(true);
+    apiGet(`/api/audit-log?limit=${limit}&offset=${p*limit}`)
+      .then(d=>{setRows(d.rows||[]);setTotal(d.total||0);})
+      .catch(e=>showToast("Erreur: "+e.message))
+      .finally(()=>setLoading(false));
+  };
+  useEffect(()=>{load(page);},[page]);
+
+  const actionLabel=a=>({
+    login_ok:"🟢 Connexion",login_fail:"🔴 Échec connexion",logout:"⬜ Déconnexion",
+    "2fa_ok":"🟢 2FA validé","2fa_fail":"🔴 Échec 2FA",totp_enabled:"🔐 2FA activé",totp_disabled:"🔓 2FA désactivé",
+    order_status_changed:"📦 Statut commande",order_created:"🛒 Commande créée"
+  }[a]||a);
+
+  const actionColor=a=>{
+    if(a.includes("fail")||a.includes("Fail"))return C.red;
+    if(a==="logout"||a==="totp_disabled")return C.text3;
+    if(a==="totp_enabled"||a==="2fa_ok"||a==="login_ok")return C.green;
+    return C.accent;
+  };
+
+  return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Journal d'audit</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{total} événement{total!==1?"s":""} enregistré{total!==1?"s":""}</div>
+      </div>
+      <Btn variant="ghost" onClick={()=>load(page)} style={{fontSize:12,padding:"7px 14px"}}>🔄 Actualiser</Btn>
+    </div>
+    <Card style={{padding:0,overflow:"hidden"}}>
+      {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{borderBottom:`1px solid ${C.border}`}}>
+              {["Date","Action","Détails","IP"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:11,color:C.text3,fontWeight:600,letterSpacing:"0.07em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length===0&&<tr><td colSpan={4} style={{padding:32,textAlign:"center",color:C.text3,fontSize:13}}>Aucun événement</td></tr>}
+            {rows.map(r=>{
+              let detailStr="";
+              try{const d=r.details?JSON.parse(r.details):{};detailStr=Object.entries(d).filter(([k])=>k!=="ip").map(([k,v])=>`${k}: ${v}`).join(" · ");}catch{}
+              return<tr key={r.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}11`}}>
+                <td style={{padding:"9px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap",fontFamily:"'JetBrains Mono'"}}>{r.created_at?.replace("T"," ").slice(0,16)}</td>
+                <td style={{padding:"9px 14px",fontSize:12,fontWeight:600,whiteSpace:"nowrap",color:actionColor(r.action)}}>{actionLabel(r.action)}</td>
+                <td style={{padding:"9px 14px",fontSize:11,color:C.text2,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{detailStr||"—"}</td>
+                <td style={{padding:"9px 14px",fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",whiteSpace:"nowrap"}}>{r.ip||"—"}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>}
+    </Card>
+    {total>limit&&<div style={{display:"flex",justifyContent:"center",gap:8,alignItems:"center"}}>
+      <Btn variant="ghost" disabled={page===0} onClick={()=>setPage(p=>p-1)} style={{padding:"6px 14px",fontSize:12}}>← Préc.</Btn>
+      <span style={{fontSize:12,color:C.text3}}>Page {page+1} / {Math.ceil(total/limit)}</span>
+      <Btn variant="ghost" disabled={(page+1)*limit>=total} onClick={()=>setPage(p=>p+1)} style={{padding:"6px 14px",fontSize:12}}>Suiv. →</Btn>
+    </div>}
   </div>;
 }
 
@@ -2337,6 +2561,7 @@ function App(){
       {page==="messages"&&<MessagesPage/>}
       {page==="analytics"&&<AnalyticsPage/>}
       {page==="automations"&&<AutomationsPage/>}
+      {page==="audit-log"&&<AuditLogPage/>}
       {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
     </main>
   </div>

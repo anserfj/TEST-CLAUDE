@@ -48,15 +48,24 @@ function loadCart() {
 }
 
 // ── API ──
+function _initDataHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const id = tg.initData;
+  if (id) h["X-Telegram-Init-Data"] = id;
+  return h;
+}
 async function apiGet(path) {
-  const r = await fetch(path);
+  const headers = {};
+  const id = tg.initData;
+  if (id) headers["X-Telegram-Init-Data"] = id;
+  const r = await fetch(path, { headers });
   if (!r.ok) throw new Error(`API ${r.status}`);
   return r.json();
 }
 async function apiPost(path, body) {
   const r = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: _initDataHeaders(),
     body: JSON.stringify(body),
   });
   if (!r.ok) {

@@ -146,6 +146,22 @@ try { db.exec(`ALTER TABLE promos ADD COLUMN user_id INTEGER`); } catch(e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN tag TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN blacklisted INTEGER DEFAULT 0`); } catch(e) {}
 
+// Audit log table
+db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  action TEXT NOT NULL,
+  details TEXT,
+  ip TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+)`);
+
+// Order rate limiting table
+db.exec(`CREATE TABLE IF NOT EXISTS order_rate (
+  telegram_id INTEGER PRIMARY KEY,
+  count INTEGER DEFAULT 0,
+  window_start TEXT DEFAULT (datetime('now'))
+)`);
+
 // Settings table
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
 // Seed default settings (INSERT OR IGNORE so existing values are preserved)
@@ -166,6 +182,11 @@ const _upsertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) V
   ['auto_inactivity_text', 'Hey ! Ça fait un moment qu\'on t\'a pas vu 👀\n\nNos nouveaux arrivages sont disponibles, viens jeter un œil 🔥'],
   ['auto_shop_alert_enabled', '0'],
   ['auto_shop_alert_hours', '4'],
+  ['totp_secret', ''],
+  ['totp_enabled', '0'],
+  ['session_timeout_minutes', '60'],
+  ['order_rate_limit', '5'],
+  ['order_rate_window_hours', '1'],
 ].forEach(([k, v]) => _upsertSetting.run(k, v));
 
 // Migration: supprimer les catégories et produits de démonstration CBD
