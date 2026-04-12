@@ -102,14 +102,34 @@
 </head>
 <body><div id="root"></div>
 <script>
-window.onerror=function(msg,src,line,col,err){
+var _diag=function(label,msg){
   var root=document.getElementById('root');
-  if(root)root.innerHTML='<pre style="color:#ff4757;background:#0f1318;padding:24px;font-size:13px;white-space:pre-wrap;word-break:break-all">RUNTIME ERROR:\n'+msg+'\n\nFile: '+src+'\nLine: '+line+'\n\n'+(err&&err.stack?err.stack:'')+'</pre>';
+  if(root)root.innerHTML='<pre style="color:#ff4757;background:#0f1318;padding:24px;font-size:13px;white-space:pre-wrap;word-break:break-all">'+label+':\n'+msg+'</pre>';
+};
+// Catch JS runtime errors
+window.onerror=function(msg,src,line,col,err){
+  _diag('RUNTIME ERROR',msg+'\n\nFile: '+src+'\nLine: '+line+'\n\n'+(err&&err.stack?err.stack:''));
   return false;
 };
+// Catch unhandled promise rejections
 window.addEventListener('unhandledrejection',function(e){
   var root=document.getElementById('root');
-  if(root&&root.innerHTML.trim()==='')root.innerHTML='<pre style="color:#ff4757;background:#0f1318;padding:24px;font-size:13px;white-space:pre-wrap">UNHANDLED REJECTION:\n'+(e.reason&&e.reason.stack?e.reason.stack:String(e.reason))+'</pre>';
+  if(root&&root.innerHTML.trim()==='')_diag('UNHANDLED REJECTION',(e.reason&&e.reason.stack?e.reason.stack:String(e.reason)));
+});
+// Intercept console.error to catch silent Babel compilation errors
+var _ce=console.error.bind(console);
+console.error=function(){
+  _ce.apply(console,arguments);
+  var msg=Array.prototype.slice.call(arguments).map(function(a){return a&&a.stack?a.stack:String(a);}).join('\n');
+  var root=document.getElementById('root');
+  if(root&&root.innerHTML.trim()==='')_diag('CONSOLE ERROR (possible Babel failure)',msg);
+};
+// After full page load + 2s, check if root is still empty
+window.addEventListener('load',function(){
+  setTimeout(function(){
+    var root=document.getElementById('root');
+    if(root&&root.innerHTML.trim()==='')_diag('ROOT VIDE','Babel a peut-etre echoue silencieusement.\nVerifier la console du navigateur (F12).');
+  },2000);
 });
 </script>
 <script type="text/babel">
