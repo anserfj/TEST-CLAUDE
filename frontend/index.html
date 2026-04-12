@@ -101,48 +101,6 @@
   </style>
 </head>
 <body><div id="root"></div>
-<script>
-var _diag=function(label,msg){
-  var root=document.getElementById('root');
-  if(root)root.innerHTML='<pre style="color:#ff4757;background:#0f1318;padding:24px;font-size:13px;white-space:pre-wrap;word-break:break-all">'+label+':\n'+msg+'</pre>';
-};
-// Catch JS runtime errors
-window.onerror=function(msg,src,line,col,err){
-  _diag('RUNTIME ERROR',msg+'\n\nFile: '+src+'\nLine: '+line+'\n\n'+(err&&err.stack?err.stack:''));
-  return false;
-};
-// Catch unhandled promise rejections
-window.addEventListener('unhandledrejection',function(e){
-  var root=document.getElementById('root');
-  if(root&&root.innerHTML.trim()==='')_diag('UNHANDLED REJECTION',(e.reason&&e.reason.stack?e.reason.stack:String(e.reason)));
-});
-// Intercept console.error to catch silent Babel compilation errors
-var _ce=console.error.bind(console);
-console.error=function(){
-  _ce.apply(console,arguments);
-  var msg=Array.prototype.slice.call(arguments).map(function(a){return a&&a.stack?a.stack:String(a);}).join('\n');
-  var root=document.getElementById('root');
-  if(root&&root.innerHTML.trim()==='')_diag('CONSOLE ERROR (possible Babel failure)',msg);
-};
-// After full page load + 2s, check if root is still empty
-window.addEventListener('load',function(){
-  setTimeout(function(){
-    var root=document.getElementById('root');
-    if(root&&root.innerHTML.trim()===''){
-      var info=[];
-      info.push('React: '+(typeof React!=='undefined'?'OK v'+React.version:'MANQUANT'));
-      info.push('ReactDOM: '+(typeof ReactDOM!=='undefined'?'OK':'MANQUANT'));
-      info.push('Babel: '+(typeof Babel!=='undefined'?'OK v'+(Babel.version||'?'):'MANQUANT'));
-      info.push('Leaflet: '+(typeof L!=='undefined'?'OK':'MANQUANT'));
-      if(typeof Babel!=='undefined'){
-        try{Babel.transform('<div/>',{presets:['react']});info.push('Babel transform: OK');}
-        catch(e){info.push('Babel transform ERREUR: '+e.message);}
-      }
-      _diag('ROOT VIDE - Diagnostic',info.join('\n'));
-    }
-  },2000);
-});
-</script>
 <script type="text/babel">
 const {useState,useEffect,useRef,useMemo,useCallback}=React;
 
@@ -381,7 +339,7 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"analytics",icon:"📊",label:"Analytics"},{id:"automations",icon:"⚡",label:"Automations"},{id:"audit-log",icon:"🔒",label:"Audit"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"analytics",icon:"📊",label:"Analytics"},{id:"automations",icon:"⚡",label:"Automations"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:"0 0 72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
@@ -2266,77 +2224,6 @@ function SettingsPage({orders,logout}){
   </div>;
 }
 
-/* ── AUDIT LOG ── */
-function AuditLogPage(){
-  const [rows,setRows]=useState([]);
-  const [total,setTotal]=useState(0);
-  const [page,setPage]=useState(0);
-  const [loading,setLoading]=useState(false);
-  const limit=50;
-
-  const load=p=>{
-    setLoading(true);
-    apiGet(`/api/audit-log?limit=${limit}&offset=${p*limit}`)
-      .then(d=>{setRows(d.rows||[]);setTotal(d.total||0);})
-      .catch(e=>showToast("Erreur: "+e.message))
-      .finally(()=>setLoading(false));
-  };
-  useEffect(()=>{load(page);},[page]);
-
-  const actionLabel=a=>({
-    login_ok:"🟢 Connexion",login_fail:"🔴 Échec connexion",logout:"⬜ Déconnexion",
-    "2fa_ok":"🟢 2FA validé","2fa_fail":"🔴 Échec 2FA",totp_enabled:"🔐 2FA activé",totp_disabled:"🔓 2FA désactivé",
-    order_status_changed:"📦 Statut commande",order_created:"🛒 Commande créée"
-  }[a]||a);
-
-  const actionColor=a=>{
-    if(a.includes("fail")||a.includes("Fail"))return C.red;
-    if(a==="logout"||a==="totp_disabled")return C.text3;
-    if(a==="totp_enabled"||a==="2fa_ok"||a==="login_ok")return C.green;
-    return C.accent;
-  };
-
-  return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-      <div>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Journal d'audit</div>
-        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{total} événement{total!==1?"s":""} enregistré{total!==1?"s":""}</div>
-      </div>
-      <Btn variant="ghost" onClick={()=>load(page)} style={{fontSize:12,padding:"7px 14px"}}>🔄 Actualiser</Btn>
-    </div>
-    <Card style={{padding:0,overflow:"hidden"}}>
-      {loading?<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>:
-      <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse"}}>
-          <thead>
-            <tr style={{borderBottom:`1px solid ${C.border}`}}>
-              {["Date","Action","Détails","IP"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:11,color:C.text3,fontWeight:600,letterSpacing:"0.07em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length===0&&<tr><td colSpan={4} style={{padding:32,textAlign:"center",color:C.text3,fontSize:13}}>Aucun événement</td></tr>}
-            {rows.map(r=>{
-              let detailStr="";
-              try{const d=r.details?JSON.parse(r.details):{};detailStr=Object.entries(d).filter(([k])=>k!=="ip").map(([k,v])=>`${k}: ${v}`).join(" · ");}catch{}
-              return<tr key={r.id} className="row-hover" style={{borderBottom:`1px solid ${C.border}11`}}>
-                <td style={{padding:"9px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap",fontFamily:"'JetBrains Mono'"}}>{r.created_at?.replace("T"," ").slice(0,16)}</td>
-                <td style={{padding:"9px 14px",fontSize:12,fontWeight:600,whiteSpace:"nowrap",color:actionColor(r.action)}}>{actionLabel(r.action)}</td>
-                <td style={{padding:"9px 14px",fontSize:11,color:C.text2,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{detailStr||"—"}</td>
-                <td style={{padding:"9px 14px",fontSize:11,color:C.text3,fontFamily:"'JetBrains Mono'",whiteSpace:"nowrap"}}>{r.ip||"—"}</td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
-      </div>}
-    </Card>
-    {total>limit&&<div style={{display:"flex",justifyContent:"center",gap:8,alignItems:"center"}}>
-      <Btn variant="ghost" disabled={page===0} onClick={()=>setPage(p=>p-1)} style={{padding:"6px 14px",fontSize:12}}>← Préc.</Btn>
-      <span style={{fontSize:12,color:C.text3}}>Page {page+1} / {Math.ceil(total/limit)}</span>
-      <Btn variant="ghost" disabled={(page+1)*limit>=total} onClick={()=>setPage(p=>p+1)} style={{padding:"6px 14px",fontSize:12}}>Suiv. →</Btn>
-    </div>}
-  </div>;
-}
-
 /* ── ANALYTICS ── */
 function AnalyticsPage(){
   const [data,setData]=useState(null);
@@ -2603,25 +2490,12 @@ function App(){
       {page==="messages"&&<MessagesPage/>}
       {page==="analytics"&&<AnalyticsPage/>}
       {page==="automations"&&<AutomationsPage/>}
-      {page==="audit-log"&&<AuditLogPage/>}
       {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
     </main>
   </div>
 }
 
-class ErrorBoundary extends React.Component{
-  constructor(p){super(p);this.state={err:null};}
-  static getDerivedStateFromError(e){return{err:e};}
-  componentDidCatch(e,info){console.error("React error boundary caught:",e,info);}
-  render(){
-    if(this.state.err){
-      const e=this.state.err;
-      return<pre style={{color:"#ff4757",background:"#0f1318",padding:24,fontSize:13,whiteSpace:"pre-wrap",wordBreak:"break-all",minHeight:"100vh"}}>{"REACT RENDER ERROR:\n"+(e&&e.message?e.message:String(e))+"\n\n"+(e&&e.stack?e.stack:"")}</pre>;
-    }
-    return this.props.children;
-  }
-}
-ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><App/></ErrorBoundary>);
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
