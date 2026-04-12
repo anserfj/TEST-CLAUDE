@@ -101,6 +101,17 @@
   </style>
 </head>
 <body><div id="root"></div>
+<script>
+window.onerror=function(msg,src,line,col,err){
+  var root=document.getElementById('root');
+  if(root)root.innerHTML='<pre style="color:#ff4757;background:#0f1318;padding:24px;font-size:13px;white-space:pre-wrap;word-break:break-all">RUNTIME ERROR:\n'+msg+'\n\nFile: '+src+'\nLine: '+line+'\n\n'+(err&&err.stack?err.stack:'')+'</pre>';
+  return false;
+};
+window.addEventListener('unhandledrejection',function(e){
+  var root=document.getElementById('root');
+  if(root&&root.innerHTML.trim()==='')root.innerHTML='<pre style="color:#ff4757;background:#0f1318;padding:24px;font-size:13px;white-space:pre-wrap">UNHANDLED REJECTION:\n'+(e.reason&&e.reason.stack?e.reason.stack:String(e.reason))+'</pre>';
+});
+</script>
 <script type="text/babel">
 const {useState,useEffect,useRef,useMemo,useCallback}=React;
 
@@ -2567,7 +2578,19 @@ function App(){
   </div>
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+class ErrorBoundary extends React.Component{
+  constructor(p){super(p);this.state={err:null};}
+  static getDerivedStateFromError(e){return{err:e};}
+  componentDidCatch(e,info){console.error("React error boundary caught:",e,info);}
+  render(){
+    if(this.state.err){
+      const e=this.state.err;
+      return<pre style={{color:"#ff4757",background:"#0f1318",padding:24,fontSize:13,whiteSpace:"pre-wrap",wordBreak:"break-all",minHeight:"100vh"}}>{"REACT RENDER ERROR:\n"+(e&&e.message?e.message:String(e))+"\n\n"+(e&&e.stack?e.stack:"")}</pre>;
+    }
+    return this.props.children;
+  }
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><App/></ErrorBoundary>);
 </script>
 </body>
 </html>
