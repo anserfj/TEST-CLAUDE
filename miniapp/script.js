@@ -501,6 +501,7 @@ function renderCart() {
       <div class="cart-item-thumb">${thumbHtml}</div>
       <div class="cart-item-info">
         <div class="cart-item-name">${item.name}</div>
+        ${item.gram_qty ? `<div class="cart-item-qty">${item.gram_qty * item.qty}${item.unit || 'g'}</div>` : ''}
         <div class="cart-item-price">${(item.price * item.qty).toFixed(2).replace(".", ",")} €</div>
       </div>
       <div class="qty-controls">
