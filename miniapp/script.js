@@ -66,22 +66,48 @@ async function apiPost(path, body) {
   return r.json();
 }
 
+// ── SPLASH ──
+function hideSplash() {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  splash.classList.add('splash-exit');
+  setTimeout(() => { splash.remove(); }, 500);
+}
+
 // ── SHOP IDENTITY ──
 function applyShopIdentity() {
   const name = shopSettings.shop_name || "";
   const tagline = shopSettings.shop_tagline || shopSettings.shop_banner || "";
   const logoUrl = shopSettings.shop_logo_url || "";
-  const banner = document.getElementById("bannerText");
-  const logo = document.getElementById("shopLogoText");
-  if (banner) banner.textContent = tagline || (name ? `${name}` : "");
-  if (logo) {
+
+  const applyLogo = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
     if (logoUrl) {
-      logo.innerHTML = `<img src="${logoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="${name}">`;
-      logo.style.fontSize = "0";
+      el.innerHTML = `<img src="${logoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="${name}">`;
+      el.style.fontSize = "0";
     } else if (name) {
-      logo.textContent = name.substring(0, 3).toUpperCase();
+      el.textContent = name.substring(0, 3).toUpperCase();
+      el.style.fontSize = "";
     }
-  }
+  };
+
+  const banner = document.getElementById("bannerText");
+  if (banner) banner.textContent = tagline || (name ? `${name}` : "");
+
+  applyLogo("shopLogoText");
+  applyLogo("infoLogoText");
+  applyLogo("splashLogoCircle");
+
+  const infoBrand = document.getElementById("infoBrand");
+  if (infoBrand && name) infoBrand.textContent = name.toUpperCase();
+  const infoTaglineTxt = document.getElementById("infoTaglineTxt");
+  if (infoTaglineTxt && tagline) infoTaglineTxt.textContent = tagline;
+  const splashBrand = document.getElementById("splashBrand");
+  if (splashBrand && name) splashBrand.textContent = name.toUpperCase();
+  const splashTaglineEl = document.getElementById("splashTaglineEl");
+  if (splashTaglineEl && tagline) splashTaglineEl.textContent = tagline;
+
   if (name) document.title = name + " · Boutique";
 }
 
@@ -122,6 +148,7 @@ function showAccessBlocked() {
 
 // ── INIT ──
 async function init() {
+  const splashStart = Date.now();
   loadCart();
   showSkeletons();
   try {
@@ -153,6 +180,8 @@ async function init() {
   }
   renderProducts();
   updateCartBadge();
+  const elapsed = Date.now() - splashStart;
+  setTimeout(hideSplash, Math.max(0, 1800 - elapsed));
 }
 
 // ── BUILD CATEGORY SELECT ──

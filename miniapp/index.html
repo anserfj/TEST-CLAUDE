@@ -14,6 +14,33 @@
 </head>
 <body>
 
+  <!-- ── SPLASH SCREEN ── -->
+  <div id="splash">
+    <div class="splash-bg">
+      <div class="spart" style="--x:12%;--y:18%;--d:3.4s;--s:1.2"></div>
+      <div class="spart" style="--x:82%;--y:12%;--d:4.1s;--s:.8"></div>
+      <div class="spart" style="--x:22%;--y:72%;--d:3.9s;--s:1"></div>
+      <div class="spart" style="--x:74%;--y:68%;--d:4.6s;--s:.7"></div>
+      <div class="spart" style="--x:48%;--y:35%;--d:3.1s;--s:.6"></div>
+      <div class="spart" style="--x:8%;--y:52%;--d:5.2s;--s:1.1"></div>
+      <div class="spart" style="--x:88%;--y:42%;--d:4.8s;--s:.9"></div>
+      <div class="spart" style="--x:60%;--y:88%;--d:3.7s;--s:.75"></div>
+    </div>
+    <div class="splash-main">
+      <div class="splash-logo-wrap">
+        <div class="splash-ring sr1"></div>
+        <div class="splash-ring sr2"></div>
+        <div class="splash-ring sr3"></div>
+        <div class="splash-logo-circle" id="splashLogoCircle">B83</div>
+      </div>
+      <div class="splash-brand" id="splashBrand">BALTIMORE 83</div>
+      <div class="splash-tagline" id="splashTaglineEl">Votre shop dans le Var 🔥</div>
+      <div class="splash-loading">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+
   <nav class="tabs">
     <button class="tab active" data-tab="produits" onclick="switchTab('produits')">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -68,58 +95,90 @@
 
     <!-- PAGE INFO -->
     <section id="page-info" class="page">
-      <div class="info-header">
-        <div class="shop-logo-wrap">
-          <div class="shop-logo">B83</div>
+
+      <!-- HERO -->
+      <div class="info-hero">
+        <div class="info-hero-glow"></div>
+        <div class="info-logo-wrap">
+          <div class="info-logo-ring ilr1"></div>
+          <div class="info-logo-ring ilr2"></div>
+          <div class="shop-logo info-logo-inner" id="infoLogoText">B83</div>
         </div>
-        <h1 class="info-title">Informations</h1>
-        <p class="info-subtitle">Horaires et moyens de nous contacter</p>
+        <div class="info-brand" id="infoBrand">BALTIMORE 83</div>
+        <div class="info-tagline-txt" id="infoTaglineTxt">Votre shop dans le Var 83 🔥</div>
       </div>
 
-      <div class="info-section">
-        <div class="info-section-title">
-          <span class="info-icon">🕐</span> Horaires
+      <!-- STATS -->
+      <div class="info-stats-row">
+        <div class="info-stat-box">
+          <span class="info-stat-val">83</span>
+          <span class="info-stat-lbl">Var</span>
         </div>
-        <div class="info-row">
-          <div class="info-row-icon">🚚</div>
-          <div class="info-row-content">
-            <div class="info-row-label">Livraison</div>
-            <div class="info-row-value">Tout le Var 83 📍</div>
-            <div class="info-row-value accent">13h00 – 23h00</div>
-          </div>
+        <div class="info-stat-sep"></div>
+        <div class="info-stat-box">
+          <span class="info-stat-val">🔥</span>
+          <span class="info-stat-lbl">Qualité</span>
         </div>
-        <div class="info-row">
-          <div class="info-row-icon">📍</div>
-          <div class="info-row-content">
-            <div class="info-row-label">Meetup</div>
-            <div class="info-row-value accent">Sur rendez-vous</div>
-          </div>
+        <div class="info-stat-sep"></div>
+        <div class="info-stat-box">
+          <span class="info-stat-val">⚡</span>
+          <span class="info-stat-lbl">Rapide</span>
         </div>
       </div>
 
-      <div class="info-section" id="socialLinksSection">
-        <div class="info-section-title">Nos Réseaux</div>
+      <!-- HORAIRES -->
+      <div class="info-card">
+        <div class="info-card-head">
+          <span class="info-card-ico">🕐</span>
+          <span class="info-card-head-title">Horaires</span>
+        </div>
+        <div class="info-time-row">
+          <div class="info-time-left">
+            <span class="info-time-emoji">🚚</span>
+            <div>
+              <div class="info-time-name">Livraison</div>
+              <div class="info-time-sub">Tout le Var 83 📍</div>
+            </div>
+          </div>
+          <div class="info-time-chip">13h – 23h</div>
+        </div>
+        <div class="info-time-row">
+          <div class="info-time-left">
+            <span class="info-time-emoji">📍</span>
+            <div>
+              <div class="info-time-name">Meetup</div>
+              <div class="info-time-sub">Sur rendez-vous</div>
+            </div>
+          </div>
+          <div class="info-time-chip alt">Sur RDV</div>
+        </div>
+      </div>
+
+      <!-- CONTACT -->
+      <div class="info-card" id="socialLinksSection">
+        <div class="info-card-head">
+          <span class="info-card-ico">📡</span>
+          <span class="info-card-head-title">Nos Réseaux</span>
+        </div>
         <a class="contact-block" id="socialTelegramLink" href="https://t.me/+kzA04I6sErVjYWVk" target="_blank">
           <div class="contact-icon tg-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
           </div>
           <div class="contact-info">
             <div class="contact-name">Telegram</div>
+            <div class="contact-desc">Rejoindre la communauté</div>
           </div>
           <div class="contact-arrow">›</div>
         </a>
         <a class="contact-block" id="socialInstagramLink" href="https://tutuduanyu.org/joinchat/IozAbl7mUPSJBWgbbzVTQg" target="_blank">
           <div class="contact-icon" style="background:linear-gradient(135deg,#6b3fa0,#9b5de5)">
             <svg width="22" height="22" viewBox="0 0 64 64" fill="white" xmlns="http://www.w3.org/2000/svg">
-              <!-- Corps de la patate -->
               <ellipse cx="32" cy="36" rx="22" ry="17" fill="white"/>
               <ellipse cx="22" cy="22" rx="13" ry="10" fill="white"/>
               <ellipse cx="42" cy="20" rx="11" ry="9" fill="white"/>
-              <!-- Yeux/taches -->
               <circle cx="26" cy="34" r="3" fill="#6b3fa0"/>
               <circle cx="38" cy="38" r="2.5" fill="#6b3fa0"/>
               <circle cx="30" cy="44" r="2" fill="#6b3fa0"/>
-              <!-- Tige -->
               <path d="M32 14 Q34 8 38 6" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
               <circle cx="38" cy="6" r="2" fill="white"/>
             </svg>
@@ -131,6 +190,7 @@
           <div class="contact-arrow">›</div>
         </a>
       </div>
+
     </section>
 
     <!-- PAGE PANIER -->
