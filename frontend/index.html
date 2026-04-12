@@ -108,12 +108,25 @@ const {useState,useEffect,useRef,useMemo,useCallback}=React;
 function showToast(msg){const el=document.createElement("div");el.style.cssText="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid rgba(255,255,255,.25);color:#f5f5f5;font-size:13px;font-weight:600;padding:9px 22px;border-radius:99px;white-space:nowrap;z-index:9999;font-family:'DM Sans',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,.5);animation:fadeIn .2s ease";el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2500);}
 const Portal=({children})=>ReactDOM.createPortal(children,document.body);
 
+/* ── AUTH TOKEN ── */
+function getToken(){try{return localStorage.getItem("_bt")||""}catch{return""}}
+function setToken(t){try{if(t)localStorage.setItem("_bt",t)}catch{}}
+function clearToken(){try{localStorage.removeItem("_bt")}catch{}}
+
 /* ── API LOCALE ── */
-async function apiGet(p){const r=await fetch(p);if(!r.ok)throw new Error(await r.text());return r.json();}
-async function apiPost(p,body){const r=await fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function apiPut(p,body){const r=await fetch(p,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function apiPatch(p,body){const r=await fetch(p,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());return r.json();}
-async function apiDelete(p){const r=await fetch(p,{method:"DELETE"});if(!r.ok)throw new Error(await r.text());return r.json();}
+async function apiFetch(p,opts={}){
+  const h={...opts.headers};
+  const t=getToken();if(t)h["Authorization"]="Bearer "+t;
+  const r=await fetch(p,{...opts,headers:h});
+  if(r.status===401){clearToken();window.location.reload();throw new Error("Session expirée");}
+  if(!r.ok)throw new Error(await r.text());
+  return r.json();
+}
+async function apiGet(p){return apiFetch(p);}
+async function apiPost(p,body){return apiFetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});}
+async function apiPut(p,body){return apiFetch(p,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});}
+async function apiPatch(p,body){return apiFetch(p,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});}
+async function apiDelete(p){return apiFetch(p,{method:"DELETE"});}
 
 const C={bg:"#080a0e",surface:"#0f1318",card:"#111620",border:"#1e2530",accent:"#ffffff",accentDim:"#ffffff18",accentMid:"#ffffff44",gold:"#f0b429",green:"#00e676",red:"#ff4757",orange:"#ff9f43",purple:"#a78bfa",text1:"#eef2f7",text2:"#8b9ab0",text3:"#4a5568"};
 const STATUS={pending:{label:"Nouvelle",color:C.gold,bg:"#f0b42918"},confirmed:{label:"Confirmée",color:C.purple,bg:"#a78bfa18"},shipped:{label:"Expédiée",color:C.accent,bg:C.accentDim},delivered:{label:"Livrée",color:C.green,bg:"#00e67618"},cancelled:{label:"Annulée",color:C.red,bg:"#ff475718"}};
@@ -250,7 +263,7 @@ function LoginPage({onLogin}){
   const [pass,setPass]=useState("");
   const [err,setErr]=useState("");
   const [isLoading,setLoading]=useState(false);
-  const handle=async e=>{e.preventDefault();setLoading(true);setErr("");try{const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,pass})});if(r.ok){onLogin();}else{const d=await r.json();setErr(d.error||"Email ou mot de passe incorrect.");}}catch{setErr("Impossible de contacter le serveur.");}setLoading(false);};
+  const handle=async e=>{e.preventDefault();setLoading(true);setErr("");try{const r=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,pass})});if(r.ok){const d=await r.json();onLogin(d.token);}else{const d=await r.json();setErr(d.error||"Email ou mot de passe incorrect.");}}catch{setErr("Impossible de contacter le serveur.");}setLoading(false);};
   return<div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.bg,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",inset:0,opacity:.03,backgroundImage:`linear-gradient(${C.accent} 1px,transparent 1px),linear-gradient(90deg,${C.accent} 1px,transparent 1px)`,backgroundSize:"40px 40px"}}/>
     <div style={{position:"absolute",top:"20%",left:"10%",width:300,height:300,background:`radial-gradient(circle,${C.accent}12 0%,transparent 70%)`,borderRadius:"50%",pointerEvents:"none"}}/>
@@ -1954,7 +1967,7 @@ function SettingsPage({orders,logout}){
 
 /* ── APP ── */
 function App(){
-  const [logged,setLogged]=useState(()=>{try{return localStorage.getItem("baltimore83_logged")==="1"}catch{return false}});
+  const [logged,setLogged]=useState(()=>{try{return localStorage.getItem("baltimore83_logged")==="1"&&!!getToken()}catch{return false}});
   const [page,setPage]=useState("dashboard");
   const [orders,setOrders]=useState([]);
   const [selectedOrder,setSelectedOrder]=useState(null);
@@ -1966,8 +1979,8 @@ function App(){
 
   const playBeep=()=>{try{const ctx=new(window.AudioContext||window.webkitAudioContext)();[[520,0,0.1],[780,0.13,0.1]].forEach(([freq,delay,dur])=>{const o=ctx.createOscillator();const g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=freq;g.gain.setValueAtTime(0.25,ctx.currentTime+delay);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+dur);o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+dur+0.05);});}catch(e){}};
 
-  const login=()=>{try{localStorage.setItem("baltimore83_logged","1")}catch{}setLogged(true)};
-  const logout=()=>{try{localStorage.removeItem("baltimore83_logged")}catch{}setLogged(false)};
+  const login=(token)=>{setToken(token);try{localStorage.setItem("baltimore83_logged","1")}catch{}setLogged(true)};
+  const logout=()=>{clearToken();try{localStorage.removeItem("baltimore83_logged")}catch{}setLogged(false)};
 
   const getSettings=()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}};
 

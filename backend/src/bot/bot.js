@@ -231,6 +231,13 @@ export function createBot(token) {
 
   // Mise à jour statut commande depuis le groupe
   async function handleOrderStatus(ctx, orderId, status, label, clientMsg) {
+    // Vérifier que le callback vient bien du groupe de notifications
+    const chatId = ctx.chat?.id?.toString();
+    const notifyGroupId = process.env.NOTIFY_GROUP_ID;
+    if (!notifyGroupId || chatId !== notifyGroupId) {
+      await ctx.answerCallbackQuery('⛔ Action non autorisée').catch(() => {});
+      return;
+    }
     try {
       db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, orderId);
       const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(orderId);
@@ -266,8 +273,6 @@ export function createBot(token) {
       `📬 <b>Votre commande #${ctx.match[1]} a été livrée !</b>\n\nMerci pour votre confiance 🙏`
     );
   });
-
-  bot.callbackQuery('noop', async (ctx) => { await ctx.answerCallbackQuery(); });
 
   bot.callbackQuery('noop', async (ctx) => { await ctx.answerCallbackQuery(); });
 

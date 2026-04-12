@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import { isTokenValid } from '../auth.js';
 
 let wss = null;
 const adminClients = new Set();
@@ -6,7 +7,16 @@ const adminClients = new Set();
 export function createWsServer(server) {
   wss = new WebSocketServer({ server, path: '/ws' });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    // Validate token from query string: /ws?token=xxx
+    const url = new URL(req.url, 'http://localhost');
+    const token = url.searchParams.get('token') || '';
+    if (!isTokenValid(token)) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Non authentifié' }));
+      ws.close(4401, 'Unauthorized');
+      return;
+    }
+
     adminClients.add(ws);
     ws.isAlive = true;
 
