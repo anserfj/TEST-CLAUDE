@@ -128,7 +128,18 @@ console.error=function(){
 window.addEventListener('load',function(){
   setTimeout(function(){
     var root=document.getElementById('root');
-    if(root&&root.innerHTML.trim()==='')_diag('ROOT VIDE','Babel a peut-etre echoue silencieusement.\nVerifier la console du navigateur (F12).');
+    if(root&&root.innerHTML.trim()===''){
+      var info=[];
+      info.push('React: '+(typeof React!=='undefined'?'OK v'+React.version:'MANQUANT'));
+      info.push('ReactDOM: '+(typeof ReactDOM!=='undefined'?'OK':'MANQUANT'));
+      info.push('Babel: '+(typeof Babel!=='undefined'?'OK v'+(Babel.version||'?'):'MANQUANT'));
+      info.push('Leaflet: '+(typeof L!=='undefined'?'OK':'MANQUANT'));
+      if(typeof Babel!=='undefined'){
+        try{Babel.transform('<div/>',{presets:['react']});info.push('Babel transform: OK');}
+        catch(e){info.push('Babel transform ERREUR: '+e.message);}
+      }
+      _diag('ROOT VIDE - Diagnostic',info.join('\n'));
+    }
   },2000);
 });
 </script>
