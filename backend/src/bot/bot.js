@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard, Keyboard } from 'grammy';
 import db from '../db/database.js';
 import { broadcastToAdmins } from '../websocket/wsServer.js';
+import { sendWelcomeMessage } from '../scheduler.js';
 
 let bot = null;
 
@@ -323,6 +324,8 @@ export function createBot(token) {
         `🎁 Ton code de parrainage pour inviter tes amis :\n<code>${myCode}</code>`,
         { parse_mode: 'HTML', reply_markup: keyboard }
       );
+      // Message de bienvenue automatique
+      sendWelcomeMessage(ctx.from.id).catch(() => {});
       // Notifier le parrain
       sendMessageToUser(referrer.telegram_id,
         `🎉 <b>Bonne nouvelle !</b>\n${name} a rejoint la boutique grâce à ton parrainage !`

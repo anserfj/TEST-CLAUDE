@@ -288,7 +288,7 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"analytics",icon:"📊",label:"Analytics"},{id:"automations",icon:"⚡",label:"Automations"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:"0 0 72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
@@ -912,6 +912,9 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
 }
 
 /* ── CLIENTS ── */
+const TAG_CONFIG={vip:{label:"VIP",color:"#f0b429",bg:"#f0b42918",icon:"⭐"},regulier:{label:"Régulier",color:"#a78bfa",bg:"#a78bfa18",icon:"🔄"},nouveau:{label:"Nouveau",color:"#00e676",bg:"#00e67618",icon:"✨"}};
+function TagBadge({tag}){if(!tag)return null;const c=TAG_CONFIG[tag]||{label:tag,color:"#8b9ab0",bg:"#8b9ab018",icon:"🏷"};return<span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:c.bg,color:c.color,border:`1px solid ${c.color}30`,fontWeight:700}}>{c.icon} {c.label}</span>;}
+
 function ClientsPage({orders,setOrders}){
   const [clients,setClients]=useState([]);
   const [selected,setSelected]=useState(null);
@@ -919,9 +922,12 @@ function ClientsPage({orders,setOrders}){
   const [loading,setLoading]=useState(false);
   const [updating,setUpdating]=useState(false);
   const [sortBy,setSortBy]=useState("recent");
+  const [filterTag,setFilterTag]=useState("tous");
   const [noteText,setNoteText]=useState("");
   const [savingNote,setSavingNote]=useState(false);
   const [validating,setValidating]=useState(false);
+  const [blacklisting,setBlacklisting]=useState(false);
+  const [tagging,setTagging]=useState(false);
 
   useEffect(()=>{setLoading(true);apiGet("/api/users").then(u=>setClients(u)).catch(console.error).finally(()=>setLoading(false));},[]);
   useEffect(()=>{if(selected)setNoteText(selected.notes||"")},[selected?.id]);
@@ -935,6 +941,30 @@ function ClientsPage({orders,setOrders}){
       showToast(val?"✅ Client validé":"⚠️ Accès révoqué");
     }catch(e){showToast("❌ "+e.message.slice(0,100));}
     setValidating(false);
+  };
+
+  const setTag=async(client,tag)=>{
+    setTagging(true);
+    try{
+      await apiPatch("/api/users/"+client.id+"/tag",{tag:tag||null});
+      setClients(prev=>prev.map(c=>c.id===client.id?{...c,tag:tag||null}:c));
+      setSelected(prev=>prev&&prev.id===client.id?{...prev,tag:tag||null}:prev);
+      showToast("🏷 Tag mis à jour");
+    }catch(e){showToast("❌ "+e.message.slice(0,100));}
+    setTagging(false);
+  };
+
+  const toggleBlacklist=async(client)=>{
+    const newVal=client.blacklisted?0:1;
+    if(newVal&&!confirm(`Blacklister ${dn(client)} ? Il ne pourra plus accéder à la boutique.`))return;
+    setBlacklisting(true);
+    try{
+      await apiPatch("/api/users/"+client.id+"/blacklist",{blacklisted:newVal});
+      setClients(prev=>prev.map(c=>c.id===client.id?{...c,blacklisted:newVal}:c));
+      setSelected(prev=>prev&&prev.id===client.id?{...prev,blacklisted:newVal}:prev);
+      showToast(newVal?"🚫 Client blacklisté":"✅ Blacklist levée");
+    }catch(e){showToast("❌ "+e.message.slice(0,100));}
+    setBlacklisting(false);
   };
 
   const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
@@ -974,6 +1004,8 @@ function ClientsPage({orders,setOrders}){
 
   const sorted=useMemo(()=>{
     let r=[...clients].filter(c=>!search||dn(c).toLowerCase().includes(search.toLowerCase()));
+    if(filterTag==="blacklist")r=r.filter(c=>c.blacklisted);
+    else if(filterTag!=="tous")r=r.filter(c=>c.tag===filterTag);
     if(sortBy==="ca")r.sort((a,b)=>ca(b.id)-ca(a.id));
     else if(sortBy==="orders")r.sort((a,b)=>clientOrders(b.id).length-clientOrders(a.id).length);
     else r.sort((a,b)=>new Date(b.last_seen)-new Date(a.last_seen));
@@ -990,6 +1022,13 @@ function ClientsPage({orders,setOrders}){
 
     <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..." style={{flex:1,minWidth:140,background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 12px",outline:"none"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <select value={filterTag} onChange={e=>setFilterTag(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,fontSize:12,padding:"8px 10px",outline:"none",cursor:"pointer"}}>
+        <option value="tous">Tous les tags</option>
+        <option value="vip">⭐ VIP</option>
+        <option value="regulier">🔄 Réguliers</option>
+        <option value="nouveau">✨ Nouveaux</option>
+        <option value="blacklist">🚫 Blacklistés</option>
+      </select>
       <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,fontSize:12,padding:"8px 10px",outline:"none",cursor:"pointer"}}>
         <option value="recent">Plus récent</option>
         <option value="ca">CA ↓</option>
@@ -1007,9 +1046,11 @@ function ClientsPage({orders,setOrders}){
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <div style={{width:38,height:38,borderRadius:10,background:C.accentDim,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>👤</div>
                 <div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                     <div style={{fontSize:13,fontWeight:700,color:isSel?C.accent:C.text1}}>{dn(c)}</div>
                     <span style={{fontSize:10,padding:"1px 5px",borderRadius:4,background:c.is_validated?"#00e67615":"#ff6b3515",color:c.is_validated?"#00e676":"#ff6b35",border:`1px solid ${c.is_validated?"#00e67630":"#ff6b3530"}`}}>{c.is_validated?"✅":"⚠️"}</span>
+                    {c.blacklisted?<span style={{fontSize:10,padding:"1px 5px",borderRadius:4,background:"#ff475715",color:C.red,border:`1px solid #ff475730`}}>🚫</span>:null}
+                    {c.tag&&<TagBadge tag={c.tag}/>}
                   </div>
                   <div style={{fontSize:11,color:C.text3}}>Depuis {new Date(c.created_at).toLocaleDateString("fr-FR")} · Vu {new Date(c.last_seen).toLocaleDateString("fr-FR")}</div>
                 </div>
@@ -1046,6 +1087,19 @@ function ClientsPage({orders,setOrders}){
             <div style={{flex:1,padding:"10px",background:C.surface,borderRadius:8,textAlign:"center"}}>
               <div style={{fontFamily:"'Bebas Neue'",fontSize:22,color:C.gold}}>{clientOrders(selected.id).length}</div>
               <div style={{fontSize:11,color:C.text3}}>Commandes</div>
+            </div>
+          </div>
+          {/* Tag & Blacklist */}
+          <div style={{marginBottom:10,padding:"10px 12px",background:C.surface,borderRadius:8,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:11,color:C.text3,marginBottom:8,textTransform:"uppercase",letterSpacing:".06em"}}>🏷 Étiquette client</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+              {["vip","regulier","nouveau",null].map(t=>{const c2=t?TAG_CONFIG[t]:{label:"Aucun",color:C.text3,bg:"transparent",icon:"×"};const isActive=selected.tag===t;return<button key={t||"none"} onClick={()=>!tagging&&setTag(selected,t)} style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${isActive?(TAG_CONFIG[t]?.color||C.border):C.border}`,background:isActive?(TAG_CONFIG[t]?.bg||C.accentDim):"transparent",color:isActive?(TAG_CONFIG[t]?.color||C.text1):C.text3,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{c2.icon} {c2.label}</button>;})}
+            </div>
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8}}>
+              <button onClick={()=>toggleBlacklist(selected)} disabled={blacklisting}
+                style={{fontSize:11,padding:"4px 12px",borderRadius:6,border:`1px solid ${selected.blacklisted?"#00e67650":"#ff475750"}`,background:selected.blacklisted?"#00e67610":"#ff475712",color:selected.blacklisted?C.green:C.red,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>
+                {blacklisting?"...":(selected.blacklisted?"🔓 Lever le blacklist":"🚫 Blacklister")}
+              </button>
             </div>
           </div>
           {/* Validation & Parrainage */}
@@ -1458,20 +1512,19 @@ function PromosPage(){
   const [promos,setPromos]=useState([]);
   const [loading,setLoading]=useState(false);
   const [toast,setToast]=useState("");
-  const [form,setForm]=useState({code:"",discount_type:"percent",discount_value:"",min_order:"",max_uses:""});
+  const [clients,setClients]=useState([]);
+  const [form,setForm]=useState({code:"",discount_type:"percent",discount_value:"",min_order:"",max_uses:"",expires_at:"",user_id:""});
   const [showNew,setShowNew]=useState(false);
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(""),2500)};
   const load=()=>{setLoading(true);apiGet("/api/promos").then(d=>setPromos(Array.isArray(d)?d:[])).catch(e=>showToast("Erreur: "+e.message)).finally(()=>setLoading(false))};
-  useEffect(()=>{load()},[]);
+  useEffect(()=>{load();apiGet("/api/users").then(u=>setClients(Array.isArray(u)?u:[])).catch(()=>{});},[]);
 
   const create=async()=>{
     if(!form.code.trim()||!form.discount_value)return showToast("Code et valeur requis");
     try{
-      await apiPost("/api/promos",{code:form.code,discount_type:form.discount_type,discount_value:parseFloat(form.discount_value),min_order:parseFloat(form.min_order||0),max_uses:parseInt(form.max_uses||0)});
-      setForm({code:"",discount_type:"percent",discount_value:"",min_order:"",max_uses:""});
-      setShowNew(false);
-      load();
-      showToast("✅ Code créé !");
+      await apiPost("/api/promos",{code:form.code,discount_type:form.discount_type,discount_value:parseFloat(form.discount_value),min_order:parseFloat(form.min_order||0),max_uses:parseInt(form.max_uses||0),expires_at:form.expires_at||null,user_id:form.user_id||null});
+      setForm({code:"",discount_type:"percent",discount_value:"",min_order:"",max_uses:"",expires_at:"",user_id:""});
+      setShowNew(false);load();showToast("✅ Code créé !");
     }catch(e){showToast("Erreur: "+e.message)}
   };
   const toggle=async(p)=>{
@@ -1486,6 +1539,9 @@ function PromosPage(){
 
   const inputStyle={background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 10px",outline:"none",width:"100%",fontFamily:"inherit"};
   const selStyle={...inputStyle,cursor:"pointer"};
+
+  const isExpired=p=>p.expires_at&&new Date(p.expires_at)<new Date();
+  const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
 
   const newFormJsx=<div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:16,display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
     <div style={{fontWeight:700,fontSize:13,color:C.text1,marginBottom:4}}>Nouveau code promo</div>
@@ -1513,6 +1569,17 @@ function PromosPage(){
         <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Utilisations max (0=∞)</div>
         <input style={inputStyle} type="number" min="0" placeholder="0" value={form.max_uses} onChange={e=>setForm(f=>({...f,max_uses:e.target.value}))}/>
       </div>
+      <div>
+        <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Expiration (optionnel)</div>
+        <input style={inputStyle} type="datetime-local" value={form.expires_at} onChange={e=>setForm(f=>({...f,expires_at:e.target.value}))}/>
+      </div>
+    </div>
+    <div>
+      <div style={{fontSize:11,color:C.text3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Réservé à un client (optionnel)</div>
+      <select style={selStyle} value={form.user_id} onChange={e=>setForm(f=>({...f,user_id:e.target.value}))}>
+        <option value="">Tous les clients</option>
+        {clients.map(c=><option key={c.id} value={c.id}>{dn(c)}</option>)}
+      </select>
     </div>
     <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
       <Btn variant="ghost" onClick={()=>setShowNew(false)} style={{fontSize:12,padding:"6px 14px"}}>Annuler</Btn>
@@ -1535,12 +1602,17 @@ function PromosPage(){
         const discLabel=p.discount_type==="percent"?`-${p.discount_value}%`:`-${parseFloat(p.discount_value).toFixed(2)}€`;
         const usageLabel=p.max_uses>0?`${p.uses_count}/${p.max_uses} utilisations`:`${p.uses_count} utilisation${p.uses_count!==1?"s":""}`;
         const minLabel=p.min_order>0?` · Min ${parseFloat(p.min_order).toFixed(0)}€`:"";
-        return <div key={p.id} style={{background:C.card,border:`1px solid ${p.active?C.border:"#ff475730"}`,borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,opacity:p.active?1:.65}}>
+        const expired=isExpired(p);
+        const ownerClient=p.user_id?clients.find(c=>c.id===p.user_id):null;
+        return <div key={p.id} style={{background:C.card,border:`1px solid ${(p.active&&!expired)?C.border:"#ff475730"}`,borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,opacity:(p.active&&!expired)?1:.65}}>
           <div style={{flex:1}}>
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
               <span style={{fontFamily:"monospace",fontWeight:800,fontSize:14,color:C.text1,letterSpacing:"0.05em"}}>{p.code}</span>
               <span style={{background:"rgba(0,230,118,.12)",color:"#00e676",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700}}>{discLabel}</span>
               {!p.active&&<span style={{background:"rgba(255,71,87,.1)",color:"#ff4757",borderRadius:20,padding:"2px 8px",fontSize:11}}>Inactif</span>}
+              {expired&&<span style={{background:"rgba(255,71,87,.1)",color:"#ff4757",borderRadius:20,padding:"2px 8px",fontSize:11}}>⏰ Expiré</span>}
+              {ownerClient&&<span style={{background:"#a78bfa18",color:"#a78bfa",borderRadius:20,padding:"2px 8px",fontSize:11}}>👤 {dn(ownerClient)}</span>}
+              {p.expires_at&&!expired&&<span style={{background:"#f0b42918",color:C.gold,borderRadius:20,padding:"2px 8px",fontSize:11}}>⏳ {new Date(p.expires_at).toLocaleDateString("fr-FR")}</span>}
             </div>
             <div style={{fontSize:11,color:C.text3,marginTop:4}}>{usageLabel}{minLabel}</div>
           </div>
@@ -1565,35 +1637,69 @@ function MessagesPage(){
   const [broadcasting,setBroadcasting]=useState(false);
   const [history,setHistory]=useState([]);
   const [clientCount,setClientCount]=useState(0);
+  const [products,setProducts]=useState([]);
+  // Segmented broadcast
+  const [segMode,setSegMode]=useState("all"); // all | inactive | product | tag
+  const [segValue,setSegValue]=useState("");
+  const [segCount,setSegCount]=useState(null);
+  const [segLoading,setSegLoading]=useState(false);
 
   useEffect(()=>{
     apiGet("/api/broadcasts").then(bh=>{if(Array.isArray(bh))setHistory(bh);}).catch(()=>{});
-    apiGet("/api/messages").then(convs=>{if(Array.isArray(convs))setClientCount(convs.length);}).catch(()=>{});
+    apiGet("/api/users").then(u=>{if(Array.isArray(u))setClientCount(u.length);}).catch(()=>{});
+    apiGet("/api/products").then(p=>{if(Array.isArray(p))setProducts(p);}).catch(()=>{});
   },[]);
+
+  const previewCount=async()=>{
+    if(segMode==="all"){setSegCount(clientCount);return;}
+    if(!segValue&&segMode!=="all")return;
+    setSegLoading(true);
+    try{const r=await apiPost("/api/broadcast/segment/count",{segment:segMode,segment_value:segValue});setSegCount(r.count);}
+    catch{setSegCount(null);}
+    setSegLoading(false);
+  };
+  useEffect(()=>{setSegCount(null);},[segMode,segValue]);
 
   const send=async()=>{
     if(!broadcast.trim())return;
-    if(!confirm(`Envoyer à tous les clients (${clientCount} contacts) ?`))return;
+    const target=segMode==="all"?`tous les clients (${clientCount})`:`le segment sélectionné (${segCount??'?'} contacts)`;
+    if(!confirm(`Envoyer à ${target} ?`))return;
     setBroadcasting(true);
     try{
-      const r=await apiPost("/api/broadcast",{text:broadcast.trim()});
+      let r;
+      if(segMode==="all")r=await apiPost("/api/broadcast",{text:broadcast.trim()});
+      else r=await apiPost("/api/broadcast/segment",{text:broadcast.trim(),segment:segMode,segment_value:segValue});
       showToast(`✅ Envoyé à ${r.sent}/${r.total} clients`);
-      setBroadcast("");
+      setBroadcast("");setSegCount(null);
       apiGet("/api/broadcasts").then(bh=>{if(Array.isArray(bh))setHistory(bh);}).catch(()=>{});
-    }catch(e){
-      showToast("❌ Erreur : "+(e.message||"").slice(0,80));
-    }
+    }catch(e){showToast("❌ Erreur : "+(e.message||"").slice(0,80));}
     setBroadcasting(false);
   };
+
+  const selStyle={background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:13,padding:"8px 10px",outline:"none",width:"100%",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"};
 
   return<div className="fade-in" style={{maxWidth:620,width:"100%",boxSizing:"border-box"}}>
     <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em",marginBottom:20}}>Messages</div>
     <Card style={{marginBottom:16}}>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:4}}>📢 Envoyer à tous les clients</div>
-      <div style={{fontSize:12,color:C.text3,marginBottom:14}}>{clientCount} utilisateurs enregistrés</div>
-      <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Votre message pour tous les clients..." style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:14,padding:"11px 13px",outline:"none",resize:"vertical",minHeight:100,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-      <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
-        <Btn onClick={send} disabled={broadcasting||!broadcast.trim()}>{broadcasting?"⏳ Envoi en cours...":"📢 Envoyer à tous"}</Btn>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:12}}>📢 Envoi ciblé</div>
+      {/* Segment selector */}
+      <div style={{marginBottom:12}}>
+        <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Destinataires</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+          {[["all","👥 Tous"],["inactive","💤 Inactifs"],["product","📦 Produit"],["tag","🏷 Tag"]].map(([v,l])=><button key={v} onClick={()=>{setSegMode(v);setSegValue("");}} style={{padding:"5px 12px",borderRadius:8,border:`1px solid ${segMode===v?C.accent:C.border}`,background:segMode===v?C.accentDim:"transparent",color:segMode===v?C.accent:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{l}</button>)}
+        </div>
+        {segMode==="inactive"&&<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:C.text3,whiteSpace:"nowrap"}}>Sans commande depuis</span><input type="number" min="1" value={segValue} onChange={e=>setSegValue(e.target.value)} placeholder="14" style={{...selStyle,width:80}}/><span style={{fontSize:12,color:C.text3}}>jours</span></div>}
+        {segMode==="product"&&<select style={selStyle} value={segValue} onChange={e=>setSegValue(e.target.value)}><option value="">Choisir un produit...</option>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+        {segMode==="tag"&&<select style={selStyle} value={segValue} onChange={e=>setSegValue(e.target.value)}><option value="">Choisir un tag...</option><option value="vip">⭐ VIP</option><option value="regulier">🔄 Réguliers</option><option value="nouveau">✨ Nouveaux</option></select>}
+        {segMode!=="all"&&<div style={{marginTop:8,display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={previewCount} style={{fontSize:11,padding:"4px 12px",borderRadius:6,border:`1px solid ${C.border}`,background:C.surface,color:C.text2,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{segLoading?"...":"🔍 Aperçu"}</button>
+          {segCount!==null&&<span style={{fontSize:12,color:C.accent,fontWeight:700}}>{segCount} destinataire{segCount!==1?"s":""}</span>}
+        </div>}
+      </div>
+      <textarea value={broadcast} onChange={e=>setBroadcast(e.target.value)} placeholder="Votre message..." style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:14,padding:"11px 13px",outline:"none",resize:"vertical",minHeight:100,fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10}}>
+        <span style={{fontSize:12,color:C.text3}}>{segMode==="all"?`${clientCount} clients`:(segCount!==null?`${segCount} destinataires`:"")}</span>
+        <Btn onClick={send} disabled={broadcasting||!broadcast.trim()}>{broadcasting?"⏳ Envoi en cours...":"📢 Envoyer"}</Btn>
       </div>
     </Card>
     <div style={{fontFamily:"'Bebas Neue'",fontSize:16,letterSpacing:"0.05em",marginBottom:10,color:C.text2}}>Historique ({history.length})</div>
@@ -1965,6 +2071,217 @@ function SettingsPage({orders,logout}){
   </div>;
 }
 
+/* ── ANALYTICS ── */
+function AnalyticsPage(){
+  const [data,setData]=useState(null);
+  const [period,setPeriod]=useState("30d");
+  const [loading,setLoading]=useState(false);
+
+  const load=p=>{setLoading(true);apiGet("/api/analytics?period="+p).then(d=>setData(d)).catch(e=>showToast("Erreur: "+e.message)).finally(()=>setLoading(false));};
+  useEffect(()=>{load(period);},[]);
+  const changePeriod=p=>{setPeriod(p);load(p);};
+
+  const barMax=arr=>Math.max(...arr.map(x=>x.order_count||0),1);
+
+  if(loading&&!data)return<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>;
+
+  const {topClients=[],topProducts=[],peakHours=[],basketStats={},tagStats=[],blacklistCount=0}=data||{};
+
+  const periodBtns=[["7d","7j"],["30d","30j"],["90d","90j"],["all","Tout"]];
+
+  return<div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Analytics</div>
+      <div style={{display:"flex",gap:6}}>
+        {periodBtns.map(([v,l])=><button key={v} onClick={()=>changePeriod(v)} style={{padding:"5px 12px",borderRadius:8,border:`1px solid ${period===v?C.accent:C.border}`,background:period===v?C.accentDim:"transparent",color:period===v?C.accent:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{l}</button>)}
+      </div>
+    </div>
+
+    {/* KPI row */}
+    <div className="stats-grid">
+      <Card style={{padding:16}}>
+        <div style={{fontSize:11,color:C.text3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Panier moyen</div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:28,color:C.accent}}>{parseFloat(basketStats.avg_basket||0).toFixed(2).replace(".",",")} €</div>
+        <div style={{fontSize:11,color:C.text3,marginTop:2}}>{basketStats.order_count||0} commandes</div>
+      </Card>
+      <Card style={{padding:16}}>
+        <div style={{fontSize:11,color:C.text3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Panier min / max</div>
+        <div style={{fontSize:16,fontWeight:700,color:C.text1}}>{parseFloat(basketStats.min_basket||0).toFixed(0)}€ / {parseFloat(basketStats.max_basket||0).toFixed(0)}€</div>
+      </Card>
+      <Card style={{padding:16}}>
+        <div style={{fontSize:11,color:C.text3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Clients tagués</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:4}}>
+          {tagStats.length===0?<span style={{fontSize:12,color:C.text3}}>Aucun tag</span>:tagStats.map(t=><span key={t.tag} style={{fontSize:12,padding:"2px 10px",borderRadius:10,background:TAG_CONFIG[t.tag]?.bg||C.accentDim,color:TAG_CONFIG[t.tag]?.color||C.accent,fontWeight:700}}>{TAG_CONFIG[t.tag]?.icon||"🏷"} {t.count}</span>)}
+        </div>
+      </Card>
+      <Card style={{padding:16}}>
+        <div style={{fontSize:11,color:C.text3,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Blacklistés</div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:28,color:blacklistCount>0?C.red:C.text3}}>{blacklistCount}</div>
+      </Card>
+    </div>
+
+    <div className="dash-grid-2">
+      {/* Top clients */}
+      <Card>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:".05em",marginBottom:12}}>🏆 Top clients</div>
+        {topClients.length===0?<div style={{textAlign:"center",padding:20,color:C.text3,fontSize:13}}>Aucune donnée</div>:topClients.map((c,i)=>{
+          const name=c.username?`@${c.username}`:`${c.first_name||""}${c.last_name?` ${c.last_name}`:""}`.trim()||`User ${c.id}`;
+          return<div key={c.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<topClients.length-1?`1px solid ${C.border}`:"none"}}>
+            <span style={{fontFamily:"'Bebas Neue'",fontSize:20,color:i===0?C.gold:i===1?C.text2:C.text3,width:24,textAlign:"center"}}>{i+1}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.text1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
+              <div style={{fontSize:11,color:C.text3}}>{c.order_count} cmd{c.order_count!==1?"s":""}{c.last_order?` · ${new Date(c.last_order).toLocaleDateString("fr-FR")}`:""}</div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.accent}}>{parseFloat(c.total_spent||0).toFixed(2).replace(".",",")}€</div>
+              {c.tag&&<TagBadge tag={c.tag}/>}
+            </div>
+          </div>;
+        })}
+      </Card>
+
+      {/* Top produits */}
+      <Card>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:".05em",marginBottom:12}}>📦 Top produits</div>
+        {topProducts.length===0?<div style={{textAlign:"center",padding:20,color:C.text3,fontSize:13}}>Aucune donnée</div>:topProducts.map((p,i)=><div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<topProducts.length-1?`1px solid ${C.border}`:"none"}}>
+          <span style={{fontFamily:"'Bebas Neue'",fontSize:20,color:i===0?C.gold:i===1?C.text2:C.text3,width:24,textAlign:"center"}}>{i+1}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.text1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+            <div style={{fontSize:11,color:C.text3}}>{p.total_qty}{p.unit||"g"} vendus · {p.order_count} cmd{p.order_count!==1?"s":""}</div>
+          </div>
+          <div style={{fontSize:13,fontWeight:700,color:C.accent,flexShrink:0}}>{parseFloat(p.total_revenue||0).toFixed(2).replace(".",",")}€</div>
+        </div>)}
+      </Card>
+    </div>
+
+    {/* Heures de pointe */}
+    <Card>
+      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:".05em",marginBottom:14}}>⏰ Heures de pointe</div>
+      {peakHours.length===0?<div style={{textAlign:"center",padding:20,color:C.text3,fontSize:13}}>Aucune donnée</div>:<div>
+        <div style={{display:"flex",alignItems:"flex-end",gap:2,height:80}}>
+          {Array.from({length:24},(_,h)=>{
+            const d=peakHours.find(x=>x.hour===h)||{order_count:0};
+            const maxV=barMax(peakHours);
+            const pct=maxV>0?(d.order_count/maxV)*100:0;
+            const isTop=d.order_count>0&&d.order_count===maxV;
+            return<div key={h} title={`${h}h — ${d.order_count} cmd`} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"default"}}>
+              <div style={{width:"100%",background:isTop?C.accent:d.order_count>0?C.accentMid:"#ffffff08",borderRadius:"3px 3px 0 0",height:`${Math.max(pct,2)}%`,transition:"height .3s",minHeight:d.order_count>0?4:2}}/>
+            </div>;
+          })}
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:10,color:C.text3}}>
+          {[0,6,12,18,23].map(h=><span key={h}>{h}h</span>)}
+        </div>
+        <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:8}}>
+          {peakHours.sort((a,b)=>b.order_count-a.order_count).slice(0,3).map(h=><span key={h.hour} style={{fontSize:12,padding:"3px 10px",borderRadius:8,background:C.accentDim,color:C.accent,fontWeight:700}}>{h.hour}h — {h.order_count} commande{h.order_count!==1?"s":""}</span>)}
+        </div>
+      </div>}
+    </Card>
+  </div>;
+}
+
+/* ── AUTOMATIONS ── */
+function AutomationsPage(){
+  const [cfg,setCfg]=useState({});
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{apiGet("/api/automations").then(d=>setCfg(d||{})).catch(()=>{}).finally(()=>setLoading(false));},[]);
+
+  const save=async()=>{
+    setSaving(true);
+    try{await apiPut("/api/automations",cfg);showToast("✅ Automations sauvegardées");}
+    catch(e){showToast("❌ "+e.message.slice(0,80));}
+    setSaving(false);
+  };
+
+  const set=(k,v)=>setCfg(c=>({...c,[k]:v}));
+
+  const togStyle=(on)=>({display:"inline-flex",alignItems:"center",justifyContent:on?"flex-end":"flex-start",width:40,height:22,borderRadius:11,background:on?C.accent:"#1e2530",border:`1px solid ${on?C.accent:C.border}`,cursor:"pointer",padding:2,transition:"all .2s"});
+  const dotStyle={width:16,height:16,borderRadius:8,background:C.bg,boxShadow:"0 1px 4px rgba(0,0,0,.4)"};
+
+  if(loading)return<div style={{padding:60,display:"flex",justifyContent:"center"}}><div className="spinner"/></div>;
+
+  return<div className="fade-in" style={{maxWidth:640,display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:34,letterSpacing:"0.05em"}}>Automations</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>Messages envoyés automatiquement par le bot</div>
+      </div>
+      <Btn onClick={save} disabled={saving}>{saving?"⏳ Sauvegarde...":"💾 Sauvegarder"}</Btn>
+    </div>
+
+    {/* Bienvenue */}
+    <Card>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:".05em"}}>🎉 Message de bienvenue</div>
+          <div style={{fontSize:12,color:C.text3,marginTop:2}}>Envoyé automatiquement quand un nouveau client se valide via parrainage</div>
+        </div>
+        <div style={togStyle(cfg.auto_welcome_enabled==="1")} onClick={()=>set("auto_welcome_enabled",cfg.auto_welcome_enabled==="1"?"0":"1")}>
+          <div style={dotStyle}/>
+        </div>
+      </div>
+      {cfg.auto_welcome_enabled==="1"&&<div>
+        <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Message</div>
+        <textarea value={cfg.auto_welcome_text||""} onChange={e=>set("auto_welcome_text",e.target.value)} rows={4}
+          style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:13,padding:"10px 13px",outline:"none",resize:"vertical",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}
+          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+      </div>}
+    </Card>
+
+    {/* Inactivité */}
+    <Card>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:".05em"}}>💤 Rappel inactivité</div>
+          <div style={{fontSize:12,color:C.text3,marginTop:2}}>Relance automatique des clients qui n'ont pas commandé depuis X jours</div>
+        </div>
+        <div style={togStyle(cfg.auto_inactivity_enabled==="1")} onClick={()=>set("auto_inactivity_enabled",cfg.auto_inactivity_enabled==="1"?"0":"1")}>
+          <div style={dotStyle}/>
+        </div>
+      </div>
+      {cfg.auto_inactivity_enabled==="1"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div>
+          <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Délai d'inactivité (jours)</div>
+          <input type="number" min="1" value={cfg.auto_inactivity_days||"14"} onChange={e=>set("auto_inactivity_days",e.target.value)}
+            style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",width:100}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Message de rappel</div>
+          <textarea value={cfg.auto_inactivity_text||""} onChange={e=>set("auto_inactivity_text",e.target.value)} rows={4}
+            style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:9,color:C.text1,fontSize:13,padding:"10px 13px",outline:"none",resize:"vertical",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}
+            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+        </div>
+        <div style={{fontSize:11,color:C.text3,padding:"8px 12px",background:"#f0b42910",border:`1px solid #f0b42930`,borderRadius:8}}>
+          ⏰ Le rappel est envoyé une fois par heure aux clients éligibles (au moins une commande passée, mais aucune dans les {cfg.auto_inactivity_days||14} derniers jours).
+        </div>
+      </div>}
+    </Card>
+
+    {/* Alerte shop inactif */}
+    <Card>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:".05em"}}>🔔 Alerte shop inactif</div>
+          <div style={{fontSize:12,color:C.text3,marginTop:2}}>Notifie le groupe admin si aucune commande n'est reçue pendant X heures</div>
+        </div>
+        <div style={togStyle(cfg.auto_shop_alert_enabled==="1")} onClick={()=>set("auto_shop_alert_enabled",cfg.auto_shop_alert_enabled==="1"?"0":"1")}>
+          <div style={dotStyle}/>
+        </div>
+      </div>
+      {cfg.auto_shop_alert_enabled==="1"&&<div>
+        <div style={{fontSize:11,color:C.text3,marginBottom:6,textTransform:"uppercase",letterSpacing:".06em"}}>Délai sans commande (heures)</div>
+        <input type="number" min="1" value={cfg.auto_shop_alert_hours||"4"} onChange={e=>set("auto_shop_alert_hours",e.target.value)}
+          style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",width:100}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+        <div style={{fontSize:11,color:C.text3,marginTop:10,padding:"8px 12px",background:"#a78bfa10",border:`1px solid #a78bfa30`,borderRadius:8}}>
+          ⚡ L'alerte est envoyée dans le groupe de notification Telegram ({process.env.NOTIFY_GROUP_ID||"groupe configuré"}) une fois par heure de vérification.
+        </div>
+      </div>}
+    </Card>
+  </div>;
+}
+
 /* ── APP ── */
 function App(){
   const [logged,setLogged]=useState(()=>{try{return localStorage.getItem("baltimore83_logged")==="1"&&!!getToken()}catch{return false}});
@@ -2018,6 +2335,8 @@ function App(){
       {page==="categories"&&<CategoriesPage/>}
       {page==="promos"&&<PromosPage/>}
       {page==="messages"&&<MessagesPage/>}
+      {page==="analytics"&&<AnalyticsPage/>}
+      {page==="automations"&&<AutomationsPage/>}
       {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
     </main>
   </div>

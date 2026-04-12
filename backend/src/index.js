@@ -6,6 +6,7 @@ import { createBot, notifyGroup } from './bot/bot.js';
 import db from './db/database.js';
 import { createWsServer } from './websocket/wsServer.js';
 import apiRoutes from './api/routes.js';
+import { startScheduler } from './scheduler.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -78,6 +79,9 @@ setInterval(async () => {
     }
   } catch(e) { console.error('reminder error:', e.message); }
 }, 30 * 60 * 1000);
+
+// Start automation scheduler
+startScheduler();
 
 // Graceful shutdown
 process.on('SIGTERM', () => { server.close(() => process.exit(0)); });

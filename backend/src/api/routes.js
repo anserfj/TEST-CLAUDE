@@ -87,18 +87,27 @@ router.get('/settings', (req, res) => {
 
 // Public promo check (used by miniapp)
 router.get('/promo/:code', (req, res) => {
+  const telegramId = req.query.telegram_id;
   const promo = db.prepare('SELECT * FROM promos WHERE UPPER(code) = UPPER(?) AND active = 1').get(req.params.code);
   if (!promo) return res.status(404).json({ error: 'Code promo invalide' });
   if (promo.max_uses > 0 && promo.uses_count >= promo.max_uses)
     return res.status(400).json({ error: 'Code promo épuisé' });
+  if (promo.expires_at && new Date(promo.expires_at) < new Date())
+    return res.status(400).json({ error: 'Code promo expiré' });
+  if (promo.user_id) {
+    if (!telegramId) return res.status(403).json({ error: 'Code promo réservé' });
+    const user = db.prepare('SELECT id FROM users WHERE telegram_id = ?').get(telegramId);
+    if (!user || user.id !== promo.user_id) return res.status(403).json({ error: 'Code promo réservé' });
+  }
   res.json(promo);
 });
 
 // ── MINIAPP ENDPOINTS (public — called by Telegram users) ─────────────────────
 
 router.get('/miniapp/access/:telegramId', (req, res) => {
-  const user = db.prepare('SELECT is_validated, referral_code FROM users WHERE telegram_id = ?').get(req.params.telegramId);
+  const user = db.prepare('SELECT is_validated, referral_code, blacklisted FROM users WHERE telegram_id = ?').get(req.params.telegramId);
   if (!user) return res.json({ validated: false, referral_code: null });
+  if (user.blacklisted) return res.json({ validated: false, blacklisted: true, referral_code: null });
   res.json({ validated: !!user.is_validated, referral_code: user.referral_code });
 });
 
@@ -166,6 +175,10 @@ router.post('/miniapp/order', (req, res) => {
     if (appliedPromo) {
       if (appliedPromo.max_uses > 0 && appliedPromo.uses_count >= appliedPromo.max_uses)
         return res.status(400).json({ error: 'Code promo épuisé' });
+      if (appliedPromo.expires_at && new Date(appliedPromo.expires_at) < new Date())
+        return res.status(400).json({ error: 'Code promo expiré' });
+      if (appliedPromo.user_id && appliedPromo.user_id !== user.id)
+        return res.status(403).json({ error: 'Code promo réservé' });
       if (appliedPromo.min_order > 0 && subtotalCalc < appliedPromo.min_order)
         return res.status(400).json({ error: `Commande minimum ${appliedPromo.min_order}€ requis pour ce code` });
       if (appliedPromo.discount_type === 'percent')
@@ -437,6 +450,20 @@ router.patch('/users/:id/validate', (req, res) => {
   res.json({ success: true });
 });
 
+router.patch('/users/:id/tag', (req, res) => {
+  const { tag } = req.body;
+  const valid = [null, 'vip', 'regulier', 'nouveau'];
+  if (!valid.includes(tag)) return res.status(400).json({ error: 'Tag invalide' });
+  db.prepare('UPDATE users SET tag = ? WHERE id = ?').run(tag || null, req.params.id);
+  res.json({ success: true });
+});
+
+router.patch('/users/:id/blacklist', (req, res) => {
+  const { blacklisted } = req.body;
+  db.prepare('UPDATE users SET blacklisted = ? WHERE id = ?').run(blacklisted ? 1 : 0, req.params.id);
+  res.json({ success: true });
+});
+
 router.get('/users/:id/referrals', (req, res) => {
   res.json(db.prepare('SELECT u.id, u.first_name, u.last_name, u.username, u.created_at FROM users u WHERE u.referred_by = ?').all(req.params.id));
 });
@@ -455,7 +482,7 @@ router.get('/broadcasts', (req, res) => {
 router.post('/broadcast', async (req, res) => {
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Message vide' });
-  const users = db.prepare('SELECT id, telegram_id FROM users').all();
+  const users = db.prepare('SELECT id, telegram_id FROM users WHERE blacklisted = 0 OR blacklisted IS NULL').all();
   let sent = 0, failed = 0;
   const insertMsg = db.prepare('INSERT INTO messages (user_id, telegram_id, text, from_admin, is_broadcast, read) VALUES (?, ?, ?, 1, 1, 1)');
   for (const u of users) {
@@ -463,6 +490,68 @@ router.post('/broadcast', async (req, res) => {
     catch { failed++; }
   }
   res.json({ sent, failed, total: users.length });
+});
+
+// Segmented broadcast
+router.post('/broadcast/segment', async (req, res) => {
+  const { text, segment, segment_value } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'Message vide' });
+  if (!segment) return res.status(400).json({ error: 'Segment requis' });
+
+  let users = [];
+  if (segment === 'inactive') {
+    const days = parseInt(segment_value) || 14;
+    users = db.prepare(`
+      SELECT DISTINCT u.id, u.telegram_id FROM users u
+      LEFT JOIN orders o ON o.user_id = u.id AND o.created_at >= datetime('now', '-' || ? || ' days')
+      WHERE (u.blacklisted = 0 OR u.blacklisted IS NULL)
+      AND u.is_validated = 1
+      GROUP BY u.id
+      HAVING COUNT(o.id) = 0
+    `).all(days);
+  } else if (segment === 'product') {
+    const productId = parseInt(segment_value);
+    if (!productId) return res.status(400).json({ error: 'Produit requis' });
+    users = db.prepare(`
+      SELECT DISTINCT u.id, u.telegram_id FROM users u
+      JOIN orders o ON o.user_id = u.id
+      JOIN order_items oi ON oi.order_id = o.id
+      WHERE oi.product_id = ? AND (u.blacklisted = 0 OR u.blacklisted IS NULL)
+    `).all(productId);
+  } else if (segment === 'tag') {
+    users = db.prepare(`SELECT id, telegram_id FROM users WHERE tag = ? AND (blacklisted = 0 OR blacklisted IS NULL)`).all(segment_value);
+  } else {
+    return res.status(400).json({ error: 'Segment inconnu' });
+  }
+
+  let sent = 0, failed = 0;
+  const insertMsg = db.prepare('INSERT INTO messages (user_id, telegram_id, text, from_admin, is_broadcast, read) VALUES (?, ?, ?, 1, 1, 1)');
+  for (const u of users) {
+    try { await sendMessageToUser(u.telegram_id, text); insertMsg.run(u.id, u.telegram_id, text); sent++; }
+    catch { failed++; }
+  }
+  res.json({ sent, failed, total: users.length });
+});
+
+// Count preview for segment
+router.post('/broadcast/segment/count', (req, res) => {
+  const { segment, segment_value } = req.body;
+  let count = 0;
+  if (segment === 'inactive') {
+    const days = parseInt(segment_value) || 14;
+    count = db.prepare(`
+      SELECT COUNT(DISTINCT u.id) as c FROM users u
+      LEFT JOIN orders o ON o.user_id = u.id AND o.created_at >= datetime('now', '-' || ? || ' days')
+      WHERE (u.blacklisted = 0 OR u.blacklisted IS NULL) AND u.is_validated = 1
+      GROUP BY u.id HAVING COUNT(o.id) = 0
+    `).all(days).length;
+  } else if (segment === 'product') {
+    const productId = parseInt(segment_value);
+    if (productId) count = db.prepare(`SELECT COUNT(DISTINCT u.id) as c FROM users u JOIN orders o ON o.user_id = u.id JOIN order_items oi ON oi.order_id = o.id WHERE oi.product_id = ? AND (u.blacklisted = 0 OR u.blacklisted IS NULL)`).get(productId)?.c || 0;
+  } else if (segment === 'tag') {
+    count = db.prepare(`SELECT COUNT(*) as c FROM users WHERE tag = ? AND (blacklisted = 0 OR blacklisted IS NULL)`).get(segment_value)?.c || 0;
+  }
+  res.json({ count });
 });
 
 router.get('/messages/:userId', (req, res) => {
@@ -545,11 +634,11 @@ router.get('/promos', (req, res) => {
 });
 
 router.post('/promos', (req, res) => {
-  const { code, discount_type, discount_value, min_order, max_uses } = req.body;
+  const { code, discount_type, discount_value, min_order, max_uses, expires_at, user_id } = req.body;
   if (!code || !discount_value) return res.status(400).json({ error: 'Code et valeur requis' });
   try {
-    const info = db.prepare('INSERT INTO promos (code, discount_type, discount_value, min_order, max_uses) VALUES (?,?,?,?,?)')
-      .run(code.toUpperCase().trim(), discount_type || 'percent', parseFloat(discount_value), parseFloat(min_order || 0), parseInt(max_uses || 0));
+    const info = db.prepare('INSERT INTO promos (code, discount_type, discount_value, min_order, max_uses, expires_at, user_id) VALUES (?,?,?,?,?,?,?)')
+      .run(code.toUpperCase().trim(), discount_type || 'percent', parseFloat(discount_value), parseFloat(min_order || 0), parseInt(max_uses || 0), expires_at || null, user_id ? parseInt(user_id) : null);
     res.json({ id: info.lastInsertRowid });
   } catch {
     res.status(400).json({ error: 'Code déjà existant' });
@@ -557,13 +646,104 @@ router.post('/promos', (req, res) => {
 });
 
 router.patch('/promos/:id', (req, res) => {
-  db.prepare('UPDATE promos SET active = ? WHERE id = ?').run(req.body.active ? 1 : 0, req.params.id);
+  const { active, expires_at, user_id } = req.body;
+  if (typeof active !== 'undefined') {
+    db.prepare('UPDATE promos SET active = ? WHERE id = ?').run(active ? 1 : 0, req.params.id);
+  }
+  if (typeof expires_at !== 'undefined') {
+    db.prepare('UPDATE promos SET expires_at = ? WHERE id = ?').run(expires_at || null, req.params.id);
+  }
+  if (typeof user_id !== 'undefined') {
+    db.prepare('UPDATE promos SET user_id = ? WHERE id = ?').run(user_id ? parseInt(user_id) : null, req.params.id);
+  }
   res.json({ ok: true });
 });
 
 router.delete('/promos/:id', (req, res) => {
   db.prepare('DELETE FROM promos WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// ── ANALYTICS ─────────────────────────────────────────────────────────────────
+
+router.get('/analytics', (req, res) => {
+  const { period = '30d' } = req.query;
+  let dateCond = '';
+  if (period === '7d')   dateCond = `AND o.created_at >= datetime('now', '-7 days')`;
+  else if (period === '30d') dateCond = `AND o.created_at >= datetime('now', '-30 days')`;
+  else if (period === '90d') dateCond = `AND o.created_at >= datetime('now', '-90 days')`;
+
+  const topClients = db.prepare(`
+    SELECT u.id, u.username, u.first_name, u.last_name, u.telegram_id, u.tag,
+           COUNT(o.id) as order_count,
+           COALESCE(SUM(o.total), 0) as total_spent,
+           MAX(o.created_at) as last_order
+    FROM users u
+    LEFT JOIN orders o ON o.user_id = u.id AND o.status != 'cancelled' ${dateCond}
+    GROUP BY u.id
+    ORDER BY total_spent DESC LIMIT 10
+  `).all();
+
+  const topProducts = db.prepare(`
+    SELECT p.id, p.name, p.unit,
+           SUM(oi.quantity) as total_qty,
+           SUM(oi.subtotal) as total_revenue,
+           COUNT(DISTINCT o.id) as order_count
+    FROM order_items oi
+    JOIN products p ON oi.product_id = p.id
+    JOIN orders o ON oi.order_id = o.id
+    WHERE o.status != 'cancelled' ${dateCond}
+    GROUP BY p.id ORDER BY total_revenue DESC LIMIT 10
+  `).all();
+
+  const peakHours = db.prepare(`
+    SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour,
+           COUNT(*) as order_count,
+           COALESCE(SUM(total), 0) as revenue
+    FROM orders
+    WHERE status != 'cancelled' ${dateCond}
+    GROUP BY hour ORDER BY hour
+  `).all();
+
+  const basketStats = db.prepare(`
+    SELECT
+      COALESCE(AVG(total), 0) as avg_basket,
+      COALESCE(MIN(total), 0) as min_basket,
+      COALESCE(MAX(total), 0) as max_basket,
+      COUNT(*) as order_count
+    FROM orders WHERE status != 'cancelled' ${dateCond}
+  `).get();
+
+  const tagStats = db.prepare(`
+    SELECT tag, COUNT(*) as count FROM users
+    WHERE tag IS NOT NULL GROUP BY tag
+  `).all();
+
+  const blacklistCount = db.prepare(`SELECT COUNT(*) as c FROM users WHERE blacklisted = 1`).get().c;
+
+  res.json({ topClients, topProducts, peakHours, basketStats, tagStats, blacklistCount });
+});
+
+// ── AUTOMATIONS ───────────────────────────────────────────────────────────────
+
+router.get('/automations', (req, res) => {
+  const rows = db.prepare(`SELECT key, value FROM settings WHERE key LIKE 'auto_%'`).all();
+  const result = {};
+  rows.forEach(r => result[r.key] = r.value);
+  res.json(result);
+});
+
+router.put('/automations', (req, res) => {
+  const allowed = [
+    'auto_welcome_enabled', 'auto_welcome_text',
+    'auto_inactivity_enabled', 'auto_inactivity_days', 'auto_inactivity_text',
+    'auto_shop_alert_enabled', 'auto_shop_alert_hours',
+  ];
+  const upsert = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
+  Object.entries(req.body).forEach(([k, v]) => {
+    if (allowed.includes(k)) upsert.run(k, String(v));
+  });
+  res.json({ success: true });
 });
 
 export default router;

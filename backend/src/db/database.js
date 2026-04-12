@@ -138,6 +138,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS promos (
   active INTEGER DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 )`);
+// Migrate promos: add expires_at and user_id
+try { db.exec(`ALTER TABLE promos ADD COLUMN expires_at TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE promos ADD COLUMN user_id INTEGER`); } catch(e) {}
+
+// Migrate users: add tag and blacklisted
+try { db.exec(`ALTER TABLE users ADD COLUMN tag TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE users ADD COLUMN blacklisted INTEGER DEFAULT 0`); } catch(e) {}
 
 // Settings table
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
@@ -152,6 +159,13 @@ const _upsertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) V
   ['telegram_url', 'https://t.me/+kzA04I6sErVjYWVk'],
   ['instagram_url', ''],
   ['no_delivery_zones', '[]'],
+  ['auto_welcome_enabled', '0'],
+  ['auto_welcome_text', 'Bienvenue dans la boutique ! 🎉\n\nTu peux maintenant passer ta commande directement depuis la miniapp.'],
+  ['auto_inactivity_enabled', '0'],
+  ['auto_inactivity_days', '14'],
+  ['auto_inactivity_text', 'Hey ! Ça fait un moment qu\'on t\'a pas vu 👀\n\nNos nouveaux arrivages sont disponibles, viens jeter un œil 🔥'],
+  ['auto_shop_alert_enabled', '0'],
+  ['auto_shop_alert_hours', '4'],
 ].forEach(([k, v]) => _upsertSetting.run(k, v));
 
 // Migration: supprimer les catégories et produits de démonstration CBD
