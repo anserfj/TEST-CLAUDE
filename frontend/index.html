@@ -2275,7 +2275,7 @@ function AutomationsPage(){
         <input type="number" min="1" value={cfg.auto_shop_alert_hours||"4"} onChange={e=>set("auto_shop_alert_hours",e.target.value)}
           style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,color:C.text1,fontSize:14,padding:"9px 13px",outline:"none",width:100}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
         <div style={{fontSize:11,color:C.text3,marginTop:10,padding:"8px 12px",background:"#a78bfa10",border:`1px solid #a78bfa30`,borderRadius:8}}>
-          ⚡ L'alerte est envoyée dans le groupe de notification Telegram ({process.env.NOTIFY_GROUP_ID||"groupe configuré"}) une fois par heure de vérification.
+          ⚡ L'alerte est envoyée dans le groupe de notification Telegram (configuré via NOTIFY_GROUP_ID) une fois par heure de vérification.
         </div>
       </div>}
     </Card>
