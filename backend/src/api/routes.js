@@ -290,6 +290,7 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
         .run(orderId, item.product_id, item.quantity, item.unit_price, item.quantity * item.unit_price);
     }
     if (appliedPromo) db.prepare('UPDATE promos SET uses_count = uses_count + 1 WHERE id = ?').run(appliedPromo.id);
+    db.prepare('UPDATE users SET last_inactivity_reminder = NULL WHERE id = ?').run(user.id);
     return orderId;
   });
 
