@@ -741,7 +741,7 @@ router.get('/stats', (req, res) => {
   const recentOrders  = db.prepare("SELECT DATE(created_at) as date, COUNT(*) as count, SUM(total) as revenue FROM orders WHERE created_at >= date('now', '-7 days') GROUP BY DATE(created_at) ORDER BY date").all();
   const topProducts   = db.prepare("SELECT p.name, SUM(oi.quantity) as sold, SUM(oi.subtotal) as revenue FROM order_items oi JOIN products p ON oi.product_id = p.id JOIN orders o ON oi.order_id = o.id WHERE o.status != 'cancelled' GROUP BY p.id ORDER BY sold DESC LIMIT 5").all();
   const revenueByCategory = db.prepare("SELECT c.name, c.emoji, COALESCE(SUM(oi.subtotal), 0) as revenue, COALESCE(SUM(oi.quantity), 0) as sold FROM categories c LEFT JOIN products p ON p.category_id = c.id LEFT JOIN order_items oi ON oi.product_id = p.id LEFT JOIN orders o ON oi.order_id = o.id AND o.status != 'cancelled' WHERE c.active = 1 GROUP BY c.id ORDER BY revenue DESC").all();
-  const topClients    = db.prepare("SELECT u.id, u.username, u.first_name, u.last_name, u.telegram_id, COUNT(o.id) as order_count, COALESCE(SUM(o.total), 0) as total_spent FROM users u LEFT JOIN orders o ON o.user_id = u.id AND o.status != 'cancelled' GROUP BY u.id ORDER BY total_spent DESC LIMIT 5").all();
+  const topClients    = db.prepare("SELECT u.id, u.username, u.first_name, u.last_name, u.telegram_id, COUNT(o.id) as order_count, COALESCE(SUM(o.total), 0) as total_spent FROM users u JOIN orders o ON o.user_id = u.id AND o.status != 'cancelled' GROUP BY u.id ORDER BY total_spent DESC LIMIT 5").all();
   res.json({ totalOrders, pendingOrders, totalRevenue, totalUsers, unreadMessages, recentOrders, topProducts, revenueByCategory, topClients });
 });
 
@@ -855,8 +855,9 @@ router.get('/analytics', (req, res) => {
            COALESCE(SUM(o.total), 0) as total_spent,
            MAX(o.created_at) as last_order
     FROM users u
-    LEFT JOIN orders o ON o.user_id = u.id AND o.status != 'cancelled' ${dateCond}
+    JOIN orders o ON o.user_id = u.id AND o.status != 'cancelled' ${dateCond}
     GROUP BY u.id
+    HAVING total_spent > 0
     ORDER BY total_spent DESC LIMIT 10
   `).all();
 
