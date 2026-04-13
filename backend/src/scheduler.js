@@ -6,6 +6,11 @@ function getSetting(key) {
   return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value || '';
 }
 
+// Ensure tracking column exists
+try {
+  db.prepare('ALTER TABLE users ADD COLUMN last_inactivity_reminder TEXT').run();
+} catch {}
+
 // ── Welcome message ───────────────────────────────────────────────────────────
 // Called from bot.js when a new validated user is created
 export async function sendWelcomeMessage(telegramId) {
@@ -26,7 +31,8 @@ async function runInactivityReminder() {
   const text = getSetting('auto_inactivity_text');
   if (!text?.trim()) return;
 
-  // Users validated, not blacklisted, with at least one past order, but none in last X days
+  // Users validated, not blacklisted, with at least one past order, but none in last X days,
+  // and who have NOT already received an inactivity reminder
   const users = db.prepare(`
     SELECT DISTINCT u.id, u.telegram_id FROM users u
     JOIN orders o_past ON o_past.user_id = u.id
@@ -35,11 +41,16 @@ async function runInactivityReminder() {
     WHERE (u.blacklisted = 0 OR u.blacklisted IS NULL)
       AND u.is_validated = 1
       AND o_recent.id IS NULL
+      AND u.last_inactivity_reminder IS NULL
   `).all(days);
 
   let sent = 0;
   for (const u of users) {
-    try { await sendMessageToUser(u.telegram_id, text); sent++; } catch {}
+    try {
+      await sendMessageToUser(u.telegram_id, text);
+      db.prepare('UPDATE users SET last_inactivity_reminder = datetime("now") WHERE id = ?').run(u.id);
+      sent++;
+    } catch {}
   }
   if (sent > 0) console.log(`[scheduler] inactivity reminder sent to ${sent} users`);
 }
