@@ -6,11 +6,6 @@ function getSetting(key) {
   return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value || '';
 }
 
-// Ensure tracking column exists
-try {
-  db.prepare('ALTER TABLE users ADD COLUMN last_inactivity_reminder TEXT').run();
-} catch {}
-
 // ── Welcome message ───────────────────────────────────────────────────────────
 // Called from bot.js when a new validated user is created
 export async function sendWelcomeMessage(telegramId) {
@@ -46,13 +41,17 @@ async function runInactivityReminder() {
 
   let sent = 0;
   for (const u of users) {
+    // Marquer AVANT d'envoyer pour éviter les doublons même en cas d'erreur
+    db.prepare('UPDATE users SET last_inactivity_reminder = datetime("now") WHERE id = ?').run(u.id);
     try {
       await sendMessageToUser(u.telegram_id, text);
-      db.prepare('UPDATE users SET last_inactivity_reminder = datetime("now") WHERE id = ?').run(u.id);
       sent++;
-    } catch {}
+    } catch(e) {
+      console.error(`[scheduler] failed to send reminder to ${u.telegram_id}:`, e.message);
+    }
   }
   if (sent > 0) console.log(`[scheduler] inactivity reminder sent to ${sent} users`);
+  else if (users.length > 0) console.log(`[scheduler] ${users.length} reminders marked but send failed`);
 }
 
 // ── Shop inactivity alert ─────────────────────────────────────────────────────

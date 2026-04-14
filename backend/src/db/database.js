@@ -145,6 +145,7 @@ try { db.exec(`ALTER TABLE promos ADD COLUMN user_id INTEGER`); } catch(e) {}
 // Migrate users: add tag and blacklisted
 try { db.exec(`ALTER TABLE users ADD COLUMN tag TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN blacklisted INTEGER DEFAULT 0`); } catch(e) {}
+try { db.exec(`ALTER TABLE users ADD COLUMN last_inactivity_reminder TEXT`); } catch(e) {}
 
 // Audit log table
 db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
