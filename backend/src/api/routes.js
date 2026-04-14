@@ -209,7 +209,7 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
         return res.status(429).json({ error: `Trop de commandes. Maximum ${maxOrders} commandes par ${windowHours}h.` });
     } else {
       // Reset window
-      db.prepare('UPDATE order_rate SET count = 0, window_start = datetime("now") WHERE telegram_id = ?').run(telegram_id);
+      db.prepare("UPDATE order_rate SET count = 0, window_start = datetime('now') WHERE telegram_id = ?").run(telegram_id);
     }
   }
 
@@ -278,7 +278,7 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
   // Update user contact info
   db.prepare('UPDATE users SET phone = ?, address = ? WHERE telegram_id = ?').run(delivery_phone, delivery_address, telegram_id);
   // Increment order rate counter
-  db.prepare('INSERT INTO order_rate (telegram_id, count, window_start) VALUES (?, 1, datetime("now")) ON CONFLICT(telegram_id) DO UPDATE SET count = count + 1').run(telegram_id);
+  db.prepare("INSERT INTO order_rate (telegram_id, count, window_start) VALUES (?, 1, datetime('now')) ON CONFLICT(telegram_id) DO UPDATE SET count = count + 1").run(telegram_id);
 
   const createOrder = db.transaction(() => {
     const order = db.prepare(
