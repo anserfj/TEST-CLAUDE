@@ -988,7 +988,7 @@ async function confirmOrder() {
       discount,
       items: cart.map(i => ({
         product_id: i.id,
-        quantity: i.gram_qty || i.qty,
+        quantity: i.gram_qty ? i.gram_qty * i.qty : i.qty,
         unit_price: i.gram_qty ? parseFloat((i.price / i.gram_qty).toFixed(4)) : i.price,
       })),
       total: totalPrice,
