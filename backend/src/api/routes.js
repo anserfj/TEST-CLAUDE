@@ -328,6 +328,22 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
 
   notifyGroupOrder(groupMsg, orderId);
 
+  // Discord notification
+  const discordWebhook = process.env.DISCORD_WEBHOOK_URL;
+  if (discordWebhook) {
+    const discordItems = itemsWithDetails.map(i => `• **${i.prod?.name || `#${i.product_id}`}** × ${i.quantity}${i.prod?.unit||'u'} — ${(i.unit_price * i.quantity).toFixed(2)}€`).join('\n');
+    fetch(discordWebhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [{ title: `🛍️ Nouvelle commande #${orderId}`, color: 0x00e676, fields: [
+        { name: '👤 Client', value: `${delivery_name}\n${user.username ? '@'+user.username : 'ID: '+user.telegram_id}`, inline: true },
+        { name: '💰 Total', value: `**${totalCalc.toFixed(2)}€**`, inline: true },
+        { name: '🏠 Adresse', value: delivery_address || '—', inline: false },
+        { name: '🛒 Articles', value: discordItems || '—', inline: false },
+      ], timestamp: new Date().toISOString(), footer: { text: 'Baltimore 83' } }] })
+    }).catch(() => {});
+  }
+
   const userRecap =
     `✅ <b>Commande #${orderId} confirmée !</b>\n\n🛒 <b>Vos articles:</b>\n${itemsLines}\n\n💰 <b>Total: ${totalCalc.toFixed(2)}€</b>\n\n📦 <b>Livraison à:</b>\n${esc(delivery_name)}\n${esc(delivery_address)}\n\nNotre équipe vous contactera au <code>${esc(delivery_phone)}</code> 🚀\n\n<i>Merci pour votre commande !</i>`;
   sendMessageToUser(user.telegram_id, userRecap).catch(() => {});
