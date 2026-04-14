@@ -235,11 +235,12 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
     let unitPrice = parseFloat(prod.price || 0);
 
     // Apply tier pricing if available
+    // tier.price = prix TOTAL pour tier.qty unités → prix unitaire = tier.price / tier.qty
     if (prod.tiers) {
       try {
         const tiers = JSON.parse(prod.tiers).sort((a, b) => b.qty - a.qty);
         for (const t of tiers) {
-          if (qty >= parseFloat(t.qty)) { unitPrice = parseFloat(t.price); break; }
+          if (qty >= parseFloat(t.qty)) { unitPrice = parseFloat(t.price) / parseFloat(t.qty); break; }
         }
       } catch {}
     }
