@@ -348,7 +348,7 @@ function switchTab(tab) {
 
 function renderOrders() {
   // Unassigned confirmed/preparing orders (available to take)
-  const toDeliver = allOrders.filter(o => ['pending','confirmed','preparing'].includes(o.status));
+  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status));
   // My orders in transit
   const shipped   = allOrders.filter(o => o.status === 'shipped');
   // Done = local list (backend stops returning delivered)
@@ -391,15 +391,15 @@ function renderCard(o) {
   const time = new Date(o.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const date = new Date(o.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
-  const statusLabel = { pending: 'Nouvelle', confirmed: 'Confirmée', preparing: 'En préparation', shipped: 'En route', delivered: 'Livrée' };
-  const statusClass = { pending: 'status-pending', confirmed: 'status-confirmed', preparing: 'status-preparing', shipped: 'status-shipped', delivered: 'status-delivered' };
+  const statusLabel = { confirmed: 'Confirmée', preparing: 'En préparation', shipped: 'En route', delivered: 'Livrée' };
+  const statusClass = { confirmed: 'status-confirmed', preparing: 'status-preparing', shipped: 'status-shipped', delivered: 'status-delivered' };
 
   const items = (o.items || []).map(i =>
     `<div class="item-row"><span class="item-name">${i.product_name}</span><span class="item-qty">${i.quantity}${i.unit || ''} × ${i.unit_price?.toFixed(2)}€</span></div>`
   ).join('');
 
   let actions = '';
-  if (['pending','confirmed','preparing'].includes(o.status)) {
+  if (['confirmed','preparing'].includes(o.status)) {
     actions = `<div class="order-actions">
       <button class="btn-action btn-ship" onclick="updateStatus(${o.id},'shipped',this)">🚚 Prendre en charge</button>
     </div>`;

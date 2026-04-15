@@ -393,9 +393,9 @@ router.get('/driver/orders', driverAuthMiddleware, (req, res) => {
       LEFT JOIN users u ON u.id = o.user_id
       LEFT JOIN drivers d ON d.id = o.driver_id
       WHERE
-        (o.status IN ('pending','confirmed','preparing') AND (o.driver_id IS NULL OR o.driver_id = ?))
+        (o.status IN ('confirmed','preparing') AND (o.driver_id IS NULL OR o.driver_id = ?))
         OR (o.status = 'shipped' AND o.driver_id = ?)
-      ORDER BY CASE o.status WHEN 'shipped' THEN 0 WHEN 'preparing' THEN 1 WHEN 'confirmed' THEN 2 WHEN 'pending' THEN 3 END, o.created_at ASC
+      ORDER BY CASE o.status WHEN 'shipped' THEN 0 WHEN 'preparing' THEN 1 WHEN 'confirmed' THEN 2 END, o.created_at ASC
     `).all(driverId, driverId);
     const result = orders.map(o => {
       const items = db.prepare(`
@@ -442,7 +442,7 @@ router.patch('/driver/orders/:id/status', driverAuthMiddleware, async (req, res)
   if (!order) return res.status(404).json({ error: 'Commande introuvable' });
 
   if (status === 'shipped') {
-    if (!['pending', 'confirmed', 'preparing'].includes(order.status)) return res.status(400).json({ error: 'Transition invalide' });
+    if (!['confirmed', 'preparing'].includes(order.status)) return res.status(400).json({ error: 'Transition invalide' });
     // Check exclusivity: another driver already took it
     if (order.driver_id && order.driver_id !== driverId) {
       const other = db.prepare('SELECT name FROM drivers WHERE id = ?').get(order.driver_id);
