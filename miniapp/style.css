@@ -296,21 +296,18 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   border-right-color: rgba(255,255,255,.08);
   animation: spin-cw 4s linear infinite;
   will-change: transform;
-  transform: translateZ(0);
 }
 .ilr2 {
   inset: 7px;
   border-bottom-color: rgba(255,255,255,.22);
   animation: spin-ccw 5.5s linear infinite;
   will-change: transform;
-  transform: translateZ(0);
 }
 .info-logo-inner {
   width: 62px !important; height: 62px !important;
   font-size: 1.1rem !important;
   animation: pulse-logo 3.5s ease-in-out infinite;
   will-change: box-shadow;
-  transform: translateZ(0);
 }
 .info-brand {
   font-family: 'Bebas Neue', sans-serif;
@@ -946,7 +943,6 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 .shop-logo-wrap {
   animation: glow-pulse 4s ease-in-out infinite;
   will-change: box-shadow;
-  transform: translateZ(0);
 }
 
 /* ── Search focus glow ── */
