@@ -1091,6 +1091,14 @@ async function loadOrders() {
       const discountHtml = o.discount > 0
         ? `<div class="order-card-discount"><span>🎁 ${o.promo_code || 'Promo'}</span><span>-${parseFloat(o.discount).toFixed(2).replace('.', ',')} €</span></div>`
         : '';
+      const deliveryHtml = o.delivery_name ? `
+        <div class="order-delivery-block">
+          <div class="order-delivery-title">📦 Infos de livraison</div>
+          <div class="order-delivery-row">👤 ${o.delivery_name}</div>
+          ${o.delivery_phone ? `<div class="order-delivery-row">📞 ${o.delivery_phone}</div>` : ''}
+          ${o.delivery_address ? `<div class="order-delivery-row">📍 ${o.delivery_address}</div>` : ''}
+          ${o.notes ? `<div class="order-delivery-row order-delivery-notes">💬 ${o.notes}</div>` : ''}
+        </div>` : '';
 
       return `<div class="order-card">
         <div class="order-card-header">
@@ -1107,6 +1115,7 @@ async function loadOrders() {
           <span>Total</span>
           <span>${parseFloat(o.total).toFixed(2).replace(".", ",")} €</span>
         </div>
+        ${deliveryHtml}
         ${canReorder ? `<button class="reorder-btn" onclick='reorder(${itemsJson})'>↺ Recommander</button>` : ''}
       </div>`;
     }).join("");

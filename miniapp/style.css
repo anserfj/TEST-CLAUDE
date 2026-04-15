@@ -785,6 +785,32 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
   padding: 0 0 4px; margin-top: -4px;
 }
 
+/* ── ORDER DELIVERY BLOCK ── */
+.order-delivery-block {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.05);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+}
+.order-delivery-title {
+  font-size: .75rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 6px;
+}
+.order-delivery-row {
+  font-size: .82rem;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+.order-delivery-notes {
+  color: rgba(255,255,255,.45);
+  font-style: italic;
+}
+
 /* ── LEAFLET OVERRIDES for dark theme ── */
 .leaflet-container { background: #1a1a1a; }
 .leaflet-control-zoom a {
