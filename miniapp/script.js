@@ -240,6 +240,14 @@ function switchTab(tab) {
   );
   if (tab === "panier") renderCart();
   if (tab === "commandes") loadOrders();
+  if (tab === "info") {
+    // Restart ring animations (browser freezes them when element is hidden)
+    document.querySelectorAll('.ilr1, .ilr2, .info-logo-inner').forEach(el => {
+      el.style.animation = 'none';
+      void el.offsetWidth; // force reflow
+      el.style.animation = '';
+    });
+  }
 }
 
 // ── FILTER / SEARCH ──
