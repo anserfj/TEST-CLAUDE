@@ -345,7 +345,7 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
 
   const miniappUrl = process.env.MINIAPP_URL || '';
   const userRecap =
-    `✅ <b>Commande #${orderId} reçue !</b>\n\n🛒 <b>Vos articles:</b>\n${itemsLines}\n\n💰 <b>Total: ${totalCalc.toFixed(2)}€</b>\n\n📦 <b>Infos de livraison:</b>\n👤 ${esc(delivery_name)}\n📍 ${esc(delivery_address)}\n📞 <code>${esc(delivery_phone)}</code>\n\n📱 <b>Suivi de commande</b>\nOuvrez la boutique et allez dans l'onglet <b>Commandes</b> pour suivre votre livraison en temps réel.${miniappUrl ? `\n👉 ${miniappUrl}` : ''}\n\n<i>Merci pour votre commande ! 🙏</i>`;
+    `✅ <b>Commande #${orderId} reçue !</b>\n\nRetrouvez le détail et le suivi de votre commande dans la boutique → onglet <b>Commandes</b>.${miniappUrl ? `\n👉 ${miniappUrl}` : ''}\n\n<i>Merci pour votre commande ! 🙏</i>`;
   sendMessageToUser(user.telegram_id, userRecap).catch(() => {});
 
   res.json({ success: true, order_id: orderId });
