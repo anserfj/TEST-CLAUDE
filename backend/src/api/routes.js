@@ -359,6 +359,17 @@ function hashPin(pin, salt) {
   return crypto.createHmac('sha256', salt).update(String(pin)).digest('hex');
 }
 
+// Business hours: 13h to 00h Paris time
+function isWithinDriverHours() {
+  try {
+    const parts = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: 'Europe/Paris', hour: 'numeric', hour12: false
+    }).formatToParts(new Date());
+    const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? '13');
+    return h >= 13 && h < 24;
+  } catch { return true; }
+}
+
 function driverAuthMiddleware(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Non autorisé' });
@@ -386,6 +397,9 @@ router.post('/driver/login', (req, res) => {
 
 router.get('/driver/orders', driverAuthMiddleware, (req, res) => {
   try {
+    if (!isWithinDriverHours()) {
+      return res.status(403).json({ error: 'Hors service', outsideHours: true });
+    }
     const driverId = req.driver.driverId;
     const orders = db.prepare(`
       SELECT o.*, u.first_name, u.last_name, u.username, u.phone as user_phone,
@@ -438,11 +452,20 @@ router.patch('/driver/orders/:id/status', driverAuthMiddleware, async (req, res)
   const { status } = req.body;
   const orderId = parseInt(req.params.id);
   const driverId = req.driver.driverId;
-  if (!['shipped', 'delivered'].includes(status)) return res.status(400).json({ error: 'Statut non autorisé' });
+  if (!['taken', 'shipped', 'delivered'].includes(status)) return res.status(400).json({ error: 'Statut non autorisé' });
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order) return res.status(404).json({ error: 'Commande introuvable' });
 
-  if (status === 'shipped') {
+  if (status === 'taken') {
+    // Claim the order (assign driver_id without changing status)
+    if (!['confirmed', 'preparing'].includes(order.status)) return res.status(400).json({ error: 'Transition invalide' });
+    if (order.driver_id && order.driver_id !== driverId) {
+      const other = db.prepare('SELECT name FROM drivers WHERE id = ?').get(order.driver_id);
+      return res.status(409).json({ error: `Déjà prise en charge par ${other?.name || 'un autre livreur'}` });
+    }
+    db.prepare(`UPDATE orders SET driver_id=?, updated_at=datetime('now') WHERE id=?`).run(driverId, orderId);
+    return res.json({ success: true });
+  } else if (status === 'shipped') {
     if (!['confirmed', 'preparing'].includes(order.status)) return res.status(400).json({ error: 'Transition invalide' });
     // Check exclusivity: another driver already took it
     if (order.driver_id && order.driver_id !== driverId) {

@@ -183,6 +183,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   padding:7px 12px;background:transparent;border:1px solid var(--border2);
   border-radius:8px;color:var(--text2);font-size:.8rem;cursor:pointer;font-family:inherit;
 }
+
+/* Claimed order highlight */
+.order-card.claimed{border-color:rgba(74,222,128,.35);background:rgba(74,222,128,.04)}
+.claimed-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:.7rem;font-weight:700;color:var(--accent);
+  background:var(--accent-dim);border:1px solid var(--accent-mid);
+  border-radius:20px;padding:2px 8px;
+}
+.btn-go{background:rgba(74,222,128,.18);color:var(--accent);border:1px solid var(--accent-mid)}
+
+/* Outside hours banner */
+.hours-banner{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;padding:48px 24px;text-align:center;color:var(--text3);
+}
+.hours-banner .hours-icon{font-size:2.5rem;opacity:.6}
+.hours-banner .hours-title{font-size:1rem;font-weight:700;color:var(--text2)}
+.hours-banner .hours-sub{font-size:.82rem}
 </style>
 </head>
 <body>
@@ -245,15 +264,23 @@ let allOrders = [];
 let currentTab = 'toDeliver';
 let loading = false;
 
-// ── INIT ─────────────────────────────────────────────────────────────────────
+// ── HORAIRES ──────────────────────────────────────────────────────────────────
+function parisHour() {
+  try {
+    const parts = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: 'Europe/Paris', hour: 'numeric', hour12: false
+    }).formatToParts(new Date());
+    return parseInt(parts.find(p => p.type === 'hour')?.value ?? '13');
+  } catch { return new Date().getHours(); }
+}
+function isWithinHours() { const h = parisHour(); return h >= 13 && h < 24; }
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
 window.onload = () => {
-  if (token) {
-    showApp();
-    loadOrders();
-  }
+  if (token) { showApp(); loadOrders(); }
 };
 
-// ── AUTH ─────────────────────────────────────────────────────────────────────
+// ── AUTH ──────────────────────────────────────────────────────────────────────
 async function doLogin() {
   const name = document.getElementById('loginName').value.trim();
   const pin  = document.getElementById('loginPin').value.trim();
@@ -261,30 +288,21 @@ async function doLogin() {
   const err  = document.getElementById('loginError');
   err.textContent = '';
   if (!name || !pin) { err.textContent = 'Remplissez tous les champs'; return; }
-  btn.disabled = true;
-  btn.textContent = '…';
+  btn.disabled = true; btn.textContent = '…';
   try {
     const r = await fetch(`${API}/driver/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, pin })
     });
     const d = await r.json();
     if (!r.ok) { err.textContent = d.error || 'Erreur de connexion'; return; }
-    token = d.token;
-    driverName = d.name;
-    myDriverId = d.id || 0;
+    token = d.token; driverName = d.name; myDriverId = d.id || 0;
     localStorage.setItem('driver_token', token);
     localStorage.setItem('driver_name', driverName);
     localStorage.setItem('driver_id', myDriverId);
-    showApp();
-    loadOrders();
-  } catch {
-    err.textContent = 'Erreur réseau, réessayez';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Se connecter';
-  }
+    showApp(); loadOrders();
+  } catch { err.textContent = 'Erreur réseau, réessayez'; }
+  finally { btn.disabled = false; btn.textContent = 'Se connecter'; }
 }
 
 document.getElementById('loginPin').addEventListener('keydown', e => {
@@ -292,9 +310,7 @@ document.getElementById('loginPin').addEventListener('keydown', e => {
 });
 
 function doLogout() {
-  token = '';
-  driverName = '';
-  myDriverId = 0;
+  token = ''; driverName = ''; myDriverId = 0;
   localStorage.removeItem('driver_token');
   localStorage.removeItem('driver_name');
   localStorage.removeItem('driver_id');
@@ -310,7 +326,7 @@ function showApp() {
   document.getElementById('driverName').textContent = driverName;
 }
 
-// ── ORDERS ───────────────────────────────────────────────────────────────────
+// ── ORDERS ────────────────────────────────────────────────────────────────────
 async function loadOrders() {
   if (loading) return;
   loading = true;
@@ -322,21 +338,24 @@ async function loadOrders() {
     });
     if (r.status === 401) { doLogout(); return; }
     const data = await r.json();
+    if (data.outsideHours) {
+      allOrders = [];
+      renderOrders();
+      return;
+    }
     if (!r.ok) {
       list.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div style="font-size:.8rem;color:#ef4444">${data.error || 'Erreur serveur'}</div></div>`;
       return;
     }
     if (!Array.isArray(data)) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div>Réponse invalide du serveur</div></div>';
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div>Réponse invalide</div></div>';
       return;
     }
     allOrders = data;
     renderOrders();
   } catch(e) {
     list.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div>Erreur réseau<br><span style="font-size:.72rem;color:#666">${e.message}</span></div></div>`;
-  } finally {
-    loading = false;
-  }
+  } finally { loading = false; }
 }
 
 function switchTab(tab) {
@@ -347,13 +366,15 @@ function switchTab(tab) {
 }
 
 function renderOrders() {
-  // Unassigned confirmed/preparing orders (available to take)
-  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status));
-  // My orders in transit
+  // Available = unassigned confirmed/preparing (other drivers can take them)
+  const available = allOrders.filter(o => ['confirmed','preparing'].includes(o.status) && !o.driver_id);
+  // Mine = claimed by me (driver_id = mine) but not yet shipped
+  const mine      = allOrders.filter(o => ['confirmed','preparing'].includes(o.status) && o.driver_id === myDriverId);
+  // En route = my shipped orders
   const shipped   = allOrders.filter(o => o.status === 'shipped');
-  // Done = local list (backend stops returning delivered)
   const done = window._doneOrders || [];
 
+  const toDeliver = [...mine, ...available]; // my claimed first, then available
   setCount('countToDeliver', toDeliver.length);
   setCount('countShipped', shipped.length);
   setCount('countDone', done.length);
@@ -364,9 +385,20 @@ function renderOrders() {
   else list = done;
 
   const container = document.getElementById('ordersList');
+
+  // Outside hours banner for active tabs
+  if (!isWithinHours() && currentTab !== 'done') {
+    container.innerHTML = `<div class="hours-banner">
+      <div class="hours-icon">🕐</div>
+      <div class="hours-title">Hors service</div>
+      <div class="hours-sub">Les livraisons sont disponibles<br>de <b>13h</b> à <b>minuit</b> chaque jour</div>
+    </div>`;
+    return;
+  }
+
   if (!list.length) {
     const msgs = {
-      toDeliver: { icon: '📭', text: 'Aucune commande à livrer', sub: 'Les commandes confirmées par l\'admin apparaîtront ici' },
+      toDeliver: { icon: '📭', text: 'Aucune commande à livrer', sub: 'Les commandes confirmées apparaîtront ici dès 13h' },
       shipped:   { icon: '🚚', text: 'Aucune livraison en cours', sub: '' },
       done:      { icon: '🎉', text: 'Aucune livraison effectuée', sub: '' }
     };
@@ -387,7 +419,6 @@ function renderCard(o) {
   const clientName = [o.first_name, o.last_name].filter(Boolean).join(' ') || o.username || `Client #${o.user_id}`;
   const address = o.delivery_address || '—';
   const phone = o.delivery_phone || o.user_phone || '';
-  const gpsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
   const time = new Date(o.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const date = new Date(o.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
@@ -398,10 +429,19 @@ function renderCard(o) {
     `<div class="item-row"><span class="item-name">${i.product_name}</span><span class="item-qty">${i.quantity}${i.unit || ''} × ${i.unit_price?.toFixed(2)}€</span></div>`
   ).join('');
 
+  const isMine = o.driver_id === myDriverId;
+  const isAvailable = ['confirmed','preparing'].includes(o.status) && !o.driver_id;
+
   let actions = '';
-  if (['confirmed','preparing'].includes(o.status)) {
+  if (isAvailable) {
+    // Order not yet claimed — show "Prendre en charge" button
     actions = `<div class="order-actions">
-      <button class="btn-action btn-ship" onclick="updateStatus(${o.id},'shipped',this)">🚚 Prendre en charge</button>
+      <button class="btn-action btn-ship" onclick="updateStatus(${o.id},'taken',this)">📦 Prendre en charge</button>
+    </div>`;
+  } else if (isMine && ['confirmed','preparing'].includes(o.status)) {
+    // I claimed it — show "Partir en livraison" button
+    actions = `<div class="order-actions">
+      <button class="btn-action btn-go" onclick="updateStatus(${o.id},'shipped',this)">🚚 Partir en livraison</button>
     </div>`;
   } else if (o.status === 'shipped') {
     actions = `<div class="order-actions">
@@ -410,11 +450,13 @@ function renderCard(o) {
   }
 
   const notes = o.notes ? `<div class="info-row" style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:6px 10px;color:#fb923c">📝 ${o.notes}</div>` : '';
+  const claimedBadge = isMine && ['confirmed','preparing'].includes(o.status)
+    ? `<span class="claimed-badge">✓ Je m'en occupe</span>` : '';
 
-  return `<div class="order-card" id="card-${o.id}">
+  return `<div class="order-card${isMine && ['confirmed','preparing'].includes(o.status) ? ' claimed' : ''}" id="card-${o.id}">
     <div class="order-header">
       <div>
-        <div class="order-id">Commande #${o.id}</div>
+        <div class="order-id">Commande #${o.id} ${claimedBadge}</div>
         <div class="order-time">${date} à ${time}</div>
       </div>
       <span class="status-badge ${statusClass[o.status]}">${statusLabel[o.status]}</span>
@@ -462,12 +504,22 @@ async function updateStatus(orderId, status, btn) {
       showToast('⚠️ ' + (d.error || 'Erreur'));
       btn.disabled = false;
       btn.textContent = original;
-      if (r.status === 409) loadOrders(); // refresh to remove taken order
+      if (r.status === 409) loadOrders();
       return;
     }
 
-    if (status === 'delivered') {
-      // Move to done list
+    if (status === 'taken') {
+      // Assign driver_id locally and re-render
+      const order = allOrders.find(o => o.id === orderId);
+      if (order) order.driver_id = myDriverId;
+      showToast('📦 Commande prise en charge !');
+      renderOrders();
+    } else if (status === 'shipped') {
+      const order = allOrders.find(o => o.id === orderId);
+      if (order) order.status = 'shipped';
+      showToast('🚚 Bonne route !');
+      renderOrders();
+    } else if (status === 'delivered') {
       const order = allOrders.find(o => o.id === orderId);
       if (order) {
         order.status = 'delivered';
@@ -476,13 +528,8 @@ async function updateStatus(orderId, status, btn) {
       }
       allOrders = allOrders.filter(o => o.id !== orderId);
       showToast('✅ Livraison confirmée !');
-    } else {
-      // Update in list
-      const order = allOrders.find(o => o.id === orderId);
-      if (order) order.status = status;
-      showToast('🚚 En route !');
+      renderOrders();
     }
-    renderOrders();
   } catch {
     showToast('Erreur réseau');
     btn.disabled = false;
