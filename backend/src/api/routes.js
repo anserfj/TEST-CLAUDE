@@ -343,9 +343,8 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
     }).catch(() => {});
   }
 
-  const miniappUrl = process.env.MINIAPP_URL || '';
   const userRecap =
-    `✅ <b>Commande #${orderId} reçue !</b>\n\nRetrouvez le détail et le suivi de votre commande dans la boutique → onglet <b>Commandes</b>.${miniappUrl ? `\n👉 ${miniappUrl}` : ''}\n\n<i>Merci pour votre commande ! 🙏</i>`;
+    `✅ <b>Commande #${orderId} reçue !</b>\n\nRetrouvez le détail et le suivi de votre commande dans la boutique → onglet <b>Commandes</b>.\n\n<i>Merci pour votre commande ! 🙏</i>`;
   sendMessageToUser(user.telegram_id, userRecap).catch(() => {});
 
   res.json({ success: true, order_id: orderId });
