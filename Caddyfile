@@ -1,12 +1,11 @@
 baltimore-83.duckdns.org {
-    handle_path /driver* {
-        reverse_proxy driver:80
-    }
-    handle {
-        reverse_proxy frontend:80
-    }
+    reverse_proxy frontend:80
 }
 
 baltimore-83.duckdns.org:5174 {
     reverse_proxy miniapp:80
+}
+
+baltimore-83.duckdns.org:5175 {
+    reverse_proxy driver:80
 }
