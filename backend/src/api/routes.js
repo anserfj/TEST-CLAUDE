@@ -350,6 +350,80 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
   res.json({ success: true, order_id: orderId });
 });
 
+// ── DRIVER AUTH ───────────────────────────────────────────────────────────────
+
+const driverTokens = new Map(); // token -> { driverId, name, expires }
+
+function hashPin(pin, salt) {
+  return crypto.createHmac('sha256', salt).update(String(pin)).digest('hex');
+}
+
+function driverAuthMiddleware(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Non autorisé' });
+  const token = auth.slice(7);
+  const session = driverTokens.get(token);
+  if (!session || session.expires < Date.now()) {
+    driverTokens.delete(token);
+    return res.status(401).json({ error: 'Session expirée' });
+  }
+  req.driver = session;
+  next();
+}
+
+router.post('/driver/login', (req, res) => {
+  const { name, pin } = req.body;
+  if (!name || !pin) return res.status(400).json({ error: 'Champs requis' });
+  const driver = db.prepare('SELECT * FROM drivers WHERE name = ? AND active = 1').get(String(name).trim());
+  if (!driver) return res.status(401).json({ error: 'Identifiants incorrects' });
+  const hash = hashPin(pin, driver.pin_salt);
+  if (hash !== driver.pin_hash) return res.status(401).json({ error: 'Identifiants incorrects' });
+  const token = crypto.randomBytes(32).toString('hex');
+  driverTokens.set(token, { driverId: driver.id, name: driver.name, expires: Date.now() + 24 * 60 * 60 * 1000 });
+  res.json({ token, name: driver.name });
+});
+
+router.get('/driver/orders', driverAuthMiddleware, (req, res) => {
+  const orders = db.prepare(`
+    SELECT o.*, u.first_name, u.last_name, u.username, u.phone as user_phone
+    FROM orders o
+    LEFT JOIN users u ON u.id = o.user_id
+    WHERE o.status IN ('confirmed', 'preparing', 'shipped')
+    ORDER BY CASE o.status WHEN 'shipped' THEN 0 WHEN 'preparing' THEN 1 WHEN 'confirmed' THEN 2 END, o.created_at ASC
+  `).all();
+  const result = orders.map(o => {
+    const items = db.prepare(`
+      SELECT oi.quantity, oi.unit_price, oi.subtotal, p.name as product_name, p.unit
+      FROM order_items oi JOIN products p ON p.id = oi.product_id
+      WHERE oi.order_id = ?
+    `).all(o.id);
+    return { ...o, items };
+  });
+  res.json(result);
+});
+
+router.patch('/driver/orders/:id/status', driverAuthMiddleware, (req, res) => {
+  const { status } = req.body;
+  const orderId = parseInt(req.params.id);
+  if (!['shipped', 'delivered'].includes(status)) return res.status(400).json({ error: 'Statut non autorisé' });
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!order) return res.status(404).json({ error: 'Commande introuvable' });
+  if (status === 'shipped' && !['confirmed', 'preparing'].includes(order.status))
+    return res.status(400).json({ error: 'Transition invalide' });
+  if (status === 'delivered' && order.status !== 'shipped')
+    return res.status(400).json({ error: 'Transition invalide' });
+  db.prepare(`UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, orderId);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(order.user_id);
+  if (user) {
+    const msgs = {
+      shipped: `🚚 <b>Commande #${orderId} en route !</b>\n\nVotre commande est en cours de livraison.`,
+      delivered: `✅ <b>Commande #${orderId} livrée !</b>\n\nMerci pour votre commande. À bientôt ! 🙏`
+    };
+    sendMessageToUser(user.telegram_id, msgs[status]).catch(() => {});
+  }
+  res.json({ success: true });
+});
+
 // ── AUTH MIDDLEWARE — everything below requires a valid token ──────────────────
 
 router.use(authMiddleware);
@@ -544,6 +618,48 @@ router.patch('/orders/:id/status', async (req, res) => {
     };
     if (msgs[status]) sendMessageToUser(order.telegram_id, msgs[status]).catch(() => {});
   }
+  res.json({ success: true });
+});
+
+// ── DRIVERS (admin management) ────────────────────────────────────────────────
+
+router.get('/drivers', (req, res) => {
+  const drivers = db.prepare('SELECT id, name, active, created_at FROM drivers ORDER BY name').all();
+  res.json(drivers);
+});
+
+router.post('/drivers', (req, res) => {
+  const { name, pin } = req.body;
+  if (!name?.trim() || !pin) return res.status(400).json({ error: 'Champs requis' });
+  if (String(pin).length < 4) return res.status(400).json({ error: 'PIN trop court (min 4 chiffres)' });
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashPin(pin, salt);
+  try {
+    const r = db.prepare('INSERT INTO drivers (name, pin_hash, pin_salt) VALUES (?, ?, ?)').run(name.trim(), hash, salt);
+    res.json({ id: r.lastInsertRowid, name: name.trim() });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: 'Nom déjà utilisé' });
+    throw e;
+  }
+});
+
+router.put('/drivers/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const { pin, active } = req.body;
+  if (pin !== undefined) {
+    if (String(pin).length < 4) return res.status(400).json({ error: 'PIN trop court' });
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = hashPin(pin, salt);
+    db.prepare('UPDATE drivers SET pin_hash = ?, pin_salt = ? WHERE id = ?').run(hash, salt, id);
+  }
+  if (active !== undefined) db.prepare('UPDATE drivers SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+  res.json({ success: true });
+});
+
+router.delete('/drivers/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  db.prepare('DELETE FROM drivers WHERE id = ?').run(id);
+  for (const [token, s] of driverTokens.entries()) if (s.driverId === id) driverTokens.delete(token);
   res.json({ success: true });
 });
 

@@ -147,6 +147,16 @@ try { db.exec(`ALTER TABLE users ADD COLUMN tag TEXT`); } catch(e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN blacklisted INTEGER DEFAULT 0`); } catch(e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN last_inactivity_reminder TEXT`); } catch(e) {}
 
+// Drivers table
+db.exec(`CREATE TABLE IF NOT EXISTS drivers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL,
+  pin_hash TEXT NOT NULL,
+  pin_salt TEXT NOT NULL,
+  active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+)`);
+
 // Audit log table
 db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

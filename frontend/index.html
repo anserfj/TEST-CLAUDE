@@ -339,7 +339,7 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"analytics",icon:"📊",label:"Analytics"},{id:"automations",icon:"⚡",label:"Automations"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"analytics",icon:"📊",label:"Analytics"},{id:"automations",icon:"⚡",label:"Automations"},{id:"drivers",icon:"🚚",label:"Livreurs"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:"0 0 72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
@@ -2435,6 +2435,113 @@ function AutomationsPage(){
   </div>;
 }
 
+/* ── DRIVERS PAGE ── */
+function DriversPage(){
+  const [drivers,setDrivers]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [form,setForm]=useState({name:'',pin:''});
+  const [showPin,setShowPin]=useState(false);
+  const [editPins,setEditPins]=useState({});
+  const [err,setErr]=useState('');
+  const [msg,setMsg]=useState('');
+
+  const load=()=>{
+    setLoading(true);
+    apiGet('/api/drivers').then(d=>{setDrivers(d||[]);setLoading(false);}).catch(()=>setLoading(false));
+  };
+  useEffect(()=>{load();},[]);
+
+  const create=async()=>{
+    setErr('');setMsg('');
+    if(!form.name.trim()||!form.pin){setErr('Remplissez tous les champs');return;}
+    try{
+      await apiPost('/api/drivers',{name:form.name.trim(),pin:form.pin});
+      setForm({name:'',pin:''});setMsg('Livreur créé avec succès');load();
+    }catch(e){setErr(e.message||'Erreur');}
+  };
+
+  const updatePin=async(id)=>{
+    const pin=editPins[id];
+    if(!pin)return;
+    try{
+      await apiPut(`/api/drivers/${id}`,{pin});
+      setEditPins(p=>({...p,[id]:''}));setMsg('PIN mis à jour');load();
+    }catch(e){setErr(e.message||'Erreur');}
+  };
+
+  const toggleActive=async(d)=>{
+    try{await apiPut(`/api/drivers/${d.id}`,{active:d.active?0:1});load();}catch(e){setErr(e.message||'Erreur');}
+  };
+
+  const del=async(id)=>{
+    if(!confirm('Supprimer ce livreur ?'))return;
+    try{await apiDelete(`/api/drivers/${id}`);load();}catch(e){setErr(e.message||'Erreur');}
+  };
+
+  const driverUrl=window.location.origin+'/driver';
+
+  return <div style={{padding:"24px 20px",maxWidth:700}}>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
+      <span style={{fontSize:'1.3rem'}}>🚚</span>
+      <h2 style={{color:C.text,fontSize:'1.2rem',fontWeight:700}}>Gestion des Livreurs</h2>
+    </div>
+
+    <Card>
+      <div style={{fontSize:'.78rem',fontWeight:700,color:C.text2,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:12}}>Lien d'accès livreur</div>
+      <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+        <code style={{flex:1,padding:'8px 12px',background:C.bg3,borderRadius:8,fontSize:'.8rem',color:C.accent,wordBreak:'break-all'}}>{driverUrl}</code>
+        <Btn onClick={()=>{navigator.clipboard?.writeText(driverUrl).catch(()=>{});setMsg('Lien copié !');}}>Copier</Btn>
+      </div>
+      <div style={{fontSize:'.8rem',color:C.text3,marginTop:8}}>Les livreurs accèdent à cette URL depuis leur mobile</div>
+    </Card>
+
+    <Card style={{marginTop:16}}>
+      <div style={{fontSize:'.78rem',fontWeight:700,color:C.text2,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:12}}>Ajouter un livreur</div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}}>
+        <div style={{flex:1,minWidth:140}}>
+          <div style={{fontSize:'.78rem',color:C.text2,marginBottom:4}}>Nom</div>
+          <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+            placeholder="Ex: Jean" style={{width:'100%',padding:'9px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,fontSize:'.88rem',fontFamily:'inherit'}}/>
+        </div>
+        <div style={{flex:1,minWidth:140}}>
+          <div style={{fontSize:'.78rem',color:C.text2,marginBottom:4}}>PIN (min 4 chiffres)</div>
+          <div style={{position:'relative'}}>
+            <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))}
+              type={showPin?'text':'password'} inputMode="numeric" placeholder="1234"
+              style={{width:'100%',padding:'9px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,fontSize:'.88rem',fontFamily:'inherit'}}/>
+            <button onClick={()=>setShowPin(s=>!s)} style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:C.text3,fontSize:'.8rem'}}>{showPin?'🙈':'👁'}</button>
+          </div>
+        </div>
+        <Btn onClick={create} style={{whiteSpace:'nowrap'}}>+ Créer</Btn>
+      </div>
+      {err&&<div style={{color:'#ef4444',fontSize:'.82rem',marginTop:8}}>{err}</div>}
+      {msg&&<div style={{color:C.green,fontSize:'.82rem',marginTop:8}}>{msg}</div>}
+    </Card>
+
+    <Card style={{marginTop:16}}>
+      <div style={{fontSize:'.78rem',fontWeight:700,color:C.text2,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:12}}>Livreurs ({drivers.length})</div>
+      {loading?<div style={{color:C.text3,textAlign:'center',padding:24}}>Chargement…</div>
+      :drivers.length===0?<div style={{color:C.text3,textAlign:'center',padding:24}}>Aucun livreur enregistré</div>
+      :drivers.map(d=><div key={d.id} style={{display:'flex',alignItems:'center',gap:8,padding:'10px 0',borderBottom:`1px solid ${C.border}`,flexWrap:'wrap'}}>
+        <div style={{flex:1,minWidth:120}}>
+          <span style={{fontWeight:600,color:C.text}}>{d.name}</span>
+          <span style={{marginLeft:8,fontSize:'.75rem',color:d.active?C.green:'#888'}}>
+            {d.active?'● Actif':'● Inactif'}
+          </span>
+        </div>
+        <input value={editPins[d.id]||''} onChange={e=>setEditPins(p=>({...p,[d.id]:e.target.value}))}
+          type="password" inputMode="numeric" placeholder="Nouveau PIN"
+          style={{width:120,padding:'6px 10px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:7,color:C.text,fontSize:'.82rem',fontFamily:'inherit'}}/>
+        <Btn onClick={()=>updatePin(d.id)} disabled={!editPins[d.id]} style={{padding:'6px 10px',fontSize:'.78rem'}}>Changer PIN</Btn>
+        <button onClick={()=>toggleActive(d)} style={{padding:'6px 10px',background:'transparent',border:`1px solid ${C.border}`,borderRadius:7,color:d.active?'#f87171':'#4ade80',fontSize:'.78rem',cursor:'pointer',fontFamily:'inherit'}}>
+          {d.active?'Désactiver':'Activer'}
+        </button>
+        <button onClick={()=>del(d.id)} style={{padding:'6px 10px',background:'transparent',border:'1px solid #ef444440',borderRadius:7,color:'#ef4444',fontSize:'.78rem',cursor:'pointer',fontFamily:'inherit'}}>Suppr.</button>
+      </div>)}
+    </Card>
+  </div>;
+}
+
 /* ── APP ── */
 function App(){
   const [logged,setLogged]=useState(()=>{try{return localStorage.getItem("baltimore83_logged")==="1"&&!!getToken()}catch{return false}});
@@ -2490,6 +2597,7 @@ function App(){
       {page==="messages"&&<MessagesPage/>}
       {page==="analytics"&&<AnalyticsPage/>}
       {page==="automations"&&<AutomationsPage/>}
+      {page==="drivers"&&<DriversPage/>}
       {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
     </main>
   </div>

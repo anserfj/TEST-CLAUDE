@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="theme-color" content="#0d0d0d"/>
+<title>Espace Livreur</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d0d0d;--bg2:#161616;--bg3:#1f1f1f;
+  --border:#2a2a2a;--border2:#333;
+  --text:#f0f0f0;--text2:#aaa;--text3:#666;
+  --accent:#4ade80;--accent-dim:rgba(74,222,128,.12);--accent-mid:rgba(74,222,128,.3);
+  --orange:#f97316;--blue:#3b82f6;--purple:#a855f7;--red:#ef4444;
+  --radius:14px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',-apple-system,sans-serif;overflow:hidden}
+
+/* ── LOGIN ─────────────────────────────────────────────────────────────── */
+#loginScreen{
+  position:fixed;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:32px 24px;gap:16px;
+  background:var(--bg);
+}
+.login-icon{font-size:3rem;margin-bottom:4px;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.login-title{font-size:1.6rem;font-weight:700;letter-spacing:.02em;margin-bottom:4px}
+.login-sub{font-size:.85rem;color:var(--text2);margin-bottom:8px}
+.login-form{width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px}
+.input{
+  width:100%;padding:14px 16px;background:var(--bg2);border:1px solid var(--border2);
+  border-radius:12px;color:var(--text);font-size:1rem;font-family:inherit;outline:none;
+  transition:border-color .2s;
+}
+.input:focus{border-color:var(--accent)}
+.input::placeholder{color:var(--text3)}
+.btn-login{
+  padding:15px;background:var(--accent);color:#0d0d0d;font-size:1rem;font-weight:700;
+  border:none;border-radius:12px;cursor:pointer;font-family:inherit;
+  transition:opacity .2s,transform .1s;
+}
+.btn-login:active{transform:scale(.97)}
+.btn-login:disabled{opacity:.5;cursor:not-allowed}
+.login-error{color:var(--red);font-size:.85rem;text-align:center;min-height:20px}
+
+/* ── MAIN APP ──────────────────────────────────────────────────────────── */
+#appScreen{position:fixed;inset:0;display:none;flex-direction:column;overflow:hidden}
+
+/* Header */
+.app-header{
+  padding:14px 16px 12px;background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.header-left{display:flex;align-items:center;gap:10px}
+.driver-avatar{
+  width:36px;height:36px;border-radius:50%;background:var(--accent-dim);
+  border:1px solid var(--accent-mid);display:flex;align-items:center;justify-content:center;
+  font-size:1.1rem;
+}
+.driver-name{font-weight:700;font-size:.95rem}
+.driver-status{font-size:.75rem;color:var(--accent)}
+.btn-logout{
+  padding:7px 12px;background:transparent;border:1px solid var(--border2);
+  border-radius:8px;color:var(--text2);font-size:.8rem;cursor:pointer;font-family:inherit;
+}
+
+/* Tabs */
+.tabs{
+  display:flex;background:var(--bg2);border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.tab-btn{
+  flex:1;padding:12px 4px;background:transparent;border:none;
+  color:var(--text3);font-size:.8rem;font-weight:600;cursor:pointer;
+  border-bottom:2px solid transparent;transition:all .15s;font-family:inherit;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-count{
+  font-size:.7rem;background:var(--accent);color:#0d0d0d;border-radius:20px;
+  padding:1px 6px;font-weight:700;display:none;
+}
+.tab-count.show{display:block}
+
+/* Order list */
+.orders-scroll{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.orders-scroll:empty::after{
+  content:"Aucune commande";color:var(--text3);font-size:.9rem;
+  text-align:center;padding:48px 0;display:block;
+}
+
+/* Order card */
+.order-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;animation:slide-up .25s ease both;
+}
+@keyframes slide-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+.order-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px 10px;border-bottom:1px solid var(--border);
+}
+.order-id{font-weight:700;font-size:.95rem}
+.order-time{font-size:.75rem;color:var(--text3)}
+.status-badge{
+  padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;
+  letter-spacing:.03em;
+}
+.status-confirmed{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3)}
+.status-preparing{background:rgba(249,115,22,.15);color:#fb923c;border:1px solid rgba(249,115,22,.3)}
+.status-shipped{background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.3)}
+.status-delivered{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-mid)}
+
+.order-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+
+/* Client block */
+.client-block{display:flex;flex-direction:column;gap:6px}
+.client-name{font-weight:600;font-size:.9rem;display:flex;align-items:center;gap:6px}
+.info-row{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--text2)}
+.info-row a{color:var(--text2);text-decoration:none}
+.info-row a:active{color:var(--accent)}
+
+/* Address GPS button */
+.address-wrap{display:flex;align-items:flex-start;gap:8px}
+.address-text{flex:1;font-size:.82rem;color:var(--text2);line-height:1.4}
+.btn-gps{
+  padding:5px 10px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);
+  border-radius:8px;color:#60a5fa;font-size:.75rem;font-weight:600;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;font-family:inherit;
+}
+.btn-gps:active{opacity:.7}
+
+/* Items */
+.items-block{
+  background:var(--bg3);border-radius:10px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:4px;
+}
+.item-row{display:flex;justify-content:space-between;font-size:.8rem}
+.item-name{color:var(--text2)}
+.item-qty{color:var(--text3)}
+.order-total{display:flex;justify-content:space-between;font-size:.85rem;font-weight:700;padding-top:6px;border-top:1px solid var(--border)}
+
+/* Action buttons */
+.order-actions{padding:0 14px 14px;display:flex;gap:8px}
+.btn-action{
+  flex:1;padding:12px;border:none;border-radius:10px;font-size:.85rem;
+  font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s,transform .1s;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.btn-action:active{transform:scale(.97);opacity:.85}
+.btn-ship{background:rgba(168,85,247,.2);color:#c084fc;border:1px solid rgba(168,85,247,.4)}
+.btn-deliver{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-mid)}
+.btn-action:disabled{opacity:.3;cursor:not-allowed;pointer-events:none}
+
+/* Empty state */
+.empty-state{
+  text-align:center;padding:48px 24px;color:var(--text3);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+.empty-icon{font-size:2.5rem;opacity:.5}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#1e1e1e;border:1px solid var(--border2);border-radius:10px;
+  padding:10px 20px;font-size:.85rem;white-space:nowrap;
+  opacity:0;transition:all .3s;pointer-events:none;z-index:999;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Spinner */
+.spinner{
+  width:20px;height:20px;border:2px solid var(--border2);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .6s linear infinite;margin:auto;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Refresh button */
+.btn-refresh{
+  padding:7px 12px;background:transparent;border:1px solid var(--border2);
+  border-radius:8px;color:var(--text2);font-size:.8rem;cursor:pointer;font-family:inherit;
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-icon">🚚</div>
+  <div class="login-title">Espace Livreur</div>
+  <div class="login-sub">Connectez-vous pour accéder à vos livraisons</div>
+  <div class="login-form">
+    <input class="input" id="loginName" type="text" placeholder="Votre nom" autocomplete="username" autocapitalize="words"/>
+    <input class="input" id="loginPin" type="password" inputmode="numeric" placeholder="Code PIN" autocomplete="current-password"/>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">Se connecter</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- APP SCREEN -->
+<div id="appScreen">
+  <div class="app-header">
+    <div class="header-left">
+      <div class="driver-avatar">🚚</div>
+      <div>
+        <div class="driver-name" id="driverName">Livreur</div>
+        <div class="driver-status">● En service</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-refresh" onclick="loadOrders()" title="Actualiser">↻</button>
+      <button class="btn-logout" onclick="doLogout()">Déconnexion</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabToDeliver" onclick="switchTab('toDeliver')">
+      À livrer
+      <span class="tab-count" id="countToDeliver"></span>
+    </button>
+    <button class="tab-btn" id="tabShipped" onclick="switchTab('shipped')">
+      En route
+      <span class="tab-count" id="countShipped"></span>
+    </button>
+    <button class="tab-btn" id="tabDone" onclick="switchTab('done')">
+      Livrées
+      <span class="tab-count" id="countDone"></span>
+    </button>
+  </div>
+
+  <div class="orders-scroll" id="ordersList"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api';
+let token = localStorage.getItem('driver_token') || '';
+let driverName = localStorage.getItem('driver_name') || '';
+let allOrders = [];
+let currentTab = 'toDeliver';
+let loading = false;
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+window.onload = () => {
+  if (token) {
+    showApp();
+    loadOrders();
+  }
+};
+
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const name = document.getElementById('loginName').value.trim();
+  const pin  = document.getElementById('loginPin').value.trim();
+  const btn  = document.getElementById('loginBtn');
+  const err  = document.getElementById('loginError');
+  err.textContent = '';
+  if (!name || !pin) { err.textContent = 'Remplissez tous les champs'; return; }
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await fetch(`${API}/driver/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, pin })
+    });
+    const d = await r.json();
+    if (!r.ok) { err.textContent = d.error || 'Erreur de connexion'; return; }
+    token = d.token;
+    driverName = d.name;
+    localStorage.setItem('driver_token', token);
+    localStorage.setItem('driver_name', driverName);
+    showApp();
+    loadOrders();
+  } catch {
+    err.textContent = 'Erreur réseau, réessayez';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Se connecter';
+  }
+}
+
+document.getElementById('loginPin').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+function doLogout() {
+  token = '';
+  driverName = '';
+  localStorage.removeItem('driver_token');
+  localStorage.removeItem('driver_name');
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPin').value = '';
+  document.getElementById('loginName').value = '';
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'flex';
+  document.getElementById('driverName').textContent = driverName;
+}
+
+// ── ORDERS ───────────────────────────────────────────────────────────────────
+async function loadOrders() {
+  if (loading) return;
+  loading = true;
+  const list = document.getElementById('ordersList');
+  list.innerHTML = '<div style="padding:32px 0;text-align:center"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch(`${API}/driver/orders`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (r.status === 401) { doLogout(); return; }
+    allOrders = await r.json();
+    renderOrders();
+  } catch {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div>Erreur réseau</div></div>';
+  } finally {
+    loading = false;
+  }
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  renderOrders();
+}
+
+function renderOrders() {
+  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status));
+  const shipped   = allOrders.filter(o => o.status === 'shipped');
+  // For "done" tab we show shipped orders + refreshing (backend only returns active ones)
+  // so we keep a local done list
+  const done = window._doneOrders || [];
+
+  // Update counts
+  setCount('countToDeliver', toDeliver.length);
+  setCount('countShipped', shipped.length);
+  setCount('countDone', done.length);
+
+  let list;
+  if (currentTab === 'toDeliver') list = toDeliver;
+  else if (currentTab === 'shipped') list = shipped;
+  else list = done;
+
+  const container = document.getElementById('ordersList');
+  if (!list.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">${currentTab === 'done' ? '🎉' : '📭'}</div><div>${currentTab === 'done' ? 'Aucune livraison effectuée' : 'Aucune commande'}</div></div>`;
+    return;
+  }
+  container.innerHTML = list.map(renderCard).join('');
+}
+
+function setCount(id, n) {
+  const el = document.getElementById(id);
+  if (n > 0) { el.textContent = n; el.classList.add('show'); }
+  else el.classList.remove('show');
+}
+
+function renderCard(o) {
+  const clientName = [o.first_name, o.last_name].filter(Boolean).join(' ') || o.username || `Client #${o.user_id}`;
+  const address = o.delivery_address || '—';
+  const phone = o.delivery_phone || o.user_phone || '';
+  const gpsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  const time = new Date(o.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const date = new Date(o.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+  const statusLabel = { confirmed: 'Confirmée', preparing: 'En préparation', shipped: 'En route', delivered: 'Livrée' };
+  const statusClass = { confirmed: 'status-confirmed', preparing: 'status-preparing', shipped: 'status-shipped', delivered: 'status-delivered' };
+
+  const items = (o.items || []).map(i =>
+    `<div class="item-row"><span class="item-name">${i.product_name}</span><span class="item-qty">${i.quantity}${i.unit || ''} × ${i.unit_price?.toFixed(2)}€</span></div>`
+  ).join('');
+
+  let actions = '';
+  if (['confirmed','preparing'].includes(o.status)) {
+    actions = `<div class="order-actions">
+      <button class="btn-action btn-ship" onclick="updateStatus(${o.id},'shipped',this)">🚚 Prendre en charge</button>
+    </div>`;
+  } else if (o.status === 'shipped') {
+    actions = `<div class="order-actions">
+      <button class="btn-action btn-deliver" onclick="updateStatus(${o.id},'delivered',this)">✅ Marquer livré</button>
+    </div>`;
+  }
+
+  const notes = o.notes ? `<div class="info-row" style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:6px 10px;color:#fb923c">📝 ${o.notes}</div>` : '';
+
+  return `<div class="order-card" id="card-${o.id}">
+    <div class="order-header">
+      <div>
+        <div class="order-id">Commande #${o.id}</div>
+        <div class="order-time">${date} à ${time}</div>
+      </div>
+      <span class="status-badge ${statusClass[o.status]}">${statusLabel[o.status]}</span>
+    </div>
+    <div class="order-body">
+      <div class="client-block">
+        <div class="client-name">👤 ${clientName}</div>
+        ${phone ? `<div class="info-row">📞 <a href="tel:${phone}">${phone}</a></div>` : ''}
+        <div class="address-wrap">
+          <div class="address-text">📍 ${address}</div>
+          ${address !== '—' ? `<button class="btn-gps" onclick="openGps('${encodeURIComponent(address)}')">GPS</button>` : ''}
+        </div>
+        ${notes}
+      </div>
+      <div class="items-block">
+        ${items}
+        <div class="order-total"><span>Total</span><span>${o.total?.toFixed(2)}€</span></div>
+      </div>
+    </div>
+    ${actions}
+  </div>`;
+}
+
+function openGps(encodedAddress) {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const url = isIOS
+    ? `maps://?q=${encodedAddress}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+  window.open(url, '_blank');
+}
+
+async function updateStatus(orderId, status, btn) {
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '…';
+  try {
+    const r = await fetch(`${API}/driver/orders/${orderId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ status })
+    });
+    if (r.status === 401) { doLogout(); return; }
+    const d = await r.json();
+    if (!r.ok) { showToast(d.error || 'Erreur'); btn.disabled = false; btn.textContent = original; return; }
+
+    if (status === 'delivered') {
+      // Move to done list
+      const order = allOrders.find(o => o.id === orderId);
+      if (order) {
+        order.status = 'delivered';
+        if (!window._doneOrders) window._doneOrders = [];
+        window._doneOrders.unshift(order);
+      }
+      allOrders = allOrders.filter(o => o.id !== orderId);
+      showToast('✅ Livraison confirmée !');
+    } else {
+      // Update in list
+      const order = allOrders.find(o => o.id === orderId);
+      if (order) order.status = status;
+      showToast('🚚 En route !');
+    }
+    renderOrders();
+  } catch {
+    showToast('Erreur réseau');
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Auto-refresh every 60s
+setInterval(() => { if (token) loadOrders(); }, 60000);
+</script>
+</body>
+</html>

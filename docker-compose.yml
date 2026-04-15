@@ -30,6 +30,14 @@ services:
       - backend
     restart: unless-stopped
 
+  driver:
+    build: ./driver
+    expose:
+      - "80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   caddy:
     image: caddy:2-alpine
     ports:
@@ -43,6 +51,7 @@ services:
     depends_on:
       - frontend
       - miniapp
+      - driver
     restart: unless-stopped
 
 volumes:
