@@ -107,6 +107,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;
   letter-spacing:.03em;
 }
+.status-pending{background:rgba(234,179,8,.15);color:#facc15;border:1px solid rgba(234,179,8,.3)}
 .status-confirmed{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3)}
 .status-preparing{background:rgba(249,115,22,.15);color:#fb923c;border:1px solid rgba(249,115,22,.3)}
 .status-shipped{background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.3)}
@@ -347,7 +348,7 @@ function switchTab(tab) {
 
 function renderOrders() {
   // Unassigned confirmed/preparing orders (available to take)
-  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status));
+  const toDeliver = allOrders.filter(o => ['pending','confirmed','preparing'].includes(o.status));
   // My orders in transit
   const shipped   = allOrders.filter(o => o.status === 'shipped');
   // Done = local list (backend stops returning delivered)
@@ -390,15 +391,15 @@ function renderCard(o) {
   const time = new Date(o.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const date = new Date(o.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
-  const statusLabel = { confirmed: 'Confirmée', preparing: 'En préparation', shipped: 'En route', delivered: 'Livrée' };
-  const statusClass = { confirmed: 'status-confirmed', preparing: 'status-preparing', shipped: 'status-shipped', delivered: 'status-delivered' };
+  const statusLabel = { pending: 'Nouvelle', confirmed: 'Confirmée', preparing: 'En préparation', shipped: 'En route', delivered: 'Livrée' };
+  const statusClass = { pending: 'status-pending', confirmed: 'status-confirmed', preparing: 'status-preparing', shipped: 'status-shipped', delivered: 'status-delivered' };
 
   const items = (o.items || []).map(i =>
     `<div class="item-row"><span class="item-name">${i.product_name}</span><span class="item-qty">${i.quantity}${i.unit || ''} × ${i.unit_price?.toFixed(2)}€</span></div>`
   ).join('');
 
   let actions = '';
-  if (['confirmed','preparing'].includes(o.status)) {
+  if (['pending','confirmed','preparing'].includes(o.status)) {
     actions = `<div class="order-actions">
       <button class="btn-action btn-ship" onclick="updateStatus(${o.id},'shipped',this)">🚚 Prendre en charge</button>
     </div>`;
