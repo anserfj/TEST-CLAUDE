@@ -156,6 +156,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS drivers (
   active INTEGER DEFAULT 1,
   created_at TEXT DEFAULT (datetime('now'))
 )`);
+// Migrate orders: driver tracking columns
+try { db.exec(`ALTER TABLE orders ADD COLUMN driver_id INTEGER REFERENCES drivers(id)`); } catch(e) {}
+try { db.exec(`ALTER TABLE orders ADD COLUMN driver_taken_at TEXT`); } catch(e) {}
+try { db.exec(`ALTER TABLE orders ADD COLUMN driver_delivered_at TEXT`); } catch(e) {}
 
 // Audit log table
 db.exec(`CREATE TABLE IF NOT EXISTS audit_log (

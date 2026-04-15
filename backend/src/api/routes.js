@@ -380,43 +380,80 @@ router.post('/driver/login', (req, res) => {
   if (hash !== driver.pin_hash) return res.status(401).json({ error: 'Identifiants incorrects' });
   const token = crypto.randomBytes(32).toString('hex');
   driverTokens.set(token, { driverId: driver.id, name: driver.name, expires: Date.now() + 24 * 60 * 60 * 1000 });
-  res.json({ token, name: driver.name });
+  res.json({ token, name: driver.name, id: driver.id });
 });
 
 router.get('/driver/orders', driverAuthMiddleware, (req, res) => {
+  const driverId = req.driver.driverId;
+  // Return: unassigned available orders + orders already taken by this driver
   const orders = db.prepare(`
-    SELECT o.*, u.first_name, u.last_name, u.username, u.phone as user_phone
+    SELECT o.*, u.first_name, u.last_name, u.username, u.phone as user_phone,
+           d.name as driver_name
     FROM orders o
     LEFT JOIN users u ON u.id = o.user_id
-    WHERE o.status IN ('confirmed', 'preparing', 'shipped')
+    LEFT JOIN drivers d ON d.id = o.driver_id
+    WHERE
+      (o.status IN ('confirmed','preparing') AND o.driver_id IS NULL)
+      OR (o.status IN ('confirmed','preparing','shipped') AND o.driver_id = ?)
     ORDER BY CASE o.status WHEN 'shipped' THEN 0 WHEN 'preparing' THEN 1 WHEN 'confirmed' THEN 2 END, o.created_at ASC
-  `).all();
+  `).all(driverId);
   const result = orders.map(o => {
     const items = db.prepare(`
       SELECT oi.quantity, oi.unit_price, oi.subtotal, p.name as product_name, p.unit
-      FROM order_items oi JOIN products p ON p.id = oi.product_id
-      WHERE oi.order_id = ?
+      FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ?
     `).all(o.id);
     return { ...o, items };
   });
   res.json(result);
 });
 
+router.get('/driver/stats', driverAuthMiddleware, (req, res) => {
+  const driverId = req.driver.driverId;
+  const stats = db.prepare(`
+    SELECT
+      COUNT(*) as total_orders,
+      COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered,
+      AVG(CASE WHEN driver_taken_at IS NOT NULL AND driver_delivered_at IS NOT NULL
+        THEN CAST((julianday(driver_delivered_at) - julianday(driver_taken_at)) * 1440 AS INTEGER)
+      END) as avg_delivery_min,
+      AVG(CASE WHEN driver_taken_at IS NOT NULL AND created_at IS NOT NULL
+        THEN CAST((julianday(driver_taken_at) - julianday(created_at)) * 1440 AS INTEGER)
+      END) as avg_pickup_min
+    FROM orders WHERE driver_id = ?
+  `).get(driverId);
+  const recent = db.prepare(`
+    SELECT id, status, total, created_at, driver_taken_at, driver_delivered_at
+    FROM orders WHERE driver_id = ? ORDER BY created_at DESC LIMIT 10
+  `).all(driverId);
+  res.json({ ...stats, recent });
+});
+
 router.patch('/driver/orders/:id/status', driverAuthMiddleware, (req, res) => {
   const { status } = req.body;
   const orderId = parseInt(req.params.id);
+  const driverId = req.driver.driverId;
   if (!['shipped', 'delivered'].includes(status)) return res.status(400).json({ error: 'Statut non autorisé' });
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order) return res.status(404).json({ error: 'Commande introuvable' });
-  if (status === 'shipped' && !['confirmed', 'preparing'].includes(order.status))
-    return res.status(400).json({ error: 'Transition invalide' });
-  if (status === 'delivered' && order.status !== 'shipped')
-    return res.status(400).json({ error: 'Transition invalide' });
-  db.prepare(`UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, orderId);
+
+  if (status === 'shipped') {
+    if (!['confirmed', 'preparing'].includes(order.status)) return res.status(400).json({ error: 'Transition invalide' });
+    // Check exclusivity: another driver already took it
+    if (order.driver_id && order.driver_id !== driverId) {
+      const other = db.prepare('SELECT name FROM drivers WHERE id = ?').get(order.driver_id);
+      return res.status(409).json({ error: `Déjà prise en charge par ${other?.name || 'un autre livreur'}` });
+    }
+    db.prepare(`UPDATE orders SET status='shipped', driver_id=?, driver_taken_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(driverId, orderId);
+  } else if (status === 'delivered') {
+    if (order.status !== 'shipped') return res.status(400).json({ error: 'Transition invalide' });
+    if (order.driver_id !== driverId) return res.status(403).json({ error: 'Cette commande ne vous appartient pas' });
+    db.prepare(`UPDATE orders SET status='delivered', driver_delivered_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(orderId);
+  }
+
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(order.user_id);
   if (user) {
     const msgs = {
-      shipped: `🚚 <b>Commande #${orderId} en route !</b>\n\nVotre commande est en cours de livraison.`,
+      shipped:   `🚚 <b>Commande #${orderId} en route !</b>\n\nVotre livreur est en chemin.`,
       delivered: `✅ <b>Commande #${orderId} livrée !</b>\n\nMerci pour votre commande. À bientôt ! 🙏`
     };
     sendMessageToUser(user.telegram_id, msgs[status]).catch(() => {});
@@ -572,10 +609,12 @@ router.get('/orders', (req, res) => {
   const { status, limit = 50, offset = 0 } = req.query;
   let query = `
     SELECT o.*, u.username, u.first_name, u.last_name, u.telegram_id,
+           d.name as driver_name,
            COUNT(oi.id) as item_count,
            json_group_array(json_object('name', p.name, 'quantity', oi.quantity, 'unit_price', oi.unit_price)) as items
     FROM orders o
     LEFT JOIN users u ON o.user_id = u.id
+    LEFT JOIN drivers d ON o.driver_id = d.id
     LEFT JOIN order_items oi ON o.id = oi.order_id
     LEFT JOIN products p ON oi.product_id = p.id
   `;
@@ -589,7 +628,7 @@ router.get('/orders', (req, res) => {
 });
 
 router.get('/orders/:id', (req, res) => {
-  const order = db.prepare('SELECT o.*, u.username, u.first_name, u.last_name, u.telegram_id, u.phone, u.address FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(req.params.id);
+  const order = db.prepare('SELECT o.*, u.username, u.first_name, u.last_name, u.telegram_id, u.phone, u.address, d.name as driver_name FROM orders o LEFT JOIN users u ON o.user_id = u.id LEFT JOIN drivers d ON o.driver_id = d.id WHERE o.id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Commande introuvable' });
   const items = db.prepare('SELECT oi.*, p.name, p.unit FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?').all(req.params.id);
   res.json({ ...order, items });
@@ -661,6 +700,30 @@ router.delete('/drivers/:id', (req, res) => {
   db.prepare('DELETE FROM drivers WHERE id = ?').run(id);
   for (const [token, s] of driverTokens.entries()) if (s.driverId === id) driverTokens.delete(token);
   res.json({ success: true });
+});
+
+router.get('/drivers/:id/stats', (req, res) => {
+  const id = parseInt(req.params.id);
+  const driver = db.prepare('SELECT id, name, active, created_at FROM drivers WHERE id = ?').get(id);
+  if (!driver) return res.status(404).json({ error: 'Livreur introuvable' });
+  const stats = db.prepare(`
+    SELECT
+      COUNT(*) as total_orders,
+      COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered,
+      COALESCE(SUM(CASE WHEN status = 'delivered' THEN total ELSE 0 END), 0) as total_delivered_amount,
+      AVG(CASE WHEN driver_taken_at IS NOT NULL AND driver_delivered_at IS NOT NULL
+        THEN CAST((julianday(driver_delivered_at) - julianday(driver_taken_at)) * 1440 AS INTEGER) END) as avg_delivery_min,
+      AVG(CASE WHEN driver_taken_at IS NOT NULL
+        THEN CAST((julianday(driver_taken_at) - julianday(created_at)) * 1440 AS INTEGER) END) as avg_pickup_min
+    FROM orders WHERE driver_id = ?
+  `).get(id);
+  const recent = db.prepare(`
+    SELECT o.id, o.status, o.total, o.created_at, o.driver_taken_at, o.driver_delivered_at,
+           u.first_name, u.last_name, u.username
+    FROM orders o LEFT JOIN users u ON u.id = o.user_id
+    WHERE o.driver_id = ? ORDER BY o.created_at DESC LIMIT 20
+  `).all(id);
+  res.json({ driver, stats, recent });
 });
 
 // ── USERS ─────────────────────────────────────────────────────────────────────

@@ -858,7 +858,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
                 <td style={{padding:"11px 14px",fontSize:13}}>{o.telegram_user}</td>
                 <td className="hide-mobile" style={{padding:"11px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap"}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
                 <td className="hide-mobile" style={{padding:"11px 14px",fontSize:13,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</td>
-                <td style={{padding:"11px 14px"}}><Badge status={o.status}/></td>
+                <td style={{padding:"11px 14px"}}><Badge status={o.status}/>{o.driver_name&&<span style={{marginLeft:6,fontSize:10,color:'#a855f7',background:'rgba(168,85,247,.12)',border:'1px solid rgba(168,85,247,.3)',borderRadius:4,padding:'1px 6px',whiteSpace:'nowrap'}}>🚚 {o.driver_name}</span>}</td>
                 <td style={{padding:"11px 14px"}}>
                   {o.status==="pending"&&<Btn variant="purple" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"confirmed")}}>💜 Confirmer</Btn>}
                   {o.status==="confirmed"&&<Btn variant="gold" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"preparing")}}>✓ Préparer</Btn>}
@@ -910,6 +910,15 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
               </div>
               <div style={{fontSize:10,color:C.text3,marginTop:5}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div>
             </div>
+
+            {/* Livreur */}
+            {selected.driver_name&&<div style={{padding:"10px 12px",background:"rgba(168,85,247,.06)",border:"1px solid rgba(168,85,247,.2)",borderRadius:8}}>
+              <div style={{fontSize:11,color:'#a855f7',marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Livreur</div>
+              <div style={{fontWeight:600,color:C.text}}>🚚 {selected.driver_name}</div>
+              {selected.driver_taken_at&&<div style={{fontSize:10,color:C.text3,marginTop:3}}>Prise en charge : {new Date(selected.driver_taken_at).toLocaleString("fr-FR")}</div>}
+              {selected.driver_delivered_at&&<div style={{fontSize:10,color:C.text3,marginTop:2}}>Livrée : {new Date(selected.driver_delivered_at).toLocaleString("fr-FR")}</div>}
+              {selected.driver_taken_at&&selected.driver_delivered_at&&<div style={{fontSize:10,color:'#4ade80',marginTop:2}}>Durée : {Math.round((new Date(selected.driver_delivered_at)-new Date(selected.driver_taken_at))/60000)} min</div>}
+            </div>}
 
             {/* Articles */}
             <div>
@@ -2436,6 +2445,59 @@ function AutomationsPage(){
 }
 
 /* ── DRIVERS PAGE ── */
+function DriverStatsModal({driver,onClose}){
+  const [data,setData]=useState(null);
+  useEffect(()=>{
+    apiGet(`/api/drivers/${driver.id}/stats`).then(d=>setData(d)).catch(()=>{});
+  },[driver.id]);
+  const fmtMin=m=>m==null?'—':m<60?`${Math.round(m)} min`:`${Math.floor(m/60)}h${String(Math.round(m%60)).padStart(2,'0')}`;
+  const fmtDate=s=>s?new Date(s).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
+  const statusLabel={pending:'⏳',confirmed:'✅',preparing:'👨‍🍳',shipped:'🚚',delivered:'📬',cancelled:'❌'};
+  return<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:16}}>
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:24,maxWidth:560,width:'100%',maxHeight:'85vh',overflowY:'auto'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:'1.1rem'}}>🚚 {driver.name}</div>
+          <div style={{fontSize:'.78rem',color:driver.active?C.green:'#888',marginTop:2}}>{driver.active?'● Actif':'● Inactif'}</div>
+        </div>
+        <button onClick={onClose} style={{background:'transparent',border:'none',color:C.text2,cursor:'pointer',fontSize:'1.2rem'}}>✕</button>
+      </div>
+      {!data?<div style={{textAlign:'center',padding:24,color:C.text3}}>Chargement…</div>:<>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10,marginBottom:20}}>
+          {[
+            ['Commandes prises',data.stats?.total_orders??0,''],
+            ['Livrées',data.stats?.delivered??0,''],
+            ['Temps moyen prise en charge',fmtMin(data.stats?.avg_pickup_min),''],
+            ['Temps moyen livraison',fmtMin(data.stats?.avg_delivery_min),''],
+          ].map(([label,val])=><div key={label} style={{background:C.bg3,borderRadius:10,padding:'12px 14px'}}>
+            <div style={{fontSize:'.75rem',color:C.text3,marginBottom:4}}>{label}</div>
+            <div style={{fontWeight:700,fontSize:'1.1rem',color:C.accent}}>{val}</div>
+          </div>)}
+        </div>
+        <div style={{fontSize:'.78rem',fontWeight:700,color:C.text2,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:10}}>Historique récent</div>
+        {data.recent?.length===0?<div style={{color:C.text3,textAlign:'center',padding:16}}>Aucune commande</div>
+        :data.recent?.map(o=>{
+          const client=[o.first_name,o.last_name].filter(Boolean).join(' ')||o.username||`#${o.id}`;
+          const takenMin=o.driver_taken_at&&o.created_at?Math.round((new Date(o.driver_taken_at)-new Date(o.created_at))/60000):null;
+          const delivMin=o.driver_taken_at&&o.driver_delivered_at?Math.round((new Date(o.driver_delivered_at)-new Date(o.driver_taken_at))/60000):null;
+          return<div key={o.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:`1px solid ${C.border}`,flexWrap:'wrap'}}>
+            <span style={{color:C.text3,fontSize:'.78rem',width:28}}>#{o.id}</span>
+            <span style={{flex:1,fontSize:'.82rem'}}>{client}</span>
+            <span style={{fontSize:'.8rem',color:C.text2}}>{o.total?.toFixed(2)}€</span>
+            <span style={{fontSize:'.75rem',color:C.text3}}>{statusLabel[o.status]||o.status}</span>
+            <span style={{fontSize:'.72rem',color:C.text3,width:'100%',paddingLeft:36}}>
+              {o.driver_taken_at&&`Prise: ${fmtDate(o.driver_taken_at)}`}
+              {takenMin!=null&&` (+${takenMin}min)`}
+              {o.driver_delivered_at&&` · Livrée: ${fmtDate(o.driver_delivered_at)}`}
+              {delivMin!=null&&` (${delivMin}min)`}
+            </span>
+          </div>;
+        })}
+      </>}
+    </div>
+  </div>;
+}
+
 function DriversPage(){
   const [drivers,setDrivers]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -2444,6 +2506,7 @@ function DriversPage(){
   const [editPins,setEditPins]=useState({});
   const [err,setErr]=useState('');
   const [msg,setMsg]=useState('');
+  const [statsDriver,setStatsDriver]=useState(null);
 
   const load=()=>{
     setLoading(true);
@@ -2478,9 +2541,10 @@ function DriversPage(){
     try{await apiDelete(`/api/drivers/${id}`);load();}catch(e){setErr(e.message||'Erreur');}
   };
 
-  const driverUrl=window.location.origin+'/driver';
+  const driverUrl=window.location.protocol+'//'+window.location.hostname+':5175';
 
   return <div style={{padding:"24px 20px",maxWidth:700}}>
+    {statsDriver&&<DriverStatsModal driver={statsDriver} onClose={()=>setStatsDriver(null)}/>}
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
       <span style={{fontSize:'1.3rem'}}>🚚</span>
       <h2 style={{color:C.text,fontSize:'1.2rem',fontWeight:700}}>Gestion des Livreurs</h2>
@@ -2529,14 +2593,15 @@ function DriversPage(){
             {d.active?'● Actif':'● Inactif'}
           </span>
         </div>
+        <Btn onClick={()=>setStatsDriver(d)} style={{padding:'6px 10px',fontSize:'.78rem',background:C.accentDim,color:C.accent}}>📊 Stats</Btn>
         <input value={editPins[d.id]||''} onChange={e=>setEditPins(p=>({...p,[d.id]:e.target.value}))}
           type="password" inputMode="numeric" placeholder="Nouveau PIN"
-          style={{width:120,padding:'6px 10px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:7,color:C.text,fontSize:'.82rem',fontFamily:'inherit'}}/>
-        <Btn onClick={()=>updatePin(d.id)} disabled={!editPins[d.id]} style={{padding:'6px 10px',fontSize:'.78rem'}}>Changer PIN</Btn>
+          style={{width:110,padding:'6px 10px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:7,color:C.text,fontSize:'.82rem',fontFamily:'inherit'}}/>
+        <Btn onClick={()=>updatePin(d.id)} disabled={!editPins[d.id]} style={{padding:'6px 10px',fontSize:'.78rem'}}>↺ PIN</Btn>
         <button onClick={()=>toggleActive(d)} style={{padding:'6px 10px',background:'transparent',border:`1px solid ${C.border}`,borderRadius:7,color:d.active?'#f87171':'#4ade80',fontSize:'.78rem',cursor:'pointer',fontFamily:'inherit'}}>
-          {d.active?'Désactiver':'Activer'}
+          {d.active?'Désact.':'Activer'}
         </button>
-        <button onClick={()=>del(d.id)} style={{padding:'6px 10px',background:'transparent',border:'1px solid #ef444440',borderRadius:7,color:'#ef4444',fontSize:'.78rem',cursor:'pointer',fontFamily:'inherit'}}>Suppr.</button>
+        <button onClick={()=>del(d.id)} style={{padding:'6px 10px',background:'transparent',border:'1px solid #ef444440',borderRadius:7,color:'#ef4444',fontSize:'.78rem',cursor:'pointer',fontFamily:'inherit'}}>✕</button>
       </div>)}
     </Card>
   </div>;

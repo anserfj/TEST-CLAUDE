@@ -239,6 +239,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 const API = '/api';
 let token = localStorage.getItem('driver_token') || '';
 let driverName = localStorage.getItem('driver_name') || '';
+let myDriverId = parseInt(localStorage.getItem('driver_id') || '0');
 let allOrders = [];
 let currentTab = 'toDeliver';
 let loading = false;
@@ -271,8 +272,10 @@ async function doLogin() {
     if (!r.ok) { err.textContent = d.error || 'Erreur de connexion'; return; }
     token = d.token;
     driverName = d.name;
+    myDriverId = d.id || 0;
     localStorage.setItem('driver_token', token);
     localStorage.setItem('driver_name', driverName);
+    localStorage.setItem('driver_id', myDriverId);
     showApp();
     loadOrders();
   } catch {
@@ -290,8 +293,10 @@ document.getElementById('loginPin').addEventListener('keydown', e => {
 function doLogout() {
   token = '';
   driverName = '';
+  myDriverId = 0;
   localStorage.removeItem('driver_token');
   localStorage.removeItem('driver_name');
+  localStorage.removeItem('driver_id');
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPin').value = '';
@@ -332,13 +337,13 @@ function switchTab(tab) {
 }
 
 function renderOrders() {
-  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status));
-  const shipped   = allOrders.filter(o => o.status === 'shipped');
-  // For "done" tab we show shipped orders + refreshing (backend only returns active ones)
-  // so we keep a local done list
+  // Unassigned = confirmed/preparing with no driver
+  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status) && !o.driver_id);
+  // My orders in transit
+  const shipped   = allOrders.filter(o => o.status === 'shipped' && o.driver_id === myDriverId);
+  // Done = local list (backend stops returning delivered)
   const done = window._doneOrders || [];
 
-  // Update counts
   setCount('countToDeliver', toDeliver.length);
   setCount('countShipped', shipped.length);
   setCount('countDone', done.length);
@@ -437,7 +442,13 @@ async function updateStatus(orderId, status, btn) {
     });
     if (r.status === 401) { doLogout(); return; }
     const d = await r.json();
-    if (!r.ok) { showToast(d.error || 'Erreur'); btn.disabled = false; btn.textContent = original; return; }
+    if (!r.ok) {
+      showToast('⚠️ ' + (d.error || 'Erreur'));
+      btn.disabled = false;
+      btn.textContent = original;
+      if (r.status === 409) loadOrders(); // refresh to remove taken order
+      return;
+    }
 
     if (status === 'delivered') {
       // Move to done list
