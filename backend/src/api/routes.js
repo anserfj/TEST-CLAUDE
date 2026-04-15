@@ -23,10 +23,25 @@ function sanitizeObj(obj, keys) {
 
 const router = Router();
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getClientIp(req) {
+  return (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+}
+
+async function getGeoLine(ip) {
+  try {
+    const r = await fetch(`https://ip-api.com/json/${ip}?fields=status,city,regionName,country,isp&lang=fr`);
+    const g = await r.json();
+    if (g.status === 'success') return `\n📍 ${g.city}, ${g.regionName}, ${g.country}\n🏢 ${g.isp}`;
+  } catch {}
+  return '';
+}
+
 // ── AUTH ───────────────────────────────────────────────────────────────────────
 
 router.post('/auth/login', async (req, res) => {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const ip = getClientIp(req);
   const { email, pass } = req.body;
 
   // Brute force protection
@@ -38,22 +53,15 @@ router.post('/auth/login', async (req, res) => {
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@shop.local';
   const adminPass  = process.env.ADMIN_PASS  || 'changeme';
 
-  if (email === adminEmail && pass === adminPass) {
-    const ua   = req.headers['user-agent'] || '?';
-    const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
-    let geoLine = '';
-    try {
-      const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,isp&lang=fr`);
-      const geo = await geoRes.json();
-      if (geo.status === 'success') geoLine = `\n📍 ${geo.city}, ${geo.regionName}, ${geo.country}\n🏢 ${geo.isp}`;
-    } catch {}
+  const ua   = req.headers['user-agent'] || '?';
+  const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 
+  if (email === adminEmail && pass === adminPass) {
     // Check if 2FA is enabled
     const totpEnabled = db.prepare("SELECT value FROM settings WHERE key='totp_enabled'").get()?.value === '1';
     const totpSecret  = db.prepare("SELECT value FROM settings WHERE key='totp_secret'").get()?.value || '';
 
     if (totpEnabled && totpSecret) {
-      // Issue a temporary token — client must complete 2FA within 5 min
       const tempToken = createPending2fa(ip);
       auditLog('login_2fa_pending', { email, ip }, ip);
       return res.json({ success: false, require2fa: true, tempToken });
@@ -62,22 +70,15 @@ router.post('/auth/login', async (req, res) => {
     recordSuccessLogin(ip);
     const token = generateToken();
     auditLog('login_success', { email, ip }, ip);
+    const geoLine = await getGeoLine(ip);
     notifyLogin(
       `🔐 <b>Connexion au dashboard Baltimore 83</b>\n\n🕐 ${time}\n🌐 IP : <code>${ip}</code>${geoLine}\n📱 ${ua.slice(0, 100)}`
     ).catch(() => {});
-
     res.json({ success: true, token });
   } else {
     recordFailedAttempt(ip);
     auditLog('login_failed', { email: (email || '').slice(0, 80), ip }, ip);
-    const ua   = req.headers['user-agent'] || '?';
-    const time = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
-    let geoLine = '';
-    try {
-      const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,isp&lang=fr`);
-      const geo = await geoRes.json();
-      if (geo.status === 'success') geoLine = `\n📍 ${geo.city}, ${geo.regionName}, ${geo.country}\n🏢 ${geo.isp}`;
-    } catch {}
+    const geoLine = await getGeoLine(ip);
     notifyLogin(
       `⚠️ <b>Tentative de connexion échouée — Baltimore 83</b>\n\n🕐 ${time}\n🌐 IP : <code>${ip}</code>${geoLine}\n👤 Email : <code>${(email || '').slice(0, 80)}</code>\n📱 ${ua.slice(0, 100)}`
     ).catch(() => {});
@@ -87,7 +88,7 @@ router.post('/auth/login', async (req, res) => {
 
 // 2FA verification
 router.post('/auth/2fa', (req, res) => {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const ip = getClientIp(req);
   const { tempToken, code } = req.body;
   if (!tempToken || !code) return res.status(400).json({ error: 'Paramètres manquants' });
 
@@ -163,14 +164,44 @@ router.get('/miniapp/access/:telegramId', (req, res) => {
 });
 
 router.get('/miniapp/orders/:telegramId', (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(req.params.telegramId);
+  const user = db.prepare('SELECT id FROM users WHERE telegram_id = ?').get(req.params.telegramId);
   if (!user) return res.json([]);
-  const orders = db.prepare('SELECT o.* FROM orders o WHERE o.user_id = ? ORDER BY o.created_at DESC LIMIT 20').all(user.id);
-  const withItems = orders.map(order => {
-    const items = db.prepare('SELECT oi.*, p.name, p.unit FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?').all(order.id);
-    return { ...order, items };
-  });
-  res.json(withItems);
+  // Single query with JOIN — avoids N+1 pattern
+  const rows = db.prepare(`
+    SELECT o.id, o.status, o.total, o.notes, o.created_at, o.updated_at,
+           o.delivery_name, o.delivery_phone, o.delivery_address,
+           o.promo_code, o.discount,
+           oi.id as item_id, oi.quantity, oi.unit_price, oi.subtotal,
+           p.name, p.unit
+    FROM orders o
+    LEFT JOIN order_items oi ON oi.order_id = o.id
+    LEFT JOIN products p ON p.id = oi.product_id
+    WHERE o.user_id = ?
+    ORDER BY o.created_at DESC, o.id DESC
+  `).all(user.id);
+
+  // Group rows by order
+  const ordersMap = new Map();
+  for (const row of rows) {
+    if (!ordersMap.has(row.id)) {
+      ordersMap.set(row.id, {
+        id: row.id, status: row.status, total: row.total, notes: row.notes,
+        created_at: row.created_at, updated_at: row.updated_at,
+        delivery_name: row.delivery_name, delivery_phone: row.delivery_phone,
+        delivery_address: row.delivery_address,
+        promo_code: row.promo_code, discount: row.discount,
+        items: []
+      });
+    }
+    if (row.item_id) {
+      ordersMap.get(row.id).items.push({
+        id: row.item_id, quantity: row.quantity, unit_price: row.unit_price,
+        subtotal: row.subtotal, name: row.name, unit: row.unit
+      });
+    }
+  }
+  const result = [...ordersMap.values()].slice(0, 20);
+  res.json(result);
 });
 
 router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
@@ -675,7 +706,7 @@ router.patch('/orders/:id/status', async (req, res) => {
   const { status } = req.body;
   const validStatuses = ['pending', 'confirmed', 'preparing', 'shipped', 'delivered', 'cancelled'];
   if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Statut invalide' });
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const ip = getClientIp(req);
   auditLog('order_status_change', { order_id: req.params.id, status }, ip);
   db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.params.id);
   const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(req.params.id);
@@ -1013,7 +1044,7 @@ router.delete('/promos/:id', (req, res) => {
 router.post('/auth/logout', (req, res) => {
   const header = req.headers['authorization'] || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const ip = getClientIp(req);
   import('../auth.js').then(({ invalidateToken }) => { invalidateToken(token); });
   auditLog('logout', { ip }, ip);
   res.json({ success: true });
@@ -1038,7 +1069,7 @@ router.post('/auth/totp/verify-setup', authMiddleware, (req, res) => {
   const { secret, code } = req.body;
   if (!secret || !code) return res.status(400).json({ error: 'Secret et code requis' });
   if (!verifyTotp(secret, code)) return res.status(400).json({ error: 'Code incorrect' });
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const ip = getClientIp(req);
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('totp_secret', ?)").run(secret);
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('totp_enabled', '1')").run();
   auditLog('totp_enabled', { ip }, ip);
@@ -1050,7 +1081,7 @@ router.post('/auth/totp/disable', authMiddleware, (req, res) => {
   if (!code) return res.status(400).json({ error: 'Code TOTP requis' });
   const secret = db.prepare("SELECT value FROM settings WHERE key='totp_secret'").get()?.value || '';
   if (!secret || !verifyTotp(secret, code)) return res.status(400).json({ error: 'Code incorrect' });
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const ip = getClientIp(req);
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('totp_enabled', '0')").run();
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('totp_secret', '')").run();
   auditLog('totp_disabled', { ip }, ip);

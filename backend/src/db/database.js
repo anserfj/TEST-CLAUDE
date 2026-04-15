@@ -217,5 +217,18 @@ try {
   db.prepare(`DELETE FROM categories WHERE name LIKE '%CBD%'`).run();
 } catch(e) {}
 
+// ── Indexes for performance ───────────────────────────────────────────────────
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_users_telegram_id     ON users(telegram_id);
+  CREATE INDEX IF NOT EXISTS idx_orders_user_id        ON orders(user_id);
+  CREATE INDEX IF NOT EXISTS idx_orders_status         ON orders(status);
+  CREATE INDEX IF NOT EXISTS idx_orders_driver_id      ON orders(driver_id);
+  CREATE INDEX IF NOT EXISTS idx_order_items_order_id  ON order_items(order_id);
+  CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
+  CREATE INDEX IF NOT EXISTS idx_products_category_id  ON products(category_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_user_id      ON messages(user_id);
+  CREATE INDEX IF NOT EXISTS idx_messages_telegram_id  ON messages(telegram_id);
+  CREATE INDEX IF NOT EXISTS idx_carts_telegram_id     ON carts(telegram_id);
+`);
 
 export default db;
