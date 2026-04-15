@@ -320,10 +320,19 @@ async function loadOrders() {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (r.status === 401) { doLogout(); return; }
-    allOrders = await r.json();
+    const data = await r.json();
+    if (!r.ok) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div style="font-size:.8rem;color:#ef4444">${data.error || 'Erreur serveur'}</div></div>`;
+      return;
+    }
+    if (!Array.isArray(data)) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div>Réponse invalide du serveur</div></div>';
+      return;
+    }
+    allOrders = data;
     renderOrders();
-  } catch {
-    list.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div>Erreur réseau</div></div>';
+  } catch(e) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div>Erreur réseau<br><span style="font-size:.72rem;color:#666">${e.message}</span></div></div>`;
   } finally {
     loading = false;
   }
@@ -337,10 +346,10 @@ function switchTab(tab) {
 }
 
 function renderOrders() {
-  // Unassigned = confirmed/preparing with no driver
-  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status) && !o.driver_id);
+  // Unassigned confirmed/preparing orders (available to take)
+  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status));
   // My orders in transit
-  const shipped   = allOrders.filter(o => o.status === 'shipped' && o.driver_id === myDriverId);
+  const shipped   = allOrders.filter(o => o.status === 'shipped');
   // Done = local list (backend stops returning delivered)
   const done = window._doneOrders || [];
 
@@ -355,7 +364,13 @@ function renderOrders() {
 
   const container = document.getElementById('ordersList');
   if (!list.length) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">${currentTab === 'done' ? '🎉' : '📭'}</div><div>${currentTab === 'done' ? 'Aucune livraison effectuée' : 'Aucune commande'}</div></div>`;
+    const msgs = {
+      toDeliver: { icon: '📭', text: 'Aucune commande à livrer', sub: 'Les commandes confirmées par l\'admin apparaîtront ici' },
+      shipped:   { icon: '🚚', text: 'Aucune livraison en cours', sub: '' },
+      done:      { icon: '🎉', text: 'Aucune livraison effectuée', sub: '' }
+    };
+    const m = msgs[currentTab];
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">${m.icon}</div><div>${m.text}</div>${m.sub ? `<div style="font-size:.75rem;margin-top:4px">${m.sub}</div>` : ''}</div>`;
     return;
   }
   container.innerHTML = list.map(renderCard).join('');

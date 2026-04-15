@@ -384,27 +384,31 @@ router.post('/driver/login', (req, res) => {
 });
 
 router.get('/driver/orders', driverAuthMiddleware, (req, res) => {
-  const driverId = req.driver.driverId;
-  // Return: unassigned available orders + orders already taken by this driver
-  const orders = db.prepare(`
-    SELECT o.*, u.first_name, u.last_name, u.username, u.phone as user_phone,
-           d.name as driver_name
-    FROM orders o
-    LEFT JOIN users u ON u.id = o.user_id
-    LEFT JOIN drivers d ON d.id = o.driver_id
-    WHERE
-      (o.status IN ('confirmed','preparing') AND o.driver_id IS NULL)
-      OR (o.status IN ('confirmed','preparing','shipped') AND o.driver_id = ?)
-    ORDER BY CASE o.status WHEN 'shipped' THEN 0 WHEN 'preparing' THEN 1 WHEN 'confirmed' THEN 2 END, o.created_at ASC
-  `).all(driverId);
-  const result = orders.map(o => {
-    const items = db.prepare(`
-      SELECT oi.quantity, oi.unit_price, oi.subtotal, p.name as product_name, p.unit
-      FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ?
-    `).all(o.id);
-    return { ...o, items };
-  });
-  res.json(result);
+  try {
+    const driverId = req.driver.driverId;
+    const orders = db.prepare(`
+      SELECT o.*, u.first_name, u.last_name, u.username, u.phone as user_phone,
+             d.name as driver_name
+      FROM orders o
+      LEFT JOIN users u ON u.id = o.user_id
+      LEFT JOIN drivers d ON d.id = o.driver_id
+      WHERE
+        (o.status IN ('confirmed','preparing') AND (o.driver_id IS NULL OR o.driver_id = ?))
+        OR (o.status = 'shipped' AND o.driver_id = ?)
+      ORDER BY CASE o.status WHEN 'shipped' THEN 0 WHEN 'preparing' THEN 1 WHEN 'confirmed' THEN 2 END, o.created_at ASC
+    `).all(driverId, driverId);
+    const result = orders.map(o => {
+      const items = db.prepare(`
+        SELECT oi.quantity, oi.unit_price, oi.subtotal, p.name as product_name, p.unit
+        FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ?
+      `).all(o.id);
+      return { ...o, items };
+    });
+    res.json(result);
+  } catch(e) {
+    console.error('[driver/orders]', e.message);
+    res.status(500).json({ error: 'Erreur serveur: ' + e.message });
+  }
 });
 
 router.get('/driver/stats', driverAuthMiddleware, (req, res) => {
@@ -428,7 +432,8 @@ router.get('/driver/stats', driverAuthMiddleware, (req, res) => {
   res.json({ ...stats, recent });
 });
 
-router.patch('/driver/orders/:id/status', driverAuthMiddleware, (req, res) => {
+router.patch('/driver/orders/:id/status', driverAuthMiddleware, async (req, res) => {
+  try {
   const { status } = req.body;
   const orderId = parseInt(req.params.id);
   const driverId = req.driver.driverId;
@@ -459,6 +464,10 @@ router.patch('/driver/orders/:id/status', driverAuthMiddleware, (req, res) => {
     sendMessageToUser(user.telegram_id, msgs[status]).catch(() => {});
   }
   res.json({ success: true });
+  } catch(e) {
+    console.error('[driver/status]', e.message);
+    res.status(500).json({ error: 'Erreur serveur: ' + e.message });
+  }
 });
 
 // ── AUTH MIDDLEWARE — everything below requires a valid token ──────────────────
