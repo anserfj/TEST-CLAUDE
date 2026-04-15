@@ -791,4 +791,174 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 .leaflet-control-attribution {
   background: rgba(0,0,0,.6) !important; color: #666 !important; font-size: 9px !important;
 }
+
+/* ══════════════════════════════════════════
+   ANIMATIONS PREMIUM
+   ══════════════════════════════════════════ */
+
+/* ── Keyframes ── */
+@keyframes card-in {
+  from { opacity:0; transform:translateY(22px) scale(.97); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes btn-shine {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes cart-bounce {
+  0%,100% { transform: scale(1); }
+  30%     { transform: scale(1.45); }
+  60%     { transform: scale(.85); }
+  80%     { transform: scale(1.15); }
+}
+@keyframes ripple-out {
+  to { transform: scale(4); opacity: 0; }
+}
+@keyframes tab-pop {
+  0%,100% { transform: scale(1) translateY(0); }
+  50%     { transform: scale(1.18) translateY(-3px); }
+}
+@keyframes glow-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+  50%     { box-shadow: 0 0 18px 2px rgba(255,255,255,.08); }
+}
+@keyframes slide-right {
+  from { opacity:0; transform:translateX(-18px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+@keyframes slide-left {
+  from { opacity:0; transform:translateX(18px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+
+/* ── Product cards stagger ── */
+.product-card {
+  opacity: 0;
+  animation: card-in .42s cubic-bezier(.22,.68,0,1.2) forwards;
+}
+.product-card:nth-child(1)  { animation-delay: .03s; }
+.product-card:nth-child(2)  { animation-delay: .08s; }
+.product-card:nth-child(3)  { animation-delay: .13s; }
+.product-card:nth-child(4)  { animation-delay: .18s; }
+.product-card:nth-child(5)  { animation-delay: .23s; }
+.product-card:nth-child(6)  { animation-delay: .28s; }
+.product-card:nth-child(7)  { animation-delay: .33s; }
+.product-card:nth-child(8)  { animation-delay: .38s; }
+.product-card:nth-child(n+9){ animation-delay: .43s; }
+
+/* ── Product card hover lift ── */
+@media (hover: hover) {
+  .product-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255,255,255,.18);
+    box-shadow: 0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.06);
+    transition: transform .22s, border-color .22s, box-shadow .22s;
+  }
+}
+
+/* ── Image shimmer while loading ── */
+.product-img-wrap.loading {
+  background: linear-gradient(90deg, var(--bg3) 25%, rgba(255,255,255,.06) 50%, var(--bg3) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+/* ── Checkout / Add-to-cart button shine ── */
+.btn-checkout, .modal-add-btn {
+  position: relative; overflow: hidden;
+}
+.btn-checkout::after, .modal-add-btn::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.22) 50%, transparent 60%);
+  background-size: 200% 100%;
+  background-position: -200% center;
+  animation: btn-shine 2.8s ease-in-out infinite;
+}
+
+/* ── Cart count bounce ── */
+.cart-count.bounce {
+  animation: cart-bounce .45s cubic-bezier(.36,.07,.19,.97);
+}
+
+/* ── Tab press pop ── */
+.tab:active svg {
+  animation: tab-pop .3s ease;
+}
+
+/* ── Info cards hover ── */
+.info-card {
+  transition: border-color .2s, box-shadow .2s;
+}
+.info-card:hover {
+  border-color: rgba(255,255,255,.13);
+  box-shadow: 0 4px 20px rgba(0,0,0,.3);
+}
+.contact-block {
+  transition: background .15s, padding-left .15s;
+}
+.contact-block:hover {
+  background: rgba(255,255,255,.04);
+  padding-left: 20px;
+}
+.contact-arrow {
+  transition: transform .2s;
+}
+.contact-block:hover .contact-arrow {
+  transform: translateX(4px);
+}
+
+/* ── Ripple effect on buttons ── */
+.ripple {
+  position: absolute; border-radius: 50%;
+  background: rgba(255,255,255,.25);
+  width: 80px; height: 80px;
+  margin-top: -40px; margin-left: -40px;
+  pointer-events: none;
+  animation: ripple-out .55s ease forwards;
+}
+
+/* ── Cart item entrance ── */
+.cart-item {
+  animation: slide-right .28s ease both;
+}
+
+/* ── Order card entrance ── */
+.order-card {
+  animation: card-in .35s ease both;
+}
+.order-card:nth-child(1) { animation-delay: .04s; }
+.order-card:nth-child(2) { animation-delay: .1s; }
+.order-card:nth-child(3) { animation-delay: .16s; }
+.order-card:nth-child(n+4){ animation-delay: .22s; }
+
+/* ── Logo wrap pulse ── */
+.shop-logo-wrap {
+  animation: glow-pulse 4s ease-in-out infinite;
+}
+
+/* ── Search focus glow ── */
+.search-input:focus {
+  border-color: rgba(255,255,255,.35);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.06);
+}
+
+/* ── Qty option hover ── */
+.qty-option {
+  transition: all .18s;
+}
+.qty-option:hover {
+  border-color: rgba(255,255,255,.35);
+  transform: translateY(-2px);
+}
+
+/* ── Page transition directional ── */
+#page-produits.active  { animation: slide-right .25s ease; }
+#page-commandes.active { animation: slide-left  .25s ease; }
+#page-info.active      { animation: slide-left  .25s ease; }
+#page-panier.active    { animation: slide-left  .25s ease; }
 .leaflet-control-attribution a { color: #888 !important; }

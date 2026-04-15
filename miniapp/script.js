@@ -36,6 +36,17 @@ function getProductTiers(p) {
   return QTY_TIERS.map(t => ({ qty: t.qty, price: pricePerGram * t.qty }));
 }
 
+// ── RIPPLE EFFECT ──
+function addRipple(el, e) {
+  const r = document.createElement("span");
+  r.className = "ripple";
+  const rect = el.getBoundingClientRect();
+  if (e) { r.style.top = (e.clientY - rect.top) + "px"; r.style.left = (e.clientX - rect.left) + "px"; }
+  else { r.style.top = "50%"; r.style.left = "50%"; }
+  el.appendChild(r);
+  r.addEventListener("animationend", () => r.remove());
+}
+
 // ── CART PERSISTENCE ──
 function saveCart() {
   try { localStorage.setItem("baltimore83_cart", JSON.stringify(cart)); } catch(e) {}
@@ -290,8 +301,10 @@ function renderProducts() {
       ? `${parseFloat(tiers[0].price).toFixed(0)}€ – ${parseFloat(tiers[tiers.length-1].price).toFixed(0)}€`
       : `${parseFloat(p.price||0).toFixed(0)}€/${p.unit || "unité"}`;
 
+    const hasMedia = p.image_url || p.video_url || (p.gallery && p.gallery.length);
+    const imgClass = hasMedia ? "product-img-wrap loading" : "product-img-wrap";
     return `<div class="product-card" onclick="openModal(${p.id})">
-      <div class="product-img-wrap">${mediaPart}</div>
+      <div class="${imgClass}" onload="this.classList.remove('loading')">${mediaPart}</div>
       <div class="product-body">
         <div class="product-name">${p.name}</div>
         <div class="product-tags">
@@ -469,7 +482,10 @@ function addToCartFromModal(productId) {
   saveCart();
   updateCartBadge();
   showToast(`✅ ${label} ajouté`);
-  tg.HapticFeedback.impactOccurred("medium");
+  try { tg.HapticFeedback.impactOccurred("medium"); } catch {}
+  // Ripple on add button
+  const btn = document.getElementById("modalAddBtn");
+  if (btn) addRipple(btn);
   closeModal();
 }
 
@@ -500,6 +516,11 @@ function updateCartBadge() {
   if (!el) return;
   el.textContent = total;
   el.classList.toggle("visible", total > 0);
+  if (total > 0) {
+    el.classList.remove("bounce");
+    void el.offsetWidth; // reflow pour relancer l'animation
+    el.classList.add("bounce");
+  }
 }
 
 // ── RENDER CART ──
