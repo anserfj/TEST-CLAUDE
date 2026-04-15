@@ -366,15 +366,18 @@ function switchTab(tab) {
 }
 
 function renderOrders() {
-  // Available = unassigned confirmed/preparing (other drivers can take them)
-  const available = allOrders.filter(o => ['confirmed','preparing'].includes(o.status) && !o.driver_id);
-  // Mine = claimed by me (driver_id = mine) but not yet shipped
-  const mine      = allOrders.filter(o => ['confirmed','preparing'].includes(o.status) && o.driver_id === myDriverId);
-  // En route = my shipped orders
+  // All confirmed/preparing = available to deliver (backend already filters for this driver)
+  const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status));
   const shipped   = allOrders.filter(o => o.status === 'shipped');
   const done = window._doneOrders || [];
 
-  const toDeliver = [...mine, ...available]; // my claimed first, then available
+  // Put orders claimed by me first
+  toDeliver.sort((a, b) => {
+    const aIsMine = a.driver_id && String(a.driver_id) === String(myDriverId) ? 0 : 1;
+    const bIsMine = b.driver_id && String(b.driver_id) === String(myDriverId) ? 0 : 1;
+    return aIsMine - bIsMine;
+  });
+
   setCount('countToDeliver', toDeliver.length);
   setCount('countShipped', shipped.length);
   setCount('countDone', done.length);
@@ -386,15 +389,13 @@ function renderOrders() {
 
   const container = document.getElementById('ordersList');
 
-  // Outside hours banner for active tabs
-  if (!isWithinHours() && currentTab !== 'done') {
-    container.innerHTML = `<div class="hours-banner">
-      <div class="hours-icon">🕐</div>
-      <div class="hours-title">Hors service</div>
-      <div class="hours-sub">Les livraisons sont disponibles<br>de <b>13h</b> à <b>minuit</b> chaque jour</div>
-    </div>`;
-    return;
-  }
+  // Outside hours banner (shown above cards, not blocking them)
+  const hoursBanner = (!isWithinHours() && currentTab !== 'done')
+    ? `<div class="hours-banner" style="padding:20px 24px">
+        <div class="hours-icon" style="font-size:1.8rem">🕐</div>
+        <div class="hours-title">Hors service — retour à 13h</div>
+       </div>`
+    : '';
 
   if (!list.length) {
     const msgs = {
@@ -403,10 +404,10 @@ function renderOrders() {
       done:      { icon: '🎉', text: 'Aucune livraison effectuée', sub: '' }
     };
     const m = msgs[currentTab];
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">${m.icon}</div><div>${m.text}</div>${m.sub ? `<div style="font-size:.75rem;margin-top:4px">${m.sub}</div>` : ''}</div>`;
+    container.innerHTML = hoursBanner + `<div class="empty-state"><div class="empty-icon">${m.icon}</div><div>${m.text}</div>${m.sub ? `<div style="font-size:.75rem;margin-top:4px">${m.sub}</div>` : ''}</div>`;
     return;
   }
-  container.innerHTML = list.map(renderCard).join('');
+  container.innerHTML = hoursBanner + list.map(renderCard).join('');
 }
 
 function setCount(id, n) {
@@ -429,20 +430,22 @@ function renderCard(o) {
     `<div class="item-row"><span class="item-name">${i.product_name}</span><span class="item-qty">${i.quantity}${i.unit || ''} × ${i.unit_price?.toFixed(2)}€</span></div>`
   ).join('');
 
-  const isMine = o.driver_id === myDriverId;
-  const isAvailable = ['confirmed','preparing'].includes(o.status) && !o.driver_id;
+  // String() comparison avoids int/string type mismatch between localStorage and JSON
+  const isMine = myDriverId > 0 && o.driver_id != null && String(o.driver_id) === String(myDriverId);
 
   let actions = '';
-  if (isAvailable) {
-    // Order not yet claimed — show "Prendre en charge" button
-    actions = `<div class="order-actions">
-      <button class="btn-action btn-ship" onclick="updateStatus(${o.id},'taken',this)">📦 Prendre en charge</button>
-    </div>`;
-  } else if (isMine && ['confirmed','preparing'].includes(o.status)) {
-    // I claimed it — show "Partir en livraison" button
-    actions = `<div class="order-actions">
-      <button class="btn-action btn-go" onclick="updateStatus(${o.id},'shipped',this)">🚚 Partir en livraison</button>
-    </div>`;
+  if (['confirmed','preparing'].includes(o.status)) {
+    if (isMine) {
+      // Already claimed by me — show "Partir en livraison"
+      actions = `<div class="order-actions">
+        <button class="btn-action btn-go" onclick="updateStatus(${o.id},'shipped',this)">🚚 Partir en livraison</button>
+      </div>`;
+    } else {
+      // Available (server handles 409 if another driver takes it first)
+      actions = `<div class="order-actions">
+        <button class="btn-action btn-ship" onclick="updateStatus(${o.id},'taken',this)">📦 Prendre en charge</button>
+      </div>`;
+    }
   } else if (o.status === 'shipped') {
     actions = `<div class="order-actions">
       <button class="btn-action btn-deliver" onclick="updateStatus(${o.id},'delivered',this)">✅ Marquer livré</button>
@@ -450,10 +453,9 @@ function renderCard(o) {
   }
 
   const notes = o.notes ? `<div class="info-row" style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:6px 10px;color:#fb923c">📝 ${o.notes}</div>` : '';
-  const claimedBadge = isMine && ['confirmed','preparing'].includes(o.status)
-    ? `<span class="claimed-badge">✓ Je m'en occupe</span>` : '';
+  const claimedBadge = isMine ? `<span class="claimed-badge">✓ Je m'en occupe</span>` : '';
 
-  return `<div class="order-card${isMine && ['confirmed','preparing'].includes(o.status) ? ' claimed' : ''}" id="card-${o.id}">
+  return `<div class="order-card${isMine ? ' claimed' : ''}" id="card-${o.id}">
     <div class="order-header">
       <div>
         <div class="order-id">Commande #${o.id} ${claimedBadge}</div>
