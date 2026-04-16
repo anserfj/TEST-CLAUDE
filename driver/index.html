@@ -449,6 +449,22 @@ function extractSlot(notes) {
   return m ? m[1].trim() : null;
 }
 
+function resolveDate(raw) {
+  if (!raw) return { label: null, urgency: null };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const now = new Date(); now.setHours(0,0,0,0);
+    const d = new Date(raw + 'T00:00:00');
+    const diff = Math.round((d - now) / 86400000);
+    if (diff < -1) return { label: `En retard (${Math.abs(diff)}j)`, urgency: 'overdue' };
+    if (diff === -1) return { label: 'Hier · En retard', urgency: 'overdue' };
+    if (diff === 0) return { label: "Aujourd'hui", urgency: 'today' };
+    if (diff === 1) return { label: 'Demain', urgency: 'tomorrow' };
+    return { label: d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }), urgency: 'future' };
+  }
+  const urgency = raw === "Aujourd'hui" ? 'today' : raw === 'Demain' ? 'tomorrow' : 'future';
+  return { label: raw, urgency };
+}
+
 function getSlotKey(slotStr) {
   if (!slotStr) return null;
   if (slotStr.includes('Dès que possible')) return 'asap';
@@ -461,11 +477,13 @@ function getSlotKey(slotStr) {
 function slotGroupLabel(slotStr) {
   if (!slotStr) return 'Sans créneau';
   const datePart = slotStr.match(/·\s*(.+)$/);
-  const date = datePart ? ` · ${datePart[1].trim()}` : '';
-  if (slotStr.includes('Dès que possible')) return '🚀 Dès que possible' + date;
-  if (slotStr.includes('13h')) return '🌇 13h – 16h' + date;
-  if (slotStr.includes('16h')) return '🌆 16h – 19h' + date;
-  if (slotStr.includes('19h')) return '🌙 19h – 23h' + date;
+  const { label: dateLabel, urgency } = resolveDate(datePart ? datePart[1].trim() : null);
+  const dateSuffix = dateLabel ? ` · ${dateLabel}` : '';
+  const flag = urgency === 'overdue' ? ' ⚠️' : '';
+  if (slotStr.includes('Dès que possible')) return '🚀 Dès que possible' + dateSuffix + flag;
+  if (slotStr.includes('13h')) return '🌇 13h – 16h' + dateSuffix + flag;
+  if (slotStr.includes('16h')) return '🌆 16h – 19h' + dateSuffix + flag;
+  if (slotStr.includes('19h')) return '🌙 19h – 23h' + dateSuffix + flag;
   return slotStr;
 }
 
@@ -564,19 +582,19 @@ function renderCard(o) {
   if (slotStr) {
     const isAsap = slotStr.includes('Dès que possible');
     const datePart = slotStr.match(/·\s*(.+)$/);
-    const date = datePart ? datePart[1].trim() : null;
-    const isLater = date && date !== "Aujourd'hui";
+    const { label: dateLabel, urgency } = resolveDate(datePart ? datePart[1].trim() : null);
     let timeLabel = '';
     if (!isAsap) {
       if (slotStr.includes('13h')) timeLabel = '13h–16h';
       else if (slotStr.includes('16h')) timeLabel = '16h–19h';
       else if (slotStr.includes('19h')) timeLabel = '19h–23h';
     }
-    const label = isAsap ? '🚀 Dès que possible' : [timeLabel, date].filter(Boolean).join(' · ');
-    const col = isAsap ? 'var(--accent)' : isLater ? '#fb923c' : '#60a5fa';
-    const bg = isAsap ? 'rgba(74,222,128,.1)' : isLater ? 'rgba(249,115,22,.1)' : 'rgba(59,130,246,.1)';
-    const border = isAsap ? 'rgba(74,222,128,.3)' : isLater ? 'rgba(249,115,22,.3)' : 'rgba(59,130,246,.3)';
-    slotBadge = `<div class="card-slot" style="color:${col};background:${bg};border-color:${border}">${label}</div>`;
+    const label = isAsap ? '🚀 Dès que possible' : [timeLabel, dateLabel].filter(Boolean).join(' · ');
+    const col = isAsap ? 'var(--accent)' : urgency === 'overdue' ? '#ef4444' : urgency === 'tomorrow' ? '#fb923c' : urgency === 'future' ? '#a78bfa' : '#60a5fa';
+    const bg = isAsap ? 'rgba(74,222,128,.1)' : urgency === 'overdue' ? 'rgba(239,68,68,.1)' : urgency === 'tomorrow' ? 'rgba(249,115,22,.1)' : urgency === 'future' ? 'rgba(167,139,250,.1)' : 'rgba(59,130,246,.1)';
+    const border = isAsap ? 'rgba(74,222,128,.3)' : urgency === 'overdue' ? 'rgba(239,68,68,.3)' : urgency === 'tomorrow' ? 'rgba(249,115,22,.3)' : urgency === 'future' ? 'rgba(167,139,250,.3)' : 'rgba(59,130,246,.3)';
+    const overdueNote = urgency === 'overdue' ? ' — commande de la veille' : '';
+    slotBadge = `<div class="card-slot" style="color:${col};background:${bg};border-color:${border}">${urgency === 'overdue' ? '⚠️ ' : ''}${label}${overdueNote}</div>`;
   }
 
   return `<div class="order-card${isMine ? ' claimed' : ''}" onclick="openSheet(${o.id})">
@@ -619,19 +637,19 @@ function openSheet(orderId) {
   if (slotStr) {
     const isAsap = slotStr.includes('Dès que possible');
     const datePart = slotStr.match(/·\s*(.+)$/);
-    const delivDate = datePart ? datePart[1].trim() : null;
-    const isLater = delivDate && delivDate !== "Aujourd'hui";
+    const { label: dateLabel, urgency } = resolveDate(datePart ? datePart[1].trim() : null);
     let timeLabel = '';
     if (!isAsap) {
       if (slotStr.includes('13h')) timeLabel = '13h–16h';
       else if (slotStr.includes('16h')) timeLabel = '16h–19h';
       else if (slotStr.includes('19h')) timeLabel = '19h–23h';
     }
-    const label = isAsap ? '🚀 Dès que possible' : [timeLabel, delivDate].filter(Boolean).join(' · ');
-    const col = isAsap ? 'var(--accent)' : isLater ? '#fb923c' : '#60a5fa';
-    const bg = isAsap ? 'rgba(74,222,128,.1)' : isLater ? 'rgba(249,115,22,.1)' : 'rgba(59,130,246,.1)';
-    const bdr = isAsap ? 'rgba(74,222,128,.35)' : isLater ? 'rgba(249,115,22,.35)' : 'rgba(59,130,246,.35)';
-    slotHtml = `<div style="display:flex;align-items:center;padding:10px 12px;background:${bg};border:1.5px solid ${bdr};border-radius:10px;font-size:.92rem;font-weight:700;color:${col};gap:6px">⏰ ${label}</div>`;
+    const label = isAsap ? '🚀 Dès que possible' : [timeLabel, dateLabel].filter(Boolean).join(' · ');
+    const col = isAsap ? 'var(--accent)' : urgency === 'overdue' ? '#ef4444' : urgency === 'tomorrow' ? '#fb923c' : urgency === 'future' ? '#a78bfa' : '#60a5fa';
+    const bg = isAsap ? 'rgba(74,222,128,.1)' : urgency === 'overdue' ? 'rgba(239,68,68,.1)' : urgency === 'tomorrow' ? 'rgba(249,115,22,.1)' : urgency === 'future' ? 'rgba(167,139,250,.1)' : 'rgba(59,130,246,.1)';
+    const bdr = isAsap ? 'rgba(74,222,128,.35)' : urgency === 'overdue' ? 'rgba(239,68,68,.35)' : urgency === 'tomorrow' ? 'rgba(249,115,22,.35)' : urgency === 'future' ? 'rgba(167,139,250,.35)' : 'rgba(59,130,246,.35)';
+    const overdueNote = urgency === 'overdue' ? '<div style="font-size:.75rem;margin-top:2px;opacity:.85">Commande de la veille — à traiter en priorité</div>' : '';
+    slotHtml = `<div style="display:flex;flex-direction:column;padding:10px 12px;background:${bg};border:1.5px solid ${bdr};border-radius:10px;gap:2px"><div style="font-size:.92rem;font-weight:700;color:${col}">${urgency === 'overdue' ? '⚠️ ' : '⏰ '}${label}</div>${overdueNote}</div>`;
   }
   if (o.notes) {
     const i = o.notes.indexOf('—');

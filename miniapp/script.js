@@ -1064,11 +1064,13 @@ async function confirmOrder() {
     const slotInfo = SLOTS.find(s => s.id === selectedSlot);
     if (slotInfo) {
       let dateLabel = "";
-      if (selectedDeliveryDate === 'today') dateLabel = "Aujourd'hui";
-      else if (selectedDeliveryDate === 'tomorrow') dateLabel = "Demain";
-      else if (selectedCustomDate) {
-        const d = new Date(selectedCustomDate + 'T12:00:00');
-        dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+      if (selectedDeliveryDate === 'today') {
+        dateLabel = new Date().toISOString().split('T')[0];
+      } else if (selectedDeliveryDate === 'tomorrow') {
+        const t = new Date(); t.setDate(t.getDate() + 1);
+        dateLabel = t.toISOString().split('T')[0];
+      } else if (selectedCustomDate) {
+        dateLabel = selectedCustomDate;
       }
       slotNote = `Créneau: ${slotInfo.label} ${slotInfo.time}${dateLabel ? ' · ' + dateLabel : ''}`;
     }

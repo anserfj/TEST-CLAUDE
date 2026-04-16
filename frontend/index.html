@@ -133,8 +133,10 @@ const STATUS={pending:{label:"Nouvelle",color:C.gold,bg:"#f0b42918"},confirmed:{
 const fmt=n=>parseFloat(n||0).toFixed(2).replace(".",",")+"\u00a0€";
 const isVideo=url=>url&&/\.(mp4|webm|mov|avi)(\?|$)/i.test(url);
 const parseItems=items=>{try{return Array.isArray(items)?items:JSON.parse(items||"[]")}catch{return[]}};
-const parseSlot=notes=>{if(!notes)return null;const m=notes.match(/Créneau:\s*(.+?)(?:\s*—|$)/);if(!m)return null;const s=m[1].trim();const isAsap=s.includes('Dès que possible');const datePart=s.match(/·\s*(.+)$/);const date=datePart?datePart[1].trim():null;let time=null;if(!isAsap){if(s.includes('13h'))time='13h–16h';else if(s.includes('16h'))time='16h–19h';else if(s.includes('19h'))time='19h–23h';}return{isAsap,date,time};};
+const resolveDate=raw=>{if(!raw)return{label:null,urgency:null};if(/^\d{4}-\d{2}-\d{2}$/.test(raw)){const now=new Date();now.setHours(0,0,0,0);const d=new Date(raw+'T00:00:00');const diff=Math.round((d-now)/86400000);if(diff<-1)return{label:`Retard ${Math.abs(diff)}j`,urgency:'overdue'};if(diff===-1)return{label:'Hier · En retard',urgency:'overdue'};if(diff===0)return{label:"Aujourd'hui",urgency:'today'};if(diff===1)return{label:'Demain',urgency:'tomorrow'};return{label:d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}),urgency:'future'};}const urgency=raw==="Aujourd'hui"?'today':raw==='Demain'?'tomorrow':'future';return{label:raw,urgency};};
+const parseSlot=notes=>{if(!notes)return null;const m=notes.match(/Créneau:\s*(.+?)(?:\s*—|$)/);if(!m)return null;const s=m[1].trim();const isAsap=s.includes('Dès que possible');const datePart=s.match(/·\s*(.+)$/);const{label:date,urgency:dateUrgency}=resolveDate(datePart?datePart[1].trim():null);let time=null;if(!isAsap){if(s.includes('13h'))time='13h–16h';else if(s.includes('16h'))time='16h–19h';else if(s.includes('19h'))time='19h–23h';}return{isAsap,date,dateUrgency,time};};
 const extractUserNotes=notes=>{if(!notes)return null;if(!notes.includes('Créneau:'))return notes;const i=notes.indexOf('—');return i!==-1?notes.slice(i+1).trim()||null:null;};
+const slotColors=s=>{if(!s)return{col:'#60a5fa',bg:'rgba(59,130,246,.08)',bdr:'rgba(59,130,246,.3)'};if(s.isAsap)return{col:'#4ade80',bg:'rgba(74,222,128,.08)',bdr:'rgba(74,222,128,.3)'};if(s.dateUrgency==='overdue')return{col:'#ef4444',bg:'rgba(239,68,68,.08)',bdr:'rgba(239,68,68,.3)'};if(s.dateUrgency==='tomorrow')return{col:'#fb923c',bg:'rgba(249,115,22,.08)',bdr:'rgba(249,115,22,.3)'};if(s.dateUrgency==='future')return{col:'#a78bfa',bg:'rgba(167,139,250,.08)',bdr:'rgba(167,139,250,.3)'};return{col:'#60a5fa',bg:'rgba(59,130,246,.08)',bdr:'rgba(59,130,246,.3)'};};
 
 /* ── ATOMS ── */
 function Badge({status}){const c=STATUS[status]||STATUS.pending;return<span style={{display:"inline-flex",padding:"3px 10px",borderRadius:4,fontSize:11,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:c.color,background:c.bg,border:`1px solid ${c.color}33`}}>{c.label}</span>}
@@ -812,7 +814,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
                 <td style={{padding:"11px 14px",fontSize:13}}>{o.telegram_user}</td>
                 <td className="hide-mobile" style={{padding:"11px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap"}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
                 <td className="hide-mobile" style={{padding:"11px 14px",fontSize:13,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</td>
-                <td style={{padding:"11px 14px"}}><Badge status={o.status}/>{o.driver_name&&<span style={{marginLeft:6,fontSize:10,color:'#a855f7',background:'rgba(168,85,247,.12)',border:'1px solid rgba(168,85,247,.3)',borderRadius:4,padding:'1px 6px',whiteSpace:'nowrap'}}>🚚 {o.driver_name}</span>}{(()=>{const s=parseSlot(o.notes);if(!s)return null;const isLater=s.date&&s.date!=="Aujourd'hui";const col=s.isAsap?'#4ade80':isLater?'#fb923c':'#60a5fa';const bg=s.isAsap?'rgba(74,222,128,.1)':isLater?'rgba(249,115,22,.1)':'rgba(59,130,246,.1)';const label=s.isAsap?'🚀 ASAP':[s.date,s.time].filter(Boolean).join(' · ');return<span style={{marginLeft:6,fontSize:10,color:col,background:bg,border:`1px solid ${col}40`,borderRadius:4,padding:'1px 6px',whiteSpace:'nowrap',fontWeight:700}}>{label}</span>;})()}</td>
+                <td style={{padding:"11px 14px"}}><Badge status={o.status}/>{o.driver_name&&<span style={{marginLeft:6,fontSize:10,color:'#a855f7',background:'rgba(168,85,247,.12)',border:'1px solid rgba(168,85,247,.3)',borderRadius:4,padding:'1px 6px',whiteSpace:'nowrap'}}>🚚 {o.driver_name}</span>}{(()=>{const s=parseSlot(o.notes);if(!s)return null;const{col,bg}=slotColors(s);const label=s.isAsap?'🚀 ASAP':[s.time,s.date].filter(Boolean).join(' · ');const prefix=s.dateUrgency==='overdue'?'⚠️ ':s.dateUrgency==='tomorrow'?'':'';return<span style={{marginLeft:6,fontSize:10,color:col,background:bg,border:`1px solid ${col}40`,borderRadius:4,padding:'1px 6px',whiteSpace:'nowrap',fontWeight:700}}>{prefix}{label}</span>;})()}</td>
                 <td style={{padding:"11px 14px"}}>
                   {o.status==="pending"&&<Btn variant="purple" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"confirmed")}}>💜 Confirmer</Btn>}
                   {o.status==="confirmed"&&<Btn variant="gold" style={{padding:"3px 9px",fontSize:10}} disabled={updating} onClick={e=>{e.stopPropagation();updateStatus(o.id,"preparing")}}>✓ Préparer</Btn>}
@@ -894,13 +896,12 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
               {(()=>{
                 const slot=parseSlot(selected.notes);
                 const userNotes=extractUserNotes(selected.notes);
-                const isLater=slot?.date&&slot.date!=="Aujourd'hui";
-                const col=slot?.isAsap?'#4ade80':isLater?'#fb923c':'#60a5fa';
-                const bg=slot?.isAsap?'rgba(74,222,128,.08)':isLater?'rgba(249,115,22,.08)':'rgba(59,130,246,.08)';
+                const{col,bg,bdr}=slotColors(slot);
+                const overdueNote=slot?.dateUrgency==='overdue'?` — commande de la veille`:slot?.dateUrgency==='future'?' — livraison à venir':'';
                 const slotLabel=slot?.isAsap?'🚀 Dès que possible':[slot?.time,slot?.date].filter(Boolean).join(' · ');
                 return<>
-                  {slot&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,padding:"8px 10px",background:bg,borderRadius:7,border:`1px solid ${col}50`}}>
-                    <span style={{fontSize:13,fontWeight:700,color:col}}>⏰ {slotLabel}</span>
+                  {slot&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,padding:"8px 10px",background:bg,borderRadius:7,border:`1px solid ${bdr}`}}>
+                    <span style={{fontSize:13,fontWeight:700,color:col}}>{slot?.dateUrgency==='overdue'?'⚠️':'⏰'} {slotLabel}{overdueNote}</span>
                   </div>}
                   {[["Nom",selected.delivery_name],["Tél",selected.delivery_phone],["Adresse",selected.delivery_address],userNotes?["Notes",userNotes]:null].filter(Boolean).filter(([,v])=>v).map(([k,v])=><div key={k} style={{display:"flex",gap:8,marginBottom:3}}>
                     <span style={{fontSize:10,color:C.text3,minWidth:50}}>{k}</span>
@@ -969,10 +970,8 @@ function ConfirmPage({orders,setOrders}){
           const slot=parseSlot(o.notes);
           const userNotes=extractUserNotes(o.notes);
           const items=parseItems(o.items);
-          const isLater=slot?.date&&slot.date!=="Aujourd'hui";
-          const sCol=slot?.isAsap?'#4ade80':isLater?'#fb923c':'#60a5fa';
-          const sBg=slot?.isAsap?'rgba(74,222,128,.08)':isLater?'rgba(249,115,22,.08)':'rgba(59,130,246,.08)';
-          const sBdr=slot?.isAsap?'rgba(74,222,128,.3)':isLater?'rgba(249,115,22,.3)':'rgba(59,130,246,.3)';
+          const{col:sCol,bg:sBg,bdr:sBdr}=slotColors(slot);
+          const isOverdue=slot?.dateUrgency==='overdue';
           const slotLabel=slot?.isAsap?'🚀 Dès que possible':[slot?.time,slot?.date].filter(Boolean).join(' · ');
           const d=new Date(o.created_at);
           const dateStr=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
@@ -989,8 +988,9 @@ function ConfirmPage({orders,setOrders}){
             </div>
             <div style={{padding:'14px 16px',display:'flex',flexDirection:'column',gap:12}}>
               {/* Slot */}
-              {slot&&<div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:sBg,border:`2px solid ${sBdr}`,borderRadius:10}}>
-                <span style={{fontSize:15,fontWeight:700,color:sCol}}>⏰ {slotLabel}</span>
+              {slot&&<div style={{display:'flex',flexDirection:'column',gap:3,padding:'10px 14px',background:sBg,border:`2px solid ${sBdr}`,borderRadius:10}}>
+                <span style={{fontSize:15,fontWeight:700,color:sCol}}>{isOverdue?'⚠️':'⏰'} {slotLabel}</span>
+                {isOverdue&&<span style={{fontSize:11,color:sCol,opacity:.8}}>Commande de la veille — à traiter en priorité</span>}
               </div>}
               {/* Client */}
               <div style={{display:'flex',flexDirection:'column',gap:4}}>
