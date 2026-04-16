@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import db from '../db/database.js';
-import { notifyGroupOrder, notifyGroup, notifyLogin, sendMessageToUser } from '../bot/bot.js';
+import { notifyGroupOrder, notifyGroup, notifyLogin, sendMessageToUser, notifyTracking } from '../bot/bot.js';
 import { generateToken, authMiddleware, checkLoginAllowed, recordFailedAttempt, recordSuccessLogin, createPending2fa, validatePending2fa, auditLog } from '../auth.js';
 import { verifyTotp, generateTotpSecret, totpUri } from '../totp.js';
 import { telegramAuthMiddleware } from '../telegramAuth.js';
@@ -24,6 +24,23 @@ function sanitizeObj(obj, keys) {
 const router = Router();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const escHtml = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+const TRACKING_ICONS  = { pending:'🆕', confirmed:'✅', preparing:'👨‍🍳', shipped:'🚚', delivered:'🎉', cancelled:'❌' };
+const TRACKING_LABELS = { pending:'En attente', confirmed:'Confirmée', preparing:'En préparation', shipped:'En route', delivered:'Livrée', cancelled:'Annulée' };
+
+function buildTrackingMsg(orderId, status, clientName, total, notes) {
+  const icon  = TRACKING_ICONS[status]  || '🔄';
+  const label = TRACKING_LABELS[status] || status;
+  let creneau = '';
+  if (notes) {
+    const m = notes.match(/^Créneau:\s*(.+?)(?:\s*(?:—|$))/);
+    if (m) creneau = `\n🗓 ${escHtml(m[1].trim())}`;
+  }
+  const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return `${icon} <b>Commande #${orderId}</b> · ${label}\n─────────────────\n👤 ${escHtml(clientName || 'Client')} · ${parseFloat(total || 0).toFixed(2)}€${creneau}\n🕐 ${now}`;
+}
 
 function getClientIp(req) {
   return (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
@@ -359,6 +376,7 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
     `\n${sep}\n\n🛒 <b>ARTICLES</b>\n${itemsLines}\n\n${sep}\n\n🗂 <b>PAR CATÉGORIE</b>\n${catLines}\n\n${sep}\n💰 <b>TOTAL: ${totalCalc.toFixed(2)}€</b>\n📅 ${now}`;
 
   notifyGroupOrder(groupMsg, orderId);
+  notifyTracking(buildTrackingMsg(orderId, 'pending', delivery_name, totalCalc, notes)).catch(() => {});
 
   // Discord notification — même contenu que Telegram (HTML → Markdown)
   const discordWebhook = process.env.DISCORD_WEBHOOK_URL;
@@ -516,6 +534,9 @@ router.patch('/driver/orders/:id/status', driverAuthMiddleware, async (req, res)
       delivered: `✅ <b>Commande #${orderId} livrée !</b>\n\nMerci pour votre commande. À bientôt ! 🙏`
     };
     sendMessageToUser(user.telegram_id, msgs[status]).catch(() => {});
+  }
+  if (['shipped', 'delivered'].includes(status)) {
+    notifyTracking(buildTrackingMsg(orderId, status, order.delivery_name, order.total, order.notes)).catch(() => {});
   }
   res.json({ success: true });
   } catch(e) {
@@ -720,6 +741,7 @@ router.patch('/orders/:id/status', async (req, res) => {
     };
     if (msgs[status]) sendMessageToUser(order.telegram_id, msgs[status]).catch(() => {});
   }
+  notifyTracking(buildTrackingMsg(order.id, status, order.delivery_name, order.total, order.notes)).catch(() => {});
   res.json({ success: true });
 });
 

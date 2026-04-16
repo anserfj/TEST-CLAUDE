@@ -57,6 +57,12 @@ export async function notifyGroupOrder(text, orderId) {
   }
 }
 
+export async function notifyTracking(text) {
+  const channelId = process.env.TRACKING_CHANNEL_ID;
+  if (!bot || !channelId) return;
+  await sendToGroup(channelId, text);
+}
+
 export function createBot(token) {
   bot = new Bot(token);
 
@@ -252,6 +258,18 @@ export function createBot(token) {
           .text('📬 Livré', `order_deliver_${orderId}`)
       });
       if (order && clientMsg) sendMessageToUser(order.telegram_id, clientMsg).catch(() => {});
+      if (order) {
+        const icons  = { confirmed:'✅', shipped:'🚚', delivered:'🎉' };
+        const labels = { confirmed:'Confirmée', shipped:'En route', delivered:'Livrée' };
+        const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        let creneau = '';
+        if (order.notes) {
+          const m = order.notes.match(/^Créneau:\s*(.+?)(?:\s*(?:—|$))/);
+          if (m) creneau = `\n🗓 ${m[1].trim()}`;
+        }
+        const trackMsg = `${icons[status]||'🔄'} <b>Commande #${orderId}</b> · ${labels[status]||status}\n─────────────────\n👤 ${order.delivery_name||'Client'} · ${parseFloat(order.total||0).toFixed(2)}€${creneau}\n🕐 ${now}`;
+        notifyTracking(trackMsg).catch(() => {});
+      }
     } catch (e) {
       await ctx.answerCallbackQuery('Erreur: ' + e.message);
     }
