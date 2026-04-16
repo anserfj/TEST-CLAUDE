@@ -716,7 +716,7 @@ router.patch('/orders/:id/status', async (req, res) => {
   const ip = getClientIp(req);
   auditLog('order_status_change', { order_id: req.params.id, status }, ip);
   db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.params.id);
-  const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(req.params.id);
+  const order = db.prepare('SELECT o.*, u.telegram_id FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE o.id = ?').get(req.params.id);
   if (order?.telegram_id) {
     const msgs = {
       confirmed: `✅ <b>Commande #${order.id} confirmée !</b>\n\nVotre commande est prise en charge 🚀`,
@@ -727,7 +727,7 @@ router.patch('/orders/:id/status', async (req, res) => {
     };
     if (msgs[status]) sendMessageToUser(order.telegram_id, msgs[status]).catch(() => {});
   }
-  notifyTracking(buildTrackingMsg(order.id, status, order.delivery_name, order.total, order.notes)).catch(() => {});
+  if (order) notifyTracking(buildTrackingMsg(order.id, status, order.delivery_name, order.total, order.notes)).catch(() => {});
   res.json({ success: true });
 });
 
