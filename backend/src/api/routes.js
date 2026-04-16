@@ -377,21 +377,8 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
 
   notifyTracking(buildTrackingMsg(orderId, 'pending', delivery_name, totalCalc, notes)).catch(() => {});
 
-  // Discord notification — même contenu que Telegram (HTML → Markdown)
-  const discordWebhook = process.env.DISCORD_WEBHOOK_URL;
-  if (discordWebhook) {
-    const discordMsg = groupMsg
-      .replace(/<b>(.*?)<\/b>/g, '**$1**')
-      .replace(/<code>(.*?)<\/code>/g, '`$1`')
-      .replace(/<[^>]+>/g, '');
-    fetch(discordWebhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: discordMsg })
-    }).catch(() => {});
-  }
 
-  const userRecap =
+const userRecap =
     `✅ <b>Commande #${orderId} reçue !</b>\n\nRetrouvez le détail et le suivi de votre commande dans la boutique → onglet <b>Commandes</b>.\n\n<i>Merci pour votre commande ! 🙏</i>`;
   sendMessageToUser(user.telegram_id, userRecap).catch(() => {});
 
