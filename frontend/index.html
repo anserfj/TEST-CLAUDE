@@ -341,12 +341,13 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"automations",icon:"⚡",label:"Automations"},{id:"drivers",icon:"🚚",label:"Livreurs"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"confirm",icon:"🔔",label:"À confirmer"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"automations",icon:"⚡",label:"Automations"},{id:"drivers",icon:"🚚",label:"Livreurs"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:"0 0 72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
       <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.03em"}}>{item.label}</span>
       {item.id==="orders"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:C.accent,color:C.bg,borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{newCount}</span>}
+      {item.id==="confirm"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:"#f97316",color:"#fff",borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{newCount}</span>}
       
       {page===item.id&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
     </button>)}
@@ -365,6 +366,7 @@ function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
         {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 11px",borderRadius:8,marginBottom:2,background:page===item.id?C.accentDim:"transparent",border:page===item.id?`1px solid ${C.accentMid}`:"1px solid transparent",color:page===item.id?C.accent:C.text2,fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}} onMouseEnter={e=>page!==item.id&&(e.currentTarget.style.background="#ffffff08")} onMouseLeave={e=>page!==item.id&&(e.currentTarget.style.background="transparent")}>
           <span style={{fontSize:16,lineHeight:1}}>{item.icon}</span><span>{item.label}</span>
           {item.id==="orders"&&newCount>0&&<span style={{marginLeft:"auto",background:C.accent,color:C.bg,borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{newCount}</span>}
+          {item.id==="confirm"&&newCount>0&&<span style={{marginLeft:"auto",background:"#f97316",color:"#fff",borderRadius:10,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{newCount}</span>}
           
         </button>)}
       </nav>
@@ -454,8 +456,8 @@ function DashboardPage({orders,products,setPage}){
         </div>
       </div>
       <div style={{display:"flex",gap:8}}>
-        {pending>0&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",background:"#f0b42918",border:`1px solid ${C.gold}33`,borderRadius:8,fontSize:12,color:C.gold,cursor:"pointer"}} onClick={()=>setPage("orders")}>
-          ⏳ {pending} à traiter
+        {pending>0&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",background:"rgba(249,115,22,.12)",border:"1px solid rgba(249,115,22,.3)",borderRadius:8,fontSize:12,color:"#fb923c",cursor:"pointer",fontWeight:600}} onClick={()=>setPage("confirm")}>
+          🔔 {pending} à confirmer
         </div>}
         <Btn onClick={()=>setPage("orders")} style={{fontSize:12}}>Commandes →</Btn>
       </div>
@@ -934,6 +936,96 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
       </div></Portal>}
     </div>}
   </div>
+}
+
+/* ── CONFIRM PAGE ── */
+function ConfirmPage({orders,setOrders}){
+  const [updating,setUpdating]=React.useState(null);
+  const pending=orders.filter(o=>o.status==='pending').sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+
+  async function doStatus(id,status){
+    setUpdating(id);
+    try{
+      await apiPatch('/api/orders/'+id+'/status',{status});
+      setOrders(prev=>prev.map(o=>o.id===id?{...o,status}:o));
+      showToast(status==='confirmed'?'✅ Commande confirmée':'✕ Commande annulée');
+    }catch{showToast('Erreur');}
+    setUpdating(null);
+  }
+
+  return<div style={{padding:20,maxWidth:840,margin:'0 auto'}}>
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:22,fontWeight:700,color:C.text1}}>🔔 À confirmer</div>
+      <div style={{fontSize:13,color:C.text3,marginTop:4}}>{pending.length} commande{pending.length!==1?'s':''} en attente</div>
+    </div>
+    {pending.length===0
+      ?<Card style={{textAlign:'center',padding:48}}>
+          <div style={{fontSize:36,marginBottom:12}}>✅</div>
+          <div style={{color:C.text2,fontWeight:600,fontSize:16}}>Tout est confirmé !</div>
+          <div style={{color:C.text3,fontSize:13,marginTop:6}}>Aucune commande en attente de confirmation</div>
+        </Card>
+      :<div style={{display:'flex',flexDirection:'column',gap:14}}>
+        {pending.map(o=>{
+          const slot=parseSlot(o.notes);
+          const userNotes=extractUserNotes(o.notes);
+          const items=parseItems(o.items);
+          const isLater=slot?.date&&slot.date!=="Aujourd'hui";
+          const sCol=slot?.isAsap?'#4ade80':isLater?'#fb923c':'#60a5fa';
+          const sBg=slot?.isAsap?'rgba(74,222,128,.08)':isLater?'rgba(249,115,22,.08)':'rgba(59,130,246,.08)';
+          const sBdr=slot?.isAsap?'rgba(74,222,128,.3)':isLater?'rgba(249,115,22,.3)':'rgba(59,130,246,.3)';
+          const slotLabel=slot?.isAsap?'🚀 Dès que possible':[slot?.time,slot?.date].filter(Boolean).join(' · ');
+          const d=new Date(o.created_at);
+          const dateStr=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+          const timeStr=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+          const total=parseFloat(o.total)+parseFloat(o.livraison||0);
+          return<Card key={o.id} style={{padding:0,overflow:'hidden'}}>
+            {/* Header */}
+            <div style={{padding:'12px 16px',borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <span style={{fontFamily:"'JetBrains Mono'",fontSize:15,color:C.accent,fontWeight:700}}>#{o.id}</span>
+                <span style={{fontSize:12,color:C.text3}}>Reçue le {dateStr} à {timeStr}</span>
+              </div>
+              <Badge status={o.status}/>
+            </div>
+            <div style={{padding:'14px 16px',display:'flex',flexDirection:'column',gap:12}}>
+              {/* Slot */}
+              {slot&&<div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:sBg,border:`2px solid ${sBdr}`,borderRadius:10}}>
+                <span style={{fontSize:15,fontWeight:700,color:sCol}}>⏰ {slotLabel}</span>
+              </div>}
+              {/* Client */}
+              <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.text1}}>
+                  👤 {[o.delivery_name,o.telegram_user&&o.delivery_name!==o.telegram_user?`(${o.telegram_user})`:null].filter(Boolean).join(' ')||`Client #${o.user_id}`}
+                </div>
+                {o.delivery_phone&&<div style={{fontSize:13,color:C.accent}}>📞 {o.delivery_phone}</div>}
+                {o.delivery_address&&<div style={{fontSize:13,color:C.text2}}>📍 {o.delivery_address}</div>}
+                {userNotes&&<div style={{fontSize:12,color:'#fb923c',background:'rgba(249,115,22,.06)',borderRadius:7,padding:'5px 9px',border:'1px solid rgba(249,115,22,.2)'}}>📝 {userNotes}</div>}
+              </div>
+              {/* Products */}
+              <div style={{background:C.surface,borderRadius:9,padding:'10px 14px'}}>
+                {items.map((it,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'3px 0',borderBottom:i<items.length-1?`1px solid ${C.border}`:'none'}}>
+                  <span style={{color:C.text2}}>{it.name||it.product_name}</span>
+                  <span style={{color:C.text3,fontWeight:600}}>×{it.quantity||it.qty}</span>
+                </div>)}
+                <div style={{display:'flex',justifyContent:'space-between',fontSize:14,fontWeight:700,paddingTop:8,marginTop:4,borderTop:`1px solid ${C.border}`}}>
+                  <span>Total</span><span style={{color:C.accent}}>{fmt(total)}</span>
+                </div>
+              </div>
+              {/* Actions */}
+              <div style={{display:'flex',gap:8}}>
+                <Btn onClick={()=>doStatus(o.id,'confirmed')} disabled={updating===o.id} style={{flex:1,justifyContent:'center',fontSize:14,padding:'11px'}}>
+                  {updating===o.id?'…':'✅ Confirmer'}
+                </Btn>
+                <Btn variant="danger" onClick={()=>doStatus(o.id,'cancelled')} disabled={updating===o.id} style={{fontSize:13,padding:'11px 16px'}} title="Annuler la commande">
+                  ✕ Annuler
+                </Btn>
+              </div>
+            </div>
+          </Card>;
+        })}
+      </div>
+    }
+  </div>;
 }
 
 /* ── CLIENTS ── */
@@ -2511,6 +2603,7 @@ function App(){
     <Sidebar page={page} setPage={setPage} onLogout={logout} newCount={newCount}/>
     <main className="main-content" style={{flex:1}}>
       {page==="dashboard"&&<DashboardPage orders={orders} products={products} setPage={setPage}/>}
+      {page==="confirm"&&<ConfirmPage orders={orders} setOrders={setOrders}/>}
       {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder} getSettings={getSettings}/>}
       {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
       {page==="catalog"&&<CatalogPage products={products} setProducts={setProducts} loading={loadP} reload={fetchProducts}/>}
