@@ -194,6 +194,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 }
 .btn-go{background:rgba(74,222,128,.18);color:var(--accent);border:1px solid var(--accent-mid)}
 
+/* Slot group header */
+.slot-group-header{
+  font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--text3);padding:6px 2px 4px;display:flex;align-items:center;gap:8px;
+  margin-top:4px;
+}
+.slot-group-header:first-child{margin-top:0}
+.slot-count{
+  background:var(--bg3);border:1px solid var(--border2);border-radius:20px;
+  padding:1px 7px;font-size:.7rem;color:var(--text2);font-weight:700;
+}
+
 /* Outside hours banner */
 .hours-banner{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -423,18 +435,31 @@ function switchTab(tab) {
   renderOrders();
 }
 
+// Slot order for grouping
+const SLOT_ORDER = [
+  { key: "13h", label: "🌇 Début d'après-midi · 13h – 16h" },
+  { key: "16h", label: "🌆 Fin d'après-midi · 16h – 19h" },
+  { key: "19h", label: "🌙 Soirée · 19h – 23h" },
+];
+
+function extractSlot(notes) {
+  if (!notes) return null;
+  const m = notes.match(/Créneau:\s*(.+?)(?:\s*—|$)/);
+  return m ? m[1].trim() : null;
+}
+
+function getSlotKey(slotStr) {
+  if (!slotStr) return null;
+  if (slotStr.includes('13h')) return '13h';
+  if (slotStr.includes('16h')) return '16h';
+  if (slotStr.includes('19h')) return '19h';
+  return 'autre';
+}
+
 function renderOrders() {
-  // All confirmed/preparing = available to deliver (backend already filters for this driver)
   const toDeliver = allOrders.filter(o => ['confirmed','preparing'].includes(o.status));
   const shipped   = allOrders.filter(o => o.status === 'shipped');
   const done = window._doneOrders || [];
-
-  // Put orders claimed by me first
-  toDeliver.sort((a, b) => {
-    const aIsMine = a.driver_id && String(a.driver_id) === String(myDriverId) ? 0 : 1;
-    const bIsMine = b.driver_id && String(b.driver_id) === String(myDriverId) ? 0 : 1;
-    return aIsMine - bIsMine;
-  });
 
   setCount('countToDeliver', toDeliver.length);
   setCount('countShipped', shipped.length);
@@ -447,7 +472,6 @@ function renderOrders() {
 
   const container = document.getElementById('ordersList');
 
-  // Outside hours banner (shown above cards, not blocking them)
   const hoursBanner = (!isWithinHours() && currentTab !== 'done')
     ? `<div class="hours-banner" style="padding:20px 24px">
         <div class="hours-icon" style="font-size:1.8rem">🕐</div>
@@ -465,7 +489,35 @@ function renderOrders() {
     container.innerHTML = hoursBanner + `<div class="empty-state"><div class="empty-icon">${m.icon}</div><div>${m.text}</div>${m.sub ? `<div style="font-size:.75rem;margin-top:4px">${m.sub}</div>` : ''}</div>`;
     return;
   }
-  container.innerHTML = hoursBanner + list.map(renderCard).join('');
+
+  // Group by slot only for "À livrer" tab
+  if (currentTab === 'toDeliver') {
+    // Group orders by créneau
+    const groups = new Map();
+    for (const o of list) {
+      const slot = extractSlot(o.notes);
+      const key = getSlotKey(slot) || 'autre';
+      const label = slot || 'Sans créneau';
+      if (!groups.has(key)) groups.set(key, { label, orders: [] });
+      groups.get(key).orders.push(o);
+    }
+    // Sort groups by slot order
+    const slotKeyOrder = ['13h','16h','19h','autre'];
+    const sortedGroups = [...groups.entries()]
+      .sort((a, b) => slotKeyOrder.indexOf(a[0]) - slotKeyOrder.indexOf(b[0]));
+
+    // Sort inside each group: mine first
+    for (const [, g] of sortedGroups) {
+      g.orders.sort((a, b) => (isMineOrder(b) ? 1 : 0) - (isMineOrder(a) ? 1 : 0));
+    }
+
+    container.innerHTML = hoursBanner + sortedGroups.map(([, g]) => `
+      <div class="slot-group-header">${g.label} <span class="slot-count">${g.orders.length}</span></div>
+      ${g.orders.map(renderCard).join('')}
+    `).join('');
+  } else {
+    container.innerHTML = hoursBanner + list.map(renderCard).join('');
+  }
 }
 
 function setCount(id, n) {
@@ -483,12 +535,14 @@ function isMineOrder(o) {
 
 // ── Compact card (tap to open sheet) ─────────────────────────────────────────
 function renderCard(o) {
-  const clientName = [o.first_name, o.last_name].filter(Boolean).join(' ') || o.username || `Client #${o.user_id}`;
   const address = o.delivery_address || '—';
-  const time = new Date(o.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const date = new Date(o.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   const isMine = isMineOrder(o);
   const claimedBadge = isMine ? `<span class="claimed-badge">✓ Moi</span>` : '';
+
+  // Products summary: "AK-47 FARMS 5g · Gorilla Glue 10g"
+  const products = (o.items || [])
+    .map(i => `${i.product_name} ${i.quantity}${i.unit || 'g'}`)
+    .join(' · ') || '—';
 
   return `<div class="order-card${isMine ? ' claimed' : ''}" onclick="openSheet(${o.id})">
     <div class="card-row1">
@@ -496,12 +550,12 @@ function renderCard(o) {
       <span class="status-badge ${STATUS_CLASS[o.status]}">${STATUS_LABEL[o.status]}</span>
     </div>
     <div class="card-meta">
-      <div class="card-client">👤 ${clientName} · ${date} à ${time}</div>
+      <div class="card-client" style="font-weight:600;color:var(--text)">${products}</div>
       ${address !== '—' ? `<div class="card-address">📍 ${address}</div>` : ''}
     </div>
     <div class="card-footer">
       <span class="card-total">${o.total?.toFixed(2)} €</span>
-      <span class="card-arrow">Voir les détails →</span>
+      <span class="card-arrow">Voir →</span>
     </div>
   </div>`;
 }
