@@ -59,7 +59,9 @@ export async function notifyGroupOrder(text, orderId) {
 
 export async function notifyTracking(text) {
   const channelId = process.env.TRACKING_CHANNEL_ID;
-  if (!bot || !channelId) return;
+  if (!bot) { console.error('[tracking] bot not initialized'); return; }
+  if (!channelId) { console.error('[tracking] TRACKING_CHANNEL_ID non défini'); return; }
+  console.log('[tracking] envoi vers', channelId);
   await sendToGroup(channelId, text);
 }
 
