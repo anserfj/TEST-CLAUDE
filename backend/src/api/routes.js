@@ -754,7 +754,12 @@ router.put('/drivers/:id', (req, res) => {
     const hash = hashPin(pin, salt);
     db.prepare('UPDATE drivers SET pin_hash = ?, pin_salt = ? WHERE id = ?').run(hash, salt, id);
   }
-  if (active !== undefined) db.prepare('UPDATE drivers SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+  if (active !== undefined) {
+    db.prepare('UPDATE drivers SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+    if (!active) {
+      for (const [tok, s] of driverTokens.entries()) if (s.driverId === id) driverTokens.delete(tok);
+    }
+  }
   res.json({ success: true });
 });
 
