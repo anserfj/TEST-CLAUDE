@@ -954,18 +954,21 @@ function ConfirmPage({orders,setOrders}){
     setUpdating(null);
   }
 
-  return<div style={{padding:20,maxWidth:840,margin:'0 auto'}}>
-    <div style={{marginBottom:20}}>
-      <div style={{fontSize:22,fontWeight:700,color:C.text1}}>🔔 À confirmer</div>
-      <div style={{fontSize:13,color:C.text3,marginTop:4}}>{pending.length} commande{pending.length!==1?'s':''} en attente</div>
+  return<div style={{padding:'16px 12px',maxWidth:600,margin:'0 auto',boxSizing:'border-box'}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+      <div>
+        <div style={{fontSize:20,fontWeight:700,color:C.text1}}>🔔 À confirmer</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{pending.length} commande{pending.length!==1?'s':''} en attente</div>
+      </div>
+      {pending.length>0&&<div style={{fontSize:20,fontWeight:800,color:'#fb923c',background:'rgba(249,115,22,.12)',border:'1px solid rgba(249,115,22,.3)',borderRadius:10,padding:'4px 12px'}}>{pending.length}</div>}
     </div>
     {pending.length===0
-      ?<Card style={{textAlign:'center',padding:48}}>
-          <div style={{fontSize:36,marginBottom:12}}>✅</div>
+      ?<div style={{textAlign:'center',padding:'48px 24px',color:C.text3}}>
+          <div style={{fontSize:40,marginBottom:12}}>✅</div>
           <div style={{color:C.text2,fontWeight:600,fontSize:16}}>Tout est confirmé !</div>
-          <div style={{color:C.text3,fontSize:13,marginTop:6}}>Aucune commande en attente de confirmation</div>
-        </Card>
-      :<div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{fontSize:13,marginTop:6}}>Aucune commande en attente</div>
+        </div>
+      :<div style={{display:'flex',flexDirection:'column',gap:12}}>
         {pending.map(o=>{
           const slot=parseSlot(o.notes);
           const userNotes=extractUserNotes(o.notes);
@@ -974,54 +977,62 @@ function ConfirmPage({orders,setOrders}){
           const isOverdue=slot?.dateUrgency==='overdue';
           const slotLabel=slot?.isAsap?'🚀 Dès que possible':[slot?.time,slot?.date].filter(Boolean).join(' · ');
           const d=new Date(o.created_at);
-          const dateStr=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
           const timeStr=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+          const dayStr=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
           const total=parseFloat(o.total)+parseFloat(o.livraison||0);
-          return<Card key={o.id} style={{padding:0,overflow:'hidden'}}>
-            {/* Header */}
-            <div style={{padding:'12px 16px',borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <div style={{display:'flex',alignItems:'center',gap:10}}>
-                <span style={{fontFamily:"'JetBrains Mono'",fontSize:15,color:C.accent,fontWeight:700}}>#{o.id}</span>
-                <span style={{fontSize:12,color:C.text3}}>Reçue le {dateStr} à {timeStr}</span>
+          const clientName=[o.delivery_name,o.telegram_user&&o.delivery_name!==o.telegram_user?`(${o.telegram_user})`:null].filter(Boolean).join(' ')||`Client #${o.user_id}`;
+          return<div key={o.id} style={{background:C.card,border:`1px solid ${isOverdue?'rgba(239,68,68,.4)':C.border}`,borderRadius:14,overflow:'hidden',boxShadow:isOverdue?'0 0 0 1px rgba(239,68,68,.2)':'none'}}>
+
+            {/* ── Header ── */}
+            <div style={{padding:'10px 14px',borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+                <span style={{fontFamily:"'JetBrains Mono'",fontSize:16,color:C.accent,fontWeight:700,flexShrink:0}}>#{o.id}</span>
+                <span style={{fontSize:11,color:C.text3,whiteSpace:'nowrap'}}>{dayStr} · {timeStr}</span>
               </div>
-              <Badge status={o.status}/>
+              {isOverdue&&<span style={{fontSize:10,fontWeight:700,color:'#ef4444',background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.3)',borderRadius:6,padding:'2px 7px',flexShrink:0}}>⚠️ En retard</span>}
             </div>
-            <div style={{padding:'14px 16px',display:'flex',flexDirection:'column',gap:12}}>
-              {/* Slot */}
-              {slot&&<div style={{display:'flex',flexDirection:'column',gap:3,padding:'10px 14px',background:sBg,border:`2px solid ${sBdr}`,borderRadius:10}}>
-                <span style={{fontSize:15,fontWeight:700,color:sCol}}>{isOverdue?'⚠️':'⏰'} {slotLabel}</span>
-                {isOverdue&&<span style={{fontSize:11,color:sCol,opacity:.8}}>Commande de la veille — à traiter en priorité</span>}
-              </div>}
-              {/* Client */}
-              <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                <div style={{fontSize:14,fontWeight:600,color:C.text1}}>
-                  👤 {[o.delivery_name,o.telegram_user&&o.delivery_name!==o.telegram_user?`(${o.telegram_user})`:null].filter(Boolean).join(' ')||`Client #${o.user_id}`}
-                </div>
-                {o.delivery_phone&&<div style={{fontSize:13,color:C.accent}}>📞 {o.delivery_phone}</div>}
-                {o.delivery_address&&<div style={{fontSize:13,color:C.text2}}>📍 {o.delivery_address}</div>}
-                {userNotes&&<div style={{fontSize:12,color:'#fb923c',background:'rgba(249,115,22,.06)',borderRadius:7,padding:'5px 9px',border:'1px solid rgba(249,115,22,.2)'}}>📝 {userNotes}</div>}
+
+            {/* ── Créneau ── */}
+            {slot&&<div style={{margin:'12px 14px 0',padding:'9px 12px',background:sBg,border:`1.5px solid ${sBdr}`,borderRadius:9,display:'flex',flexDirection:'column',gap:2}}>
+              <span style={{fontSize:14,fontWeight:700,color:sCol}}>{isOverdue?'⚠️ ':'⏰ '}{slotLabel}</span>
+              {isOverdue&&<span style={{fontSize:11,color:sCol,opacity:.75}}>À traiter en priorité</span>}
+            </div>}
+
+            {/* ── Client ── */}
+            <div style={{padding:'10px 14px',display:'flex',flexDirection:'column',gap:5}}>
+              <div style={{fontWeight:600,fontSize:14,color:C.text1}}>👤 {clientName}</div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:'4px 12px'}}>
+                {o.delivery_phone&&<span style={{fontSize:13,color:C.accent}}>📞 {o.delivery_phone}</span>}
+                {o.delivery_address&&<span style={{fontSize:12,color:C.text2,lineHeight:1.4}}>📍 {o.delivery_address}</span>}
               </div>
-              {/* Products */}
-              <div style={{background:C.surface,borderRadius:9,padding:'10px 14px'}}>
-                {items.map((it,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'3px 0',borderBottom:i<items.length-1?`1px solid ${C.border}`:'none'}}>
-                  <span style={{color:C.text2}}>{it.name||it.product_name}</span>
-                  <span style={{color:C.text3,fontWeight:600}}>×{it.quantity||it.qty}</span>
-                </div>)}
-                <div style={{display:'flex',justifyContent:'space-between',fontSize:14,fontWeight:700,paddingTop:8,marginTop:4,borderTop:`1px solid ${C.border}`}}>
-                  <span>Total</span><span style={{color:C.accent}}>{fmt(total)}</span>
-                </div>
-              </div>
-              {/* Actions */}
-              <div style={{display:'flex',gap:8}}>
-                <Btn onClick={()=>doStatus(o.id,'confirmed')} disabled={updating===o.id} style={{flex:1,justifyContent:'center',fontSize:14,padding:'11px'}}>
-                  {updating===o.id?'…':'✅ Confirmer'}
-                </Btn>
-                <Btn variant="danger" onClick={()=>doStatus(o.id,'cancelled')} disabled={updating===o.id} style={{fontSize:13,padding:'11px 16px'}} title="Annuler la commande">
-                  ✕ Annuler
-                </Btn>
+              {userNotes&&<div style={{fontSize:12,color:'#fb923c',background:'rgba(249,115,22,.06)',borderRadius:7,padding:'5px 9px',border:'1px solid rgba(249,115,22,.2)',marginTop:2}}>📝 {userNotes}</div>}
+            </div>
+
+            {/* ── Produits ── */}
+            <div style={{margin:'0 14px',background:C.surface,borderRadius:9,padding:'8px 12px'}}>
+              {items.map((it,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:13,padding:'4px 0',borderBottom:i<items.length-1?`1px solid ${C.border}`:'none'}}>
+                <span style={{color:C.text2,flex:1,marginRight:8}}>{it.name||it.product_name}</span>
+                <span style={{color:C.text3,fontWeight:600,flexShrink:0}}>×{it.quantity||it.qty}</span>
+              </div>)}
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:14,fontWeight:700,paddingTop:7,marginTop:3,borderTop:`1px solid ${C.border}`}}>
+                <span style={{color:C.text2}}>Total</span>
+                <span style={{color:C.accent}}>{fmt(total)}</span>
               </div>
             </div>
-          </Card>;
+
+            {/* ── Actions ── */}
+            <div style={{padding:'12px 14px',display:'flex',flexDirection:'column',gap:8}}>
+              <Btn onClick={()=>doStatus(o.id,'confirmed')} disabled={updating===o.id}
+                style={{width:'100%',justifyContent:'center',fontSize:15,padding:'13px',borderRadius:10,background:'#4ade80',color:'#0a0a0a',fontWeight:700,border:'none'}}>
+                {updating===o.id?'…':'✅ Confirmer la commande'}
+              </Btn>
+              <button onClick={()=>doStatus(o.id,'cancelled')} disabled={updating===o.id}
+                style={{width:'100%',background:'transparent',border:'none',color:C.text3,fontSize:12,cursor:'pointer',padding:'4px',fontFamily:"'DM Sans',sans-serif"}}>
+                ✕ Annuler la commande
+              </button>
+            </div>
+
+          </div>;
         })}
       </div>
     }
