@@ -233,6 +233,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 .card-meta{display:flex;flex-direction:column;gap:3px;margin-top:2px}
 .card-client{font-size:.82rem;color:var(--text2);display:flex;align-items:center;gap:5px}
 .card-address{font-size:.78rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.card-slot{
+  display:inline-flex;align-items:center;font-size:.78rem;font-weight:700;
+  padding:4px 10px;border-radius:8px;border:1px solid;margin:4px 0 2px;
+}
 .card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
 .card-total{font-weight:700;font-size:.9rem}
 .card-arrow{color:var(--text3);font-size:.8rem}
@@ -549,18 +553,40 @@ function renderCard(o) {
   const isMine = isMineOrder(o);
   const claimedBadge = isMine ? `<span class="claimed-badge">✓ Moi</span>` : '';
 
-  // Products summary: "AK-47 FARMS 5g · Gorilla Glue 10g"
+  // Products summary
   const products = (o.items || [])
     .map(i => `${i.product_name} ${i.quantity}${i.unit || 'g'}`)
     .join(' · ') || '—';
 
+  // Delivery slot badge
+  const slotStr = extractSlot(o.notes);
+  let slotBadge = '';
+  if (slotStr) {
+    const isAsap = slotStr.includes('Dès que possible');
+    const datePart = slotStr.match(/·\s*(.+)$/);
+    const date = datePart ? datePart[1].trim() : null;
+    const isLater = date && date !== "Aujourd'hui";
+    let timeLabel = '';
+    if (!isAsap) {
+      if (slotStr.includes('13h')) timeLabel = '13h–16h';
+      else if (slotStr.includes('16h')) timeLabel = '16h–19h';
+      else if (slotStr.includes('19h')) timeLabel = '19h–23h';
+    }
+    const label = isAsap ? '🚀 Dès que possible' : [timeLabel, date].filter(Boolean).join(' · ');
+    const col = isAsap ? 'var(--accent)' : isLater ? '#fb923c' : '#60a5fa';
+    const bg = isAsap ? 'rgba(74,222,128,.1)' : isLater ? 'rgba(249,115,22,.1)' : 'rgba(59,130,246,.1)';
+    const border = isAsap ? 'rgba(74,222,128,.3)' : isLater ? 'rgba(249,115,22,.3)' : 'rgba(59,130,246,.3)';
+    slotBadge = `<div class="card-slot" style="color:${col};background:${bg};border-color:${border}">${label}</div>`;
+  }
+
   return `<div class="order-card${isMine ? ' claimed' : ''}" onclick="openSheet(${o.id})">
     <div class="card-row1">
-      <div class="card-id">Commande #${o.id} ${claimedBadge}</div>
+      <div class="card-id">#${o.id} ${claimedBadge}</div>
       <span class="status-badge ${STATUS_CLASS[o.status]}">${STATUS_LABEL[o.status]}</span>
     </div>
+    ${slotBadge}
     <div class="card-meta">
-      <div class="card-client" style="font-weight:600;color:var(--text)">${products}</div>
+      <div style="font-size:.82rem;color:var(--text2)">${products}</div>
       ${address !== '—' ? `<div class="card-address">📍 ${address}</div>` : ''}
     </div>
     <div class="card-footer">
@@ -586,7 +612,32 @@ function openSheet(orderId) {
     `<div class="item-row"><span class="item-name">${i.product_name}</span><span class="item-qty">${i.quantity}${i.unit || ''} × ${i.unit_price?.toFixed(2)}€</span></div>`
   ).join('');
 
-  const notes = o.notes ? `<div class="info-row" style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:6px 10px;color:#fb923c;margin-top:4px">📝 ${o.notes}</div>` : '';
+  // Parse créneau and user notes separately
+  const slotStr = extractSlot(o.notes);
+  let slotHtml = '';
+  let userNotesHtml = '';
+  if (slotStr) {
+    const isAsap = slotStr.includes('Dès que possible');
+    const datePart = slotStr.match(/·\s*(.+)$/);
+    const delivDate = datePart ? datePart[1].trim() : null;
+    const isLater = delivDate && delivDate !== "Aujourd'hui";
+    let timeLabel = '';
+    if (!isAsap) {
+      if (slotStr.includes('13h')) timeLabel = '13h–16h';
+      else if (slotStr.includes('16h')) timeLabel = '16h–19h';
+      else if (slotStr.includes('19h')) timeLabel = '19h–23h';
+    }
+    const label = isAsap ? '🚀 Dès que possible' : [timeLabel, delivDate].filter(Boolean).join(' · ');
+    const col = isAsap ? 'var(--accent)' : isLater ? '#fb923c' : '#60a5fa';
+    const bg = isAsap ? 'rgba(74,222,128,.1)' : isLater ? 'rgba(249,115,22,.1)' : 'rgba(59,130,246,.1)';
+    const bdr = isAsap ? 'rgba(74,222,128,.35)' : isLater ? 'rgba(249,115,22,.35)' : 'rgba(59,130,246,.35)';
+    slotHtml = `<div style="display:flex;align-items:center;padding:10px 12px;background:${bg};border:1.5px solid ${bdr};border-radius:10px;font-size:.92rem;font-weight:700;color:${col};gap:6px">⏰ ${label}</div>`;
+  }
+  if (o.notes) {
+    const i = o.notes.indexOf('—');
+    const rawNotes = i !== -1 ? o.notes.slice(i + 1).trim() : (o.notes.includes('Créneau:') ? '' : o.notes);
+    if (rawNotes) userNotesHtml = `<div class="info-row" style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:8px;padding:6px 10px;color:#fb923c">📝 ${rawNotes}</div>`;
+  }
 
   document.getElementById('sheetTitle').textContent = `Commande #${o.id}`;
   document.getElementById('sheetBody').innerHTML = `
@@ -594,6 +645,7 @@ function openSheet(orderId) {
       <span class="status-badge ${STATUS_CLASS[o.status]}" style="font-size:.8rem;padding:4px 12px">${STATUS_LABEL[o.status]}</span>
       <span style="font-size:.8rem;color:var(--text3)">${date} à ${time}</span>
     </div>
+    ${slotHtml}
     <div class="client-block">
       <div class="client-name" style="font-size:.95rem">👤 ${clientName}</div>
       ${phone ? `<div class="info-row">📞 <a href="tel:${phone}" style="color:var(--accent);font-weight:600">${phone}</a></div>` : ''}
@@ -601,7 +653,7 @@ function openSheet(orderId) {
         <div class="address-text">📍 ${address}</div>
         ${address !== '—' ? `<button class="btn-gps" onclick="openGps('${encodeURIComponent(address)}')">GPS</button>` : ''}
       </div>
-      ${notes}
+      ${userNotesHtml}
     </div>
     <div class="items-block">
       ${items}
