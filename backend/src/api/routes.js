@@ -375,7 +375,6 @@ router.post('/miniapp/order', telegramAuthMiddleware, (req, res) => {
     (notes ? `📝 Notes: ${esc(notes)}\n` : '') +
     `\n${sep}\n\n🛒 <b>ARTICLES</b>\n${itemsLines}\n\n${sep}\n\n🗂 <b>PAR CATÉGORIE</b>\n${catLines}\n\n${sep}\n💰 <b>TOTAL: ${totalCalc.toFixed(2)}€</b>\n📅 ${now}`;
 
-  notifyGroupOrder(groupMsg, orderId);
   notifyTracking(buildTrackingMsg(orderId, 'pending', delivery_name, totalCalc, notes)).catch(() => {});
 
   // Discord notification — même contenu que Telegram (HTML → Markdown)
