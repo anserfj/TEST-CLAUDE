@@ -339,7 +339,7 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"analytics",icon:"📊",label:"Analytics"},{id:"automations",icon:"⚡",label:"Automations"},{id:"drivers",icon:"🚚",label:"Livreurs"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"automations",icon:"⚡",label:"Automations"},{id:"drivers",icon:"🚚",label:"Livreurs"},{id:"settings",icon:"⊙",label:"Paramètres"}];
   const MobileNav=()=><div className="sidebar-mobile">
     {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:"0 0 72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
       <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
@@ -540,56 +540,6 @@ function DashboardPage({orders,products,setPage}){
       </Card>
     </div>
 
-    <AnalyticsSection orders={orders} setPage={setPage}/>
-  </div>
-}
-
-/* ── ANALYTICS (revenue by category + top clients) ── */
-function AnalyticsSection({orders,setPage}){
-  const [stats,setStats]=useState(null);
-  useEffect(()=>{apiGet("/api/stats").then(s=>setStats(s)).catch(()=>{});},[orders.length]);
-
-  if(!stats)return null;
-  const {revenueByCategory=[],topClients=[]}=stats;
-  const maxCatRev=revenueByCategory[0]?.revenue||1;
-  const maxClientSpend=topClients[0]?.total_spent||1;
-  const dn=u=>u.username?`@${u.username}`:`${u.first_name||""}${u.last_name?` ${u.last_name}`:""}`.trim()||`User ${u.id}`;
-
-  return<div className="dash-grid-equal" style={{gap:16}}>
-    {/* CA par catégorie */}
-    <Card>
-      <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em",marginBottom:14}}>📊 CA par catégorie</div>
-      {revenueByCategory.filter(c=>c.revenue>0).length===0
-        ?<div style={{color:C.text3,fontSize:13}}>Aucune vente par catégorie</div>
-        :revenueByCategory.filter(c=>c.revenue>0).map((c,i)=><div key={c.name} style={{marginBottom:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-            <span style={{fontSize:12,color:C.text1}}>{c.emoji||""} {c.name}</span>
-            <span style={{fontSize:12,fontWeight:700,color:C.gold}}>{fmt(c.revenue)}</span>
-          </div>
-          <div style={{height:3,background:C.border,borderRadius:2}}><div style={{height:"100%",width:`${(c.revenue/maxCatRev)*100}%`,background:C.gold,borderRadius:2,transition:"width .4s"}}/></div>
-          <div style={{fontSize:10,color:C.text3,marginTop:2}}>{c.sold||0} unités vendues</div>
-        </div>)
-      }
-    </Card>
-
-    {/* Top clients */}
-    <Card>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-        <div style={{fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:"0.05em"}}>👑 Meilleurs clients</div>
-        <button onClick={()=>setPage("clients")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer"}}>Voir tous →</button>
-      </div>
-      {topClients.filter(c=>c.total_spent>0).length===0
-        ?<div style={{color:C.text3,fontSize:13}}>Aucun client avec commandes</div>
-        :topClients.filter(c=>c.total_spent>0).map((c,i)=><div key={c.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-          <div style={{width:24,height:24,borderRadius:6,background:i===0?"#f0b42922":C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:i===0?C.gold:C.text2,flexShrink:0}}>#{i+1}</div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:600,color:C.text1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dn(c)}</div>
-            <div style={{fontSize:10,color:C.text3}}>{c.order_count} commande{c.order_count>1?"s":""}</div>
-          </div>
-          <div style={{fontSize:13,fontWeight:700,color:i===0?C.gold:C.accent,flexShrink:0}}>{fmt(c.total_spent)}</div>
-        </div>)
-      }
-    </Card>
   </div>
 }
 
@@ -2233,8 +2183,8 @@ function SettingsPage({orders,logout}){
   </div>;
 }
 
-/* ── ANALYTICS ── */
-function AnalyticsPage(){
+/* __ ANALYTICS PAGE REMOVED __ */
+/* function AnalyticsPage(){
   const [data,setData]=useState(null);
   const [period,setPeriod]=useState("30d");
   const [loading,setLoading]=useState(false);
@@ -2340,7 +2290,7 @@ function AnalyticsPage(){
       </div>}
     </Card>
   </div>;
-}
+} */
 
 /* ── AUTOMATIONS ── */
 function AutomationsPage(){
@@ -2660,7 +2610,6 @@ function App(){
       {page==="categories"&&<CategoriesPage/>}
       {page==="promos"&&<PromosPage/>}
       {page==="messages"&&<MessagesPage/>}
-      {page==="analytics"&&<AnalyticsPage/>}
       {page==="automations"&&<AutomationsPage/>}
       {page==="drivers"&&<DriversPage/>}
       {page==="settings"&&<SettingsPage orders={orders} logout={logout}/>}
