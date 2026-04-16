@@ -273,7 +273,7 @@ function parisHour() {
     return parseInt(parts.find(p => p.type === 'hour')?.value ?? '13');
   } catch { return new Date().getHours(); }
 }
-function isWithinHours() { const h = parisHour(); return h >= 13 && h < 24; }
+function isWithinHours() { const h = parisHour(); return h >= 7 && h < 24; }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 window.onload = () => {
@@ -393,13 +393,13 @@ function renderOrders() {
   const hoursBanner = (!isWithinHours() && currentTab !== 'done')
     ? `<div class="hours-banner" style="padding:20px 24px">
         <div class="hours-icon" style="font-size:1.8rem">🕐</div>
-        <div class="hours-title">Hors service — retour à 13h</div>
+        <div class="hours-title">Hors service — retour à 7h</div>
        </div>`
     : '';
 
   if (!list.length) {
     const msgs = {
-      toDeliver: { icon: '📭', text: 'Aucune commande à livrer', sub: 'Les commandes confirmées apparaîtront ici dès 13h' },
+      toDeliver: { icon: '📭', text: 'Aucune commande à livrer', sub: 'Les commandes confirmées apparaîtront ici dès 7h' },
       shipped:   { icon: '🚚', text: 'Aucune livraison en cours', sub: '' },
       done:      { icon: '🎉', text: 'Aucune livraison effectuée', sub: '' }
     };

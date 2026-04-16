@@ -389,14 +389,14 @@ function hashPin(pin, salt) {
   return crypto.createHmac('sha256', salt).update(String(pin)).digest('hex');
 }
 
-// Business hours: 13h to 00h Paris time
+// Business hours: 7h to 00h Paris time
 function isWithinDriverHours() {
   try {
     const parts = new Intl.DateTimeFormat('fr-FR', {
       timeZone: 'Europe/Paris', hour: 'numeric', hour12: false
     }).formatToParts(new Date());
     const h = parseInt(parts.find(p => p.type === 'hour')?.value ?? '13');
-    return h >= 13 && h < 24;
+    return h >= 7 && h < 24;
   } catch { return true; }
 }
 
