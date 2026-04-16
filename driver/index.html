@@ -201,6 +201,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   margin-top:4px;
 }
 .slot-group-header:first-child{margin-top:0}
+.slot-group-header.slot-asap{color:rgba(74,222,128,.8)}
+.slot-group-header.slot-13h{color:rgba(59,130,246,.8)}
+.slot-group-header.slot-16h{color:rgba(249,115,22,.8)}
+.slot-group-header.slot-19h{color:rgba(168,85,247,.8)}
 .slot-count{
   background:var(--bg3);border:1px solid var(--border2);border-radius:20px;
   padding:1px 7px;font-size:.7rem;color:var(--text2);font-weight:700;
@@ -435,13 +439,6 @@ function switchTab(tab) {
   renderOrders();
 }
 
-// Slot order for grouping
-const SLOT_ORDER = [
-  { key: "13h", label: "🌇 Début d'après-midi · 13h – 16h" },
-  { key: "16h", label: "🌆 Fin d'après-midi · 16h – 19h" },
-  { key: "19h", label: "🌙 Soirée · 19h – 23h" },
-];
-
 function extractSlot(notes) {
   if (!notes) return null;
   const m = notes.match(/Créneau:\s*(.+?)(?:\s*—|$)/);
@@ -450,10 +447,22 @@ function extractSlot(notes) {
 
 function getSlotKey(slotStr) {
   if (!slotStr) return null;
+  if (slotStr.includes('Dès que possible')) return 'asap';
   if (slotStr.includes('13h')) return '13h';
   if (slotStr.includes('16h')) return '16h';
   if (slotStr.includes('19h')) return '19h';
   return 'autre';
+}
+
+function slotGroupLabel(slotStr) {
+  if (!slotStr) return 'Sans créneau';
+  const datePart = slotStr.match(/·\s*(.+)$/);
+  const date = datePart ? ` · ${datePart[1].trim()}` : '';
+  if (slotStr.includes('Dès que possible')) return '🚀 Dès que possible' + date;
+  if (slotStr.includes('13h')) return '🌇 13h – 16h' + date;
+  if (slotStr.includes('16h')) return '🌆 16h – 19h' + date;
+  if (slotStr.includes('19h')) return '🌙 19h – 23h' + date;
+  return slotStr;
 }
 
 function renderOrders() {
@@ -497,12 +506,12 @@ function renderOrders() {
     for (const o of list) {
       const slot = extractSlot(o.notes);
       const key = getSlotKey(slot) || 'autre';
-      const label = slot || 'Sans créneau';
+      const label = slotGroupLabel(slot);
       if (!groups.has(key)) groups.set(key, { label, orders: [] });
       groups.get(key).orders.push(o);
     }
-    // Sort groups by slot order
-    const slotKeyOrder = ['13h','16h','19h','autre'];
+    // Sort groups by slot order (asap first, then time slots)
+    const slotKeyOrder = ['asap','13h','16h','19h','autre'];
     const sortedGroups = [...groups.entries()]
       .sort((a, b) => slotKeyOrder.indexOf(a[0]) - slotKeyOrder.indexOf(b[0]));
 
@@ -511,8 +520,9 @@ function renderOrders() {
       g.orders.sort((a, b) => (isMineOrder(b) ? 1 : 0) - (isMineOrder(a) ? 1 : 0));
     }
 
-    container.innerHTML = hoursBanner + sortedGroups.map(([, g]) => `
-      <div class="slot-group-header">${g.label} <span class="slot-count">${g.orders.length}</span></div>
+    const SLOT_CLASSES = { asap: 'slot-asap', '13h': 'slot-13h', '16h': 'slot-16h', '19h': 'slot-19h' };
+    container.innerHTML = hoursBanner + sortedGroups.map(([key, g]) => `
+      <div class="slot-group-header ${SLOT_CLASSES[key] || ''}">${g.label} <span class="slot-count">${g.orders.length}</span></div>
       ${g.orders.map(renderCard).join('')}
     `).join('');
   } else {

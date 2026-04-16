@@ -710,6 +710,9 @@ button { cursor: pointer; border: none; background: none; font-family: inherit; 
 }
 
 /* ── DELIVERY SLOTS ── */
+.delivery-mode-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+}
 .slots-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
 }

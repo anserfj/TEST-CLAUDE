@@ -612,6 +612,9 @@ const SLOTS = [
   { id: "soir",  label: "🌙 Soirée",              time: "19h – 23h" },
 ];
 let selectedSlot = "debut";
+let selectedDeliveryMode = "asap";   // 'asap' | 'scheduled'
+let selectedDeliveryDate = "today";  // 'today' | 'tomorrow' | 'custom'
+let selectedCustomDate = "";
 
 function renderDeliveryForm() {
   const el = document.getElementById("cartContent");
@@ -636,6 +639,37 @@ function renderDeliveryForm() {
       <div class="slot-label">${s.label}</div>
       <div class="slot-time">${s.time}</div>
     </div>`).join("");
+
+  const modeHtml = `
+    <div class="slot-option ${selectedDeliveryMode === 'asap' ? 'selected' : ''}" onclick="selectDeliveryMode('asap')">
+      <div class="slot-label">🚀 Dès que possible</div>
+      <div class="slot-time">Le plus tôt possible</div>
+    </div>
+    <div class="slot-option ${selectedDeliveryMode === 'scheduled' ? 'selected' : ''}" onclick="selectDeliveryMode('scheduled')">
+      <div class="slot-label">📅 Choisir un créneau</div>
+      <div class="slot-time">Jour &amp; heure précis</div>
+    </div>`;
+
+  const todayLabel = new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+  const tomorrowLabel = tmrw.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const dayHtml = `
+    <div class="slot-option ${selectedDeliveryDate === 'today' ? 'selected' : ''}" onclick="selectDeliveryDate('today')">
+      <div class="slot-label">Aujourd'hui</div>
+      <div class="slot-time">${todayLabel}</div>
+    </div>
+    <div class="slot-option ${selectedDeliveryDate === 'tomorrow' ? 'selected' : ''}" onclick="selectDeliveryDate('tomorrow')">
+      <div class="slot-label">Demain</div>
+      <div class="slot-time">${tomorrowLabel}</div>
+    </div>
+    <div class="slot-option ${selectedDeliveryDate === 'custom' ? 'selected' : ''}" onclick="selectDeliveryDate('custom')">
+      <div class="slot-label">Autre date</div>
+      <div class="slot-time">Choisir ›</div>
+    </div>`;
+
+  const minDate = new Date().toISOString().split('T')[0];
+  const scheduledDisplay = selectedDeliveryMode === 'scheduled' ? '' : 'display:none';
+  const customDateDisplay = selectedDeliveryDate === 'custom' ? '' : 'display:none';
 
   const savedPromoCode = promoData ? promoData.code : '';
   const savedDiscount = calcDiscount(subtotal);
@@ -662,8 +696,19 @@ function renderDeliveryForm() {
       </div>
 
       <div class="delivery-field">
-        <label class="delivery-label">⏰ Créneau de livraison</label>
-        <div class="slots-grid" id="slotsGrid">${slotsHtml}</div>
+        <label class="delivery-label">⏰ Livraison</label>
+        <div class="delivery-mode-grid" id="modeGrid">${modeHtml}</div>
+      </div>
+      <div id="scheduledOptions" style="${scheduledDisplay}">
+        <div class="delivery-field">
+          <label class="delivery-label">📅 Jour</label>
+          <div class="slots-grid" id="dayGrid">${dayHtml}</div>
+          <input type="date" id="customDateInput" class="delivery-input" style="margin-top:8px;${customDateDisplay}" value="${selectedCustomDate}" min="${minDate}" oninput="selectedCustomDate=this.value" />
+        </div>
+        <div class="delivery-field">
+          <label class="delivery-label">🕐 Créneau horaire</label>
+          <div class="slots-grid" id="slotsGrid">${slotsHtml}</div>
+        </div>
       </div>
 
       <div class="delivery-field">
@@ -803,16 +848,32 @@ function reorder(orderItems) {
 
 function selectSlot(id) {
   selectedSlot = id;
-  document.querySelectorAll(".slot-option").forEach(el => {
-    el.classList.toggle("selected", el.onclick?.toString().includes(`'${id}'`));
-  });
-  // Re-render slots to update classes cleanly
   const grid = document.getElementById("slotsGrid");
   if (grid) grid.innerHTML = SLOTS.map(s => `
     <div class="slot-option ${s.id === id ? "selected" : ""}" onclick="selectSlot('${s.id}')">
       <div class="slot-label">${s.label}</div>
       <div class="slot-time">${s.time}</div>
     </div>`).join("");
+}
+
+function selectDeliveryMode(mode) {
+  selectedDeliveryMode = mode;
+  const grid = document.getElementById("modeGrid");
+  if (grid) grid.querySelectorAll(".slot-option").forEach(el => {
+    el.classList.toggle("selected", el.getAttribute("onclick").includes(`'${mode}'`));
+  });
+  const panel = document.getElementById("scheduledOptions");
+  if (panel) panel.style.display = mode === 'scheduled' ? '' : 'none';
+}
+
+function selectDeliveryDate(date) {
+  selectedDeliveryDate = date;
+  const grid = document.getElementById("dayGrid");
+  if (grid) grid.querySelectorAll(".slot-option").forEach(el => {
+    el.classList.toggle("selected", el.getAttribute("onclick").includes(`'${date}'`));
+  });
+  const input = document.getElementById("customDateInput");
+  if (input) input.style.display = date === 'custom' ? '' : 'none';
 }
 
 // ── MAP PICKER ──
@@ -992,8 +1053,26 @@ async function confirmOrder() {
   localStorage.setItem("b83_phone", phone);
   localStorage.setItem("b83_address", address);
 
-  const slotInfo = SLOTS.find(s => s.id === selectedSlot);
-  const slotNote = slotInfo ? `Créneau: ${slotInfo.label} ${slotInfo.time}` : "";
+  if (selectedDeliveryMode === 'scheduled' && selectedDeliveryDate === 'custom' && !selectedCustomDate) {
+    showToast("⚠️ Veuillez choisir une date de livraison"); return;
+  }
+
+  let slotNote = "";
+  if (selectedDeliveryMode === 'asap') {
+    slotNote = "Créneau: 🚀 Dès que possible";
+  } else {
+    const slotInfo = SLOTS.find(s => s.id === selectedSlot);
+    if (slotInfo) {
+      let dateLabel = "";
+      if (selectedDeliveryDate === 'today') dateLabel = "Aujourd'hui";
+      else if (selectedDeliveryDate === 'tomorrow') dateLabel = "Demain";
+      else if (selectedCustomDate) {
+        const d = new Date(selectedCustomDate + 'T12:00:00');
+        dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+      }
+      slotNote = `Créneau: ${slotInfo.label} ${slotInfo.time}${dateLabel ? ' · ' + dateLabel : ''}`;
+    }
+  }
 
   const btn = document.getElementById("confirmOrderBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Envoi en cours..."; }
