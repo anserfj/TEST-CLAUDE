@@ -263,7 +263,7 @@ export function createBot(token) {
       if (order) {
         const icons  = { confirmed:'✅', shipped:'🚚', delivered:'🎉' };
         const labels = { confirmed:'Confirmée', shipped:'En route', delivered:'Livrée' };
-        const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
         let creneau = '';
         if (order.notes) {
           const m = order.notes.match(/^Créneau:\s*(.+?)(?:\s*(?:—|$))/);

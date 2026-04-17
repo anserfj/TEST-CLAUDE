@@ -39,7 +39,7 @@ function buildTrackingMsg(orderId, status, clientName, total, notes, driverName 
     if (m) creneau = `\n🗓 ${escHtml(m[1].trim())}`;
   }
   const driver = driverName ? `\n🛵 ${escHtml(driverName)}` : '';
-  const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
   return `${icon} <b>Commande #${orderId}</b> · ${label}\n─────────────────\n👤 ${escHtml(clientName || 'Client')} · ${parseFloat(total || 0).toFixed(2)}€${creneau}${driver}\n🕐 ${now}`;
 }
 

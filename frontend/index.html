@@ -113,6 +113,9 @@ function getToken(){try{return localStorage.getItem("_bt")||""}catch{return""}}
 function setToken(t){try{if(t)localStorage.setItem("_bt",t)}catch{}}
 function clearToken(){try{localStorage.removeItem("_bt")}catch{}}
 
+/* ── DATE HELPERS ── */
+function parseUTC(s){if(!s)return new Date(NaN);const str=s.includes('Z')||s.includes('+')?s:s.replace(' ','T')+'Z';return new Date(str);}
+const TZ='Europe/Paris';
 /* ── API LOCALE ── */
 async function apiFetch(p,opts={}){
   const h={...opts.headers};
@@ -398,9 +401,9 @@ function DashboardPage({orders,products,setPage}){
     if(period==='custom'){
       const from=new Date(customFrom+'T00:00:00');
       const to=new Date(customTo+'T23:59:59');
-      return arr.filter(o=>{const d=new Date(o.created_at);return d>=from&&d<=to;});
+      return arr.filter(o=>{const d=parseUTC(o.created_at);return d>=from&&d<=to;});
     }
-    const ms=periodMs[period];if(!ms)return arr;const cut=new Date(now-ms);return arr.filter(o=>new Date(o.created_at)>=cut);
+    const ms=periodMs[period];if(!ms)return arr;const cut=new Date(now-ms);return arr.filter(o=>parseUTC(o.created_at)>=cut);
   };
 
   const active=orders.filter(o=>o.status!=="cancelled");
@@ -413,7 +416,7 @@ function DashboardPage({orders,products,setPage}){
   const avgOrder=pActive.length?totalCA/pActive.length:0;
 
   // Tendance : période courante vs période précédente
-  const trendCA=(offsetMs)=>{const ms=periodMs[period]||30*24*3600000;const start=new Date(now-offsetMs-ms);const end=new Date(now-offsetMs);return active.filter(o=>{const d=new Date(o.created_at);return d>=start&&d<=end}).reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);};
+  const trendCA=(offsetMs)=>{const ms=periodMs[period]||30*24*3600000;const start=new Date(now-offsetMs-ms);const end=new Date(now-offsetMs);return active.filter(o=>{const d=parseUTC(o.created_at);return d>=start&&d<=end}).reduce((s,o)=>s+parseFloat(o.total)+parseFloat(o.livraison||0),0);};
   const prevCA=trendCA(periodMs[period]||30*24*3600000);
   const pTrend=prevCA>0?Math.round(((totalCA-prevCA)/prevCA)*100):0;
 
@@ -431,14 +434,14 @@ function DashboardPage({orders,products,setPage}){
       const to=new Date(customTo+'T23:59:59');
       const days=Math.max(1,Math.round((to-from)/86400000)+1);
       const data=Array(days).fill(0);
-      pActive.forEach(o=>{const d=new Date(o.created_at);const idx=Math.floor((d-from)/86400000);if(idx>=0&&idx<days)data[idx]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
+      pActive.forEach(o=>{const d=parseUTC(o.created_at);const idx=Math.floor((d-from)/86400000);if(idx>=0&&idx<days)data[idx]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
       return data;
     }
     const useH=['24h','48h'].includes(period);
     const slots={tout:30,'30j':30,'7j':7,'48h':48,'24h':24}[period];
     const slotMs=useH?3600000:86400000;
     const data=Array(slots).fill(0);
-    pActive.forEach(o=>{const d=new Date(o.created_at);const diff=Math.floor((now-d)/slotMs);if(diff<slots)data[slots-1-diff]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
+    pActive.forEach(o=>{const d=parseUTC(o.created_at);const diff=Math.floor((now-d)/slotMs);if(diff<slots)data[slots-1-diff]+=parseFloat(o.total)+parseFloat(o.livraison||0)});
     return data;
   },[orders,period,customFrom,customTo]);
 
@@ -631,7 +634,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
   const exportCSV=()=>{
     const rows=[["ID","Client","Date","Heure","Statut","Articles","Sous-total","Livraison","Total"],...filtered.map(o=>{
       const items=parseItems(o.items);
-      return[o.id,o.telegram_user,new Date(o.created_at).toLocaleDateString("fr-FR"),new Date(o.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}),o.status,items.map(i=>`${i.name}×${i.quantity||i.qty||0}`).join(" | "),parseFloat(o.total).toFixed(2),parseFloat(o.livraison||0).toFixed(2),(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)];
+      return[o.id,o.telegram_user,parseUTC(o.created_at).toLocaleDateString("fr-FR",{timeZone:TZ}),parseUTC(o.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",timeZone:TZ}),o.status,items.map(i=>`${i.name}×${i.quantity||i.qty||0}`).join(" | "),parseFloat(o.total).toFixed(2),parseFloat(o.livraison||0).toFixed(2),(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)];
     })];
     const csv="\uFEFF"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
     const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`commandes_${new Date().toISOString().slice(0,10)}.csv`;a.click();
@@ -680,7 +683,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
 
     <h2>Détail des commandes</h2>
     <table><thead><tr><th>#</th><th>Client</th><th>Heure</th><th>Articles</th><th class="right">Total</th></tr></thead><tbody>
-    ${todayOrders.map(o=>`<tr><td>${o.id}</td><td>${o.telegram_user||"?"}</td><td>${new Date(o.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</td><td>${parseItems(o.items).map(i=>`${i.name} ×${i.quantity||i.qty||0}`).join("<br>")}</td><td class="right"><strong>${(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)} €</strong></td></tr>`).join("")}
+    ${todayOrders.map(o=>`<tr><td>${o.id}</td><td>${o.telegram_user||"?"}</td><td>${parseUTC(o.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",timeZone:TZ})}</td><td>${parseItems(o.items).map(i=>`${i.name} ×${i.quantity||i.qty||0}`).join("<br>")}</td><td class="right"><strong>${(parseFloat(o.total)+parseFloat(o.livraison||0)).toFixed(2)} €</strong></td></tr>`).join("")}
     </tbody></table>
     </body></html>`);
     w.document.close();
@@ -692,7 +695,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
     const w=window.open("","_blank");
     w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>BALTIMORE 83 · Dashboard</title><style>body{font-family:sans-serif;max-width:600px;margin:40px auto;color:#111;font-size:14px}h1{font-size:22px;margin-bottom:4px}table{width:100%;border-collapse:collapse;margin:16px 0}td,th{padding:8px 10px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5}tfoot td{font-weight:700}@media print{button{display:none}}</style></head><body>
     <button onclick="window.print()" style="margin-bottom:20px;padding:8px 16px;cursor:pointer">🖨️ Imprimer</button>
-    <h1>Commande ${o.id}</h1><p style="color:#666">${new Date(o.created_at).toLocaleString("fr-FR")} · ${o.telegram_user}</p>
+    <h1>Commande ${o.id}</h1><p style="color:#666">${parseUTC(o.created_at).toLocaleString("fr-FR",{timeZone:TZ})} · ${o.telegram_user}</p>
     ${li?`<h3>Livraison</h3><p>${li.prenom||""} ${li.nom||""}<br>${li.adresse||""}<br>${li.cp||""} ${li.ville||""}<br>${li.tel||""}</p>`:""}
     <h3>Articles</h3>
     <table><thead><tr><th>Produit</th><th>Goût</th><th>Qté</th><th>P.U.</th><th>Total</th></tr></thead><tbody>
@@ -713,8 +716,8 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
     let r=orders.filter(o=>{
       if(filter!=="tous"&&o.status!==filter)return false;
       if(search&&!String(o.id).toLowerCase().includes(search.toLowerCase())&&!o.telegram_user.toLowerCase().includes(search.toLowerCase()))return false;
-      if(dateFrom&&new Date(o.created_at)<new Date(dateFrom))return false;
-      if(dateTo&&new Date(o.created_at)>new Date(dateTo+"T23:59:59"))return false;
+      if(dateFrom&&parseUTC(o.created_at)<new Date(dateFrom))return false;
+      if(dateTo&&parseUTC(o.created_at)>new Date(dateTo+"T23:59:59"))return false;
       return true;
     });
     if(sort==="date_desc")r.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -734,7 +737,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
     const map={};
     orders.forEach(o=>{
       if(o.status==="cancelled")return;
-      const d=new Date(o.created_at);
+      const d=parseUTC(o.created_at);
       if(d<from||d>to)return;
       parseItems(o.items).forEach(i=>{
         if(!i.name)return;
@@ -812,7 +815,7 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
                 <td style={{padding:"11px 10px"}} onClick={e=>e.stopPropagation()}><input type="checkbox" checked={bulkSelected.includes(o.id)} onChange={e=>setBulkSelected(prev=>e.target.checked?[...prev,o.id]:prev.filter(x=>x!==o.id))}/></td>
                 <td style={{padding:"11px 14px",fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent,whiteSpace:"nowrap"}}>{o.id}</td>
                 <td style={{padding:"11px 14px",fontSize:13}}>{o.telegram_user}</td>
-                <td className="hide-mobile" style={{padding:"11px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap"}}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</td>
+                <td className="hide-mobile" style={{padding:"11px 14px",fontSize:11,color:C.text3,whiteSpace:"nowrap"}}>{parseUTC(o.created_at).toLocaleDateString("fr-FR",{timeZone:TZ})}</td>
                 <td className="hide-mobile" style={{padding:"11px 14px",fontSize:13,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</td>
                 <td style={{padding:"11px 14px"}}><Badge status={o.status}/>{o.driver_name&&<span style={{marginLeft:6,fontSize:10,color:'#a855f7',background:'rgba(168,85,247,.12)',border:'1px solid rgba(168,85,247,.3)',borderRadius:4,padding:'1px 6px',whiteSpace:'nowrap'}}>🚚 {o.driver_name}</span>}{(()=>{const s=parseSlot(o.notes);if(!s)return null;const{col,bg}=slotColors(s);const label=s.isAsap?'🚀 ASAP':[s.time,s.date].filter(Boolean).join(' · ');const prefix=s.dateUrgency==='overdue'?'⚠️ ':s.dateUrgency==='tomorrow'?'':'';return<span style={{marginLeft:6,fontSize:10,color:col,background:bg,border:`1px solid ${col}40`,borderRadius:4,padding:'1px 6px',whiteSpace:'nowrap',fontWeight:700}}>{prefix}{label}</span>;})()}</td>
                 <td style={{padding:"11px 14px"}}>
@@ -864,15 +867,15 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
                 {selected.telegram_id&&(()=>{const h=(()=>{try{return JSON.parse(localStorage.getItem("baltimore83_settings")||"{}")}catch{return{}}})().willyHandle;return h?<a href={`https://t.me/${h}?start=user_${selected.telegram_id}`} target="_blank" style={{fontSize:10,color:C.accent,textDecoration:"none",background:C.accentDim,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"2px 7px"}}>💬 Contacter</a>:null;})()}
                 {selected.telegram_user?.startsWith("@")&&<a href={`https://t.me/${selected.telegram_user.slice(1)}`} target="_blank" style={{fontSize:10,color:C.text2,textDecoration:"none",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 7px"}}>🔗 Profil</a>}
               </div>
-              <div style={{fontSize:10,color:C.text3,marginTop:5}}>{new Date(selected.created_at).toLocaleString("fr-FR")}</div>
+              <div style={{fontSize:10,color:C.text3,marginTop:5}}>{parseUTC(selected.created_at).toLocaleString("fr-FR",{timeZone:TZ})}</div>
             </div>
 
             {/* Livreur */}
             {selected.driver_name&&<div style={{padding:"10px 12px",background:"rgba(168,85,247,.06)",border:"1px solid rgba(168,85,247,.2)",borderRadius:8}}>
               <div style={{fontSize:11,color:'#a855f7',marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Livreur</div>
               <div style={{fontWeight:600,color:C.text}}>🚚 {selected.driver_name}</div>
-              {selected.driver_taken_at&&<div style={{fontSize:10,color:C.text3,marginTop:3}}>Prise en charge : {new Date(selected.driver_taken_at).toLocaleString("fr-FR")}</div>}
-              {selected.driver_delivered_at&&<div style={{fontSize:10,color:C.text3,marginTop:2}}>Livrée : {new Date(selected.driver_delivered_at).toLocaleString("fr-FR")}</div>}
+              {selected.driver_taken_at&&<div style={{fontSize:10,color:C.text3,marginTop:3}}>Prise en charge : {new Date(selected.driver_taken_at).toLocaleString("fr-FR",{timeZone:TZ})}</div>}
+              {selected.driver_delivered_at&&<div style={{fontSize:10,color:C.text3,marginTop:2}}>Livrée : {new Date(selected.driver_delivered_at).toLocaleString("fr-FR",{timeZone:TZ})}</div>}
               {selected.driver_taken_at&&selected.driver_delivered_at&&<div style={{fontSize:10,color:'#4ade80',marginTop:2}}>Durée : {Math.round((new Date(selected.driver_delivered_at)-new Date(selected.driver_taken_at))/60000)} min</div>}
             </div>}
 
@@ -942,7 +945,18 @@ function OrdersPage({orders,setOrders,products,setProducts,loading,reload,select
 /* ── CONFIRM PAGE ── */
 function ConfirmPage({orders,setOrders}){
   const [updating,setUpdating]=React.useState(null);
-  const pending=orders.filter(o=>o.status==='pending').sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  function orderPriority(o){
+    const n=o.notes||'';
+    if(n.includes('Dès que possible'))return{d:1,s:0};
+    const dm=n.match(/(\d{4}-\d{2}-\d{2})/);
+    const sm=n.match(/(\d{1,2})h/);
+    if(!dm)return{d:99,s:99};
+    const now=new Date();now.setHours(0,0,0,0);
+    const diff=Math.round((new Date(dm[1]+'T00:00:00')-now)/86400000);
+    const d=diff<0?0:diff===0?2:diff===1?3:4+diff;
+    return{d,s:sm?parseInt(sm[1]):99};
+  }
+  const pending=orders.filter(o=>o.status==='pending').sort((a,b)=>{const pa=orderPriority(a),pb=orderPriority(b);return pa.d!==pb.d?pa.d-pb.d:pa.s-pb.s;});
 
   async function doStatus(id,status){
     setUpdating(id);
@@ -976,9 +990,9 @@ function ConfirmPage({orders,setOrders}){
           const{col:sCol,bg:sBg,bdr:sBdr}=slotColors(slot);
           const isOverdue=slot?.dateUrgency==='overdue';
           const slotLabel=slot?.isAsap?'🚀 Dès que possible':[slot?.time,slot?.date].filter(Boolean).join(' · ');
-          const d=new Date(o.created_at);
-          const timeStr=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-          const dayStr=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+          const d=parseUTC(o.created_at);
+          const timeStr=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',timeZone:TZ});
+          const dayStr=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',timeZone:TZ});
           const total=parseFloat(o.total)+parseFloat(o.livraison||0);
           const clientName=[o.delivery_name,o.telegram_user&&o.delivery_name!==o.telegram_user?`(${o.telegram_user})`:null].filter(Boolean).join(' ')||`Client #${o.user_id}`;
           return<div key={o.id} style={{background:C.card,border:`1px solid ${isOverdue?'rgba(239,68,68,.4)':C.border}`,borderRadius:14,overflow:'hidden',boxShadow:isOverdue?'0 0 0 1px rgba(239,68,68,.2)':'none'}}>
@@ -1180,7 +1194,7 @@ function ClientsPage({orders,setOrders}){
                     {c.blacklisted?<span style={{fontSize:10,padding:"1px 5px",borderRadius:4,background:"#ff475715",color:C.red,border:`1px solid #ff475730`}}>🚫</span>:null}
                     {c.tag&&<TagBadge tag={c.tag}/>}
                   </div>
-                  <div style={{fontSize:11,color:C.text3}}>Depuis {new Date(c.created_at).toLocaleDateString("fr-FR")} · Vu {new Date(c.last_seen).toLocaleDateString("fr-FR")}</div>
+                  <div style={{fontSize:11,color:C.text3}}>Depuis {parseUTC(c.created_at).toLocaleDateString("fr-FR",{timeZone:TZ})} · Vu {parseUTC(c.last_seen).toLocaleDateString("fr-FR",{timeZone:TZ})}</div>
                 </div>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
@@ -1276,7 +1290,7 @@ function ClientsPage({orders,setOrders}){
                   <span style={{fontFamily:"'JetBrains Mono'",fontSize:11,color:C.accent}}>{o.id}</span>
                   <span style={{fontSize:11,fontWeight:700}}>{fmt(parseFloat(o.total)+parseFloat(o.livraison||0))}</span>
                 </div>
-                <div style={{fontSize:11,color:C.text3,marginBottom:7}}>{new Date(o.created_at).toLocaleDateString("fr-FR")} · <Badge status={o.status}/></div>
+                <div style={{fontSize:11,color:C.text3,marginBottom:7}}>{parseUTC(o.created_at).toLocaleDateString("fr-FR",{timeZone:TZ})} · <Badge status={o.status}/></div>
                 <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                   {Object.entries(STATUS).map(([key,cfg])=><button key={key} onClick={()=>updateStatus(o.id,key)} disabled={updating||o.status===key} style={{padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600,cursor:o.status===key?"default":"pointer",border:`1px solid ${o.status===key?cfg.color:C.border}`,background:o.status===key?cfg.bg:"transparent",color:o.status===key?cfg.color:C.text3,fontFamily:"'DM Sans',sans-serif"}}>{cfg.label}</button>)}
                 </div>
@@ -1740,7 +1754,7 @@ function PromosPage(){
               {!p.active&&<span style={{background:"rgba(255,71,87,.1)",color:"#ff4757",borderRadius:20,padding:"2px 8px",fontSize:11}}>Inactif</span>}
               {expired&&<span style={{background:"rgba(255,71,87,.1)",color:"#ff4757",borderRadius:20,padding:"2px 8px",fontSize:11}}>⏰ Expiré</span>}
               {ownerClient&&<span style={{background:"#a78bfa18",color:"#a78bfa",borderRadius:20,padding:"2px 8px",fontSize:11}}>👤 {dn(ownerClient)}</span>}
-              {p.expires_at&&!expired&&<span style={{background:"#f0b42918",color:C.gold,borderRadius:20,padding:"2px 8px",fontSize:11}}>⏳ {new Date(p.expires_at).toLocaleDateString("fr-FR")}</span>}
+              {p.expires_at&&!expired&&<span style={{background:"#f0b42918",color:C.gold,borderRadius:20,padding:"2px 8px",fontSize:11}}>⏳ {new Date(p.expires_at).toLocaleDateString("fr-FR",{timeZone:TZ})}</span>}
             </div>
             <div style={{fontSize:11,color:C.text3,marginTop:4}}>{usageLabel}{minLabel}</div>
           </div>
@@ -1835,7 +1849,7 @@ function MessagesPage(){
     {history.map((g,i)=><div key={i} style={{padding:"13px 15px",background:C.card,border:`1px solid ${C.border}`,borderRadius:9,marginBottom:9}}>
       <div style={{fontSize:13,color:C.text1,lineHeight:1.5,whiteSpace:"pre-wrap",marginBottom:7}}>{g.text}</div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR")}</span>
+        <span style={{fontSize:11,color:C.text3}}>{new Date(g.created_at).toLocaleString("fr-FR",{timeZone:TZ})}</span>
         <span style={{fontSize:11,background:C.accentDim,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:4,padding:"1px 7px"}}>📢 {g.recipients} destinataires</span>
       </div>
     </div>)}
@@ -2438,7 +2452,7 @@ function DriverStatsModal({driver,onClose}){
         {data.recent?.length===0?<div style={{color:C.text3,textAlign:'center',padding:16}}>Aucune commande</div>
         :data.recent?.map(o=>{
           const client=[o.first_name,o.last_name].filter(Boolean).join(' ')||o.username||`#${o.id}`;
-          const takenMin=o.driver_taken_at&&o.created_at?Math.round((new Date(o.driver_taken_at)-new Date(o.created_at))/60000):null;
+          const takenMin=o.driver_taken_at&&o.created_at?Math.round((new Date(o.driver_taken_at)-parseUTC(o.created_at))/60000):null;
           const delivMin=o.driver_taken_at&&o.driver_delivered_at?Math.round((new Date(o.driver_delivered_at)-new Date(o.driver_taken_at))/60000):null;
           return<div key={o.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:`1px solid ${C.border}`,flexWrap:'wrap'}}>
             <span style={{color:C.text3,fontSize:'.78rem',width:28}}>#{o.id}</span>
