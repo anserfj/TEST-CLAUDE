@@ -1,6 +1,6 @@
 // ── SCHEDULER — automations background jobs ──────────────────────────────────
 import db from './db/database.js';
-import { sendMessageToUser, notifyGroup } from './bot/bot.js';
+import { sendMessageToUser } from './bot/bot.js';
 
 function getSetting(key) {
   return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value || '';
@@ -64,9 +64,7 @@ async function runShopAlert() {
   `).get(hours);
 
   if (!recentOrder) {
-    const msg = `⚠️ <b>Alerte activité</b>\n\nAucune commande reçue depuis <b>${hours}h</b>.\nVérifiez que la boutique est bien en ligne.`;
-    notifyGroup(msg).catch(() => {});
-    console.log(`[scheduler] shop alert sent — no orders in ${hours}h`);
+    console.log(`[scheduler] shop alert — no orders in ${hours}h`);
   }
 }
 
