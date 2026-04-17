@@ -30,7 +30,7 @@ const escHtml = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 const TRACKING_ICONS  = { pending:'🆕', confirmed:'✅', preparing:'👨‍🍳', shipped:'🚚', delivered:'🎉', cancelled:'❌' };
 const TRACKING_LABELS = { pending:'En attente', confirmed:'Confirmée', preparing:'En préparation', shipped:'En route', delivered:'Livrée', cancelled:'Annulée' };
 
-function buildTrackingMsg(orderId, status, clientName, total, notes) {
+function buildTrackingMsg(orderId, status, clientName, total, notes, driverName = null) {
   const icon  = TRACKING_ICONS[status]  || '🔄';
   const label = TRACKING_LABELS[status] || status;
   let creneau = '';
@@ -38,8 +38,9 @@ function buildTrackingMsg(orderId, status, clientName, total, notes) {
     const m = notes.match(/^Créneau:\s*(.+?)(?:\s*(?:—|$))/);
     if (m) creneau = `\n🗓 ${escHtml(m[1].trim())}`;
   }
+  const driver = driverName ? `\n🛵 ${escHtml(driverName)}` : '';
   const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  return `${icon} <b>Commande #${orderId}</b> · ${label}\n─────────────────\n👤 ${escHtml(clientName || 'Client')} · ${parseFloat(total || 0).toFixed(2)}€${creneau}\n🕐 ${now}`;
+  return `${icon} <b>Commande #${orderId}</b> · ${label}\n─────────────────\n👤 ${escHtml(clientName || 'Client')} · ${parseFloat(total || 0).toFixed(2)}€${creneau}${driver}\n🕐 ${now}`;
 }
 
 function getClientIp(req) {
@@ -522,7 +523,8 @@ router.patch('/driver/orders/:id/status', driverAuthMiddleware, async (req, res)
     sendMessageToUser(user.telegram_id, msgs[status]).catch(() => {});
   }
   if (['shipped', 'delivered'].includes(status)) {
-    notifyTracking(buildTrackingMsg(orderId, status, order.delivery_name, order.total, order.notes)).catch(() => {});
+    const driver = db.prepare('SELECT name FROM drivers WHERE id = ?').get(driverId);
+    notifyTracking(buildTrackingMsg(orderId, status, order.delivery_name, order.total, order.notes, driver?.name)).catch(() => {});
   }
   res.json({ success: true });
   } catch(e) {
@@ -727,7 +729,10 @@ router.patch('/orders/:id/status', async (req, res) => {
     };
     if (msgs[status]) sendMessageToUser(order.telegram_id, msgs[status]).catch(() => {});
   }
-  if (order) notifyTracking(buildTrackingMsg(order.id, status, order.delivery_name, order.total, order.notes)).catch(() => {});
+  if (order) {
+    const driver = order.driver_id ? db.prepare('SELECT name FROM drivers WHERE id = ?').get(order.driver_id) : null;
+    notifyTracking(buildTrackingMsg(order.id, status, order.delivery_name, order.total, order.notes, driver?.name)).catch(() => {});
+  }
   res.json({ success: true });
 });
 
