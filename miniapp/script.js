@@ -144,6 +144,30 @@ function applyContactLinks() {
   if (igDesc && igUrl) igDesc.textContent = igUrl.replace("https://www.instagram.com/", "@").replace(/\/$/, "");
 }
 
+// ── PAS DE USERNAME TELEGRAM ──
+function showNoUsernameBlocked() {
+  document.querySelector("nav.tabs")?.style.setProperty("display", "none");
+  const main = document.querySelector("main.main");
+  if (main) main.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;padding:32px;text-align:center">
+      <div style="font-size:56px;margin-bottom:16px">👤</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:.05em;margin-bottom:12px">Nom d'utilisateur requis</div>
+      <div style="color:#aaa;font-size:.95rem;line-height:1.6;margin-bottom:28px">
+        Pour utiliser la boutique, tu dois avoir un <b style="color:#fff">nom d'utilisateur Telegram</b> (un @).<br><br>
+        <b style="color:#fff">Comment en créer un :</b><br>
+        1. Ouvre Telegram → <b>Paramètres</b><br>
+        2. Appuie sur ton nom en haut<br>
+        3. Appuie sur <b>Modifier le profil</b><br>
+        4. Remplis le champ <b>Nom d'utilisateur</b><br>
+        5. Reviens ici et relance la boutique
+      </div>
+      <div style="background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:16px 20px;font-size:.85rem;color:#888;max-width:280px">
+        Un @ te permet d'être identifié de façon unique et sécurisée pour recevoir le suivi de tes commandes.
+      </div>
+    </div>
+  `;
+}
+
 // ── ACCÈS NON VALIDÉ ──
 function showAccessBlocked() {
   document.querySelector("nav.tabs")?.style.setProperty("display", "none");
@@ -171,6 +195,15 @@ async function init() {
   const splashStart = Date.now();
   loadCart();
   showSkeletons();
+
+  // Vérifier que l'utilisateur a un @ Telegram
+  const tgUser = tg.initDataUnsafe?.user;
+  if (tgUser && !tgUser.username) {
+    hideSplash();
+    showNoUsernameBlocked();
+    return;
+  }
+
   try {
     const [cats, prods, settings] = await Promise.all([
       apiGet("/api/categories"),
