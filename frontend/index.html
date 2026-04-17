@@ -2606,6 +2606,19 @@ function App(){
   useEffect(()=>{if(logged){fetchOrders();fetchProducts();pollUnread()}},[logged]);
   useEffect(()=>{if(!logged)return;const t=setInterval(fetchOrders,30000);return()=>clearInterval(t)},[logged]);
   useEffect(()=>{if(!logged)return;const t=setInterval(pollUnread,5000);return()=>clearInterval(t)},[logged]);
+  useEffect(()=>{
+    if(!logged)return;
+    let ws,timer;
+    function connect(){
+      const url=(window.location.protocol==='https:'?'wss:':'ws:')+'//'+window.location.host+'/ws?token='+getToken();
+      ws=new WebSocket(url);
+      ws.onmessage=(e)=>{try{const m=JSON.parse(e.data);if(m.type==='new_order'||m.type==='order_updated')fetchOrders();}catch{}};
+      ws.onclose=()=>{timer=setTimeout(connect,3000);};
+      ws.onerror=()=>{ws.close();};
+    }
+    connect();
+    return()=>{clearTimeout(timer);ws?.close();};
+  },[logged]);
 
   const newCount=orders.filter(o=>o.status==="pending").length;
   if(!logged)return<LoginPage onLogin={login}/>;
