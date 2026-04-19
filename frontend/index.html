@@ -71,8 +71,7 @@
     }
     @media(max-width:640px){
       .sidebar-desktop{display:none!important}
-      .sidebar-mobile{display:flex!important;position:fixed;bottom:0;left:0;right:0;height:60px;background:#0c0f14;border-top:1px solid #1e2530;z-index:200;align-items:stretch;padding-bottom:env(safe-area-inset-bottom);overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-      .sidebar-mobile::-webkit-scrollbar{display:none}
+      .sidebar-mobile{display:flex!important;position:fixed;bottom:0;left:0;right:0;height:60px;background:#0c0f14;border-top:1px solid #1e2530;z-index:200;align-items:stretch;padding-bottom:env(safe-area-inset-bottom);overflow:hidden}
       .main-content{margin-left:0!important;max-width:100vw!important;padding:14px 10px calc(100px + env(safe-area-inset-bottom)) 10px!important}
       .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
       .hide-mobile{display:none!important}
@@ -346,17 +345,35 @@ function LoginPage({onLogin}){
 
 /* ── SIDEBAR ── */
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
-  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"confirm",icon:"🔔",label:"À confirmer"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"automations",icon:"⚡",label:"Automations"},{id:"drivers",icon:"🚚",label:"Livreurs"},{id:"settings",icon:"⊙",label:"Paramètres"}];
-  const MobileNav=()=><div className="sidebar-mobile">
-    {nav.map(item=><button key={item.id} onClick={()=>setPage(item.id)} style={{flex:"0 0 72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
-      <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
-      <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.03em"}}>{item.label}</span>
-      {item.id==="orders"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:C.accent,color:C.bg,borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{newCount}</span>}
-      {item.id==="confirm"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:"#f97316",color:"#fff",borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{newCount}</span>}
-      
-      {page===item.id&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
-    </button>)}
-  </div>;
+  const [showMore,setShowMore]=useState(false);
+  const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"confirm",icon:"🔔",label:"Confirmer"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"automations",icon:"⚡",label:"Automations"},{id:"drivers",icon:"🚚",label:"Livreurs"},{id:"settings",icon:"⊙",label:"Paramètres"}];
+  const PRIMARY_IDS=["dashboard","confirm","orders","messages"];
+  const primaryNav=nav.filter(n=>PRIMARY_IDS.includes(n.id));
+  const secondaryNav=nav.filter(n=>!PRIMARY_IDS.includes(n.id));
+  const isSecondaryActive=secondaryNav.some(n=>n.id===page);
+  const MobileNav=()=><>
+    {showMore&&<div onClick={()=>setShowMore(false)} style={{position:"fixed",inset:0,zIndex:198,background:"rgba(0,0,0,0.5)"}}/>}
+    {showMore&&<div style={{position:"fixed",bottom:60,left:0,right:0,background:"#0c0f14",borderTop:`1px solid ${C.border}`,borderRadius:"16px 16px 0 0",padding:"16px 12px 8px",zIndex:199,display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+      {secondaryNav.map(item=><button key={item.id} onClick={()=>{setPage(item.id);setShowMore(false);}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,background:page===item.id?C.accentDim:"transparent",border:`1px solid ${page===item.id?C.accentMid:"transparent"}`,borderRadius:10,color:page===item.id?C.accent:C.text2,cursor:"pointer",padding:"12px 4px",fontFamily:"'DM Sans',sans-serif"}}>
+        <span style={{fontSize:22,lineHeight:1}}>{item.icon}</span>
+        <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.02em"}}>{item.label}</span>
+      </button>)}
+    </div>}
+    <div className="sidebar-mobile">
+      {primaryNav.map(item=><button key={item.id} onClick={()=>{setPage(item.id);setShowMore(false);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:page===item.id?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
+        <span style={{fontSize:20,lineHeight:1}}>{item.icon}</span>
+        <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.03em"}}>{item.label}</span>
+        {item.id==="confirm"&&newCount>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:"#f97316",color:"#fff",borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{newCount}</span>}
+        {item.id==="messages"&&unreadMsg>0&&<span style={{position:"absolute",top:3,right:"calc(50% - 18px)",background:C.purple,color:"#fff",borderRadius:8,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{unreadMsg}</span>}
+        {page===item.id&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
+      </button>)}
+      <button onClick={()=>setShowMore(v=>!v)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:"transparent",border:"none",color:(showMore||isSecondaryActive)?C.accent:C.text3,cursor:"pointer",padding:"6px 4px",position:"relative",fontFamily:"'DM Sans',sans-serif"}}>
+        <span style={{fontSize:20,lineHeight:1}}>{showMore?"✕":"⋯"}</span>
+        <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.03em"}}>Plus</span>
+        {isSecondaryActive&&!showMore&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
+      </button>
+    </div>
+  </>;
   return<>
     <div className="sidebar-desktop" style={{width:220,minHeight:"100vh",background:C.surface,borderRight:`1px solid ${C.border}`,flexDirection:"column",position:"fixed",left:0,top:0,bottom:0,zIndex:100}}>
       <div style={{padding:"20px 18px",borderBottom:`1px solid ${C.border}`}}>
@@ -2592,6 +2609,8 @@ function App(){
   const [loadP,setLoadP]=useState(false);
   const [unreadMsgCount,setUnreadMsgCount]=useState(0);
   const prevOrderIdsRef=useRef(null);
+  const scrollPositions=useRef({});
+  const changePage=useCallback((newPage)=>{scrollPositions.current[page]=window.scrollY;setPage(newPage);requestAnimationFrame(()=>{window.scrollTo(0,scrollPositions.current[newPage]||0);});},[page]);
 
   const playBeep=()=>{try{const ctx=new(window.AudioContext||window.webkitAudioContext)();[[520,0,0.1],[780,0.13,0.1]].forEach(([freq,delay,dur])=>{const o=ctx.createOscillator();const g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=freq;g.gain.setValueAtTime(0.25,ctx.currentTime+delay);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+dur);o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+dur+0.05);});}catch(e){}};
 
@@ -2638,9 +2657,9 @@ function App(){
   if(!logged)return<LoginPage onLogin={login}/>;
 
   return<div style={{display:"flex",minHeight:"100vh"}}>
-    <Sidebar page={page} setPage={setPage} onLogout={logout} newCount={newCount}/>
+    <Sidebar page={page} setPage={changePage} onLogout={logout} newCount={newCount} unreadMsg={unreadMsgCount}/>
     <main className="main-content" style={{flex:1}}>
-      {page==="dashboard"&&<DashboardPage orders={orders} products={products} setPage={setPage}/>}
+      {page==="dashboard"&&<DashboardPage orders={orders} products={products} setPage={changePage}/>}
       {page==="confirm"&&<ConfirmPage orders={orders} setOrders={setOrders}/>}
       {page==="orders"&&<OrdersPage orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} loading={loadO} reload={fetchOrders} selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder} getSettings={getSettings}/>}
       {page==="clients"&&<ClientsPage orders={orders} setOrders={setOrders} setProducts={setProducts}/>}
