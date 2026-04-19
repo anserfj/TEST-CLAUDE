@@ -347,7 +347,7 @@ function LoginPage({onLogin}){
 function Sidebar({page,setPage,onLogout,newCount,unreadMsg}){
   const [showMore,setShowMore]=useState(false);
   const nav=[{id:"dashboard",icon:"◈",label:"Dashboard"},{id:"confirm",icon:"🔔",label:"Confirmer"},{id:"orders",icon:"≡",label:"Commandes"},{id:"clients",icon:"👥",label:"Clients"},{id:"catalog",icon:"⊞",label:"Catalogue"},{id:"categories",icon:"🏷",label:"Catégories"},{id:"promos",icon:"🎁",label:"Promos"},{id:"messages",icon:"✉",label:"Messages"},{id:"automations",icon:"⚡",label:"Automations"},{id:"drivers",icon:"🚚",label:"Livreurs"},{id:"settings",icon:"⊙",label:"Paramètres"}];
-  const PRIMARY_IDS=["dashboard","confirm","orders","messages"];
+  const PRIMARY_IDS=["dashboard","confirm","orders","drivers"];
   const primaryNav=nav.filter(n=>PRIMARY_IDS.includes(n.id));
   const secondaryNav=nav.filter(n=>!PRIMARY_IDS.includes(n.id));
   const isSecondaryActive=secondaryNav.some(n=>n.id===page);
